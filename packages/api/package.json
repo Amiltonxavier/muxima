@@ -1,0 +1,29 @@
+{
+  "name": "@muxima/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@muxima/auth": "workspace:*",
+    "@muxima/db": "workspace:*",
+    "@muxima/env": "workspace:*",
+    "@orpc/client": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@muxima/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
