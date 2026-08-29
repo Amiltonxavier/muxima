@@ -9,6 +9,19 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  ownedEvents       Event[]
+  eventMembers      EventMember[]
+  sentInvitations   EventInvitation[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  completedTasks    Task[]            @relation("TaskCompleter")
+  createdTasks      Task[]            @relation("TaskCreator")
+  createdExpenses   Expense[]
+  createdPayments   Payment[]
+  createdMovements  InventoryMovement[]
+  createdDocuments  Document[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
   @@unique([email])
   @@map("user")
 }

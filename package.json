@@ -1,51 +1,64 @@
 {
-  "name": "muxima",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "type": "module",
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "check-types": "turbo run check-types",
-    "dev:native": "turbo run dev -F native --",
-    "dev:web": "turbo run dev -F web --",
-    "dev:server": "turbo run dev -F server --",
-    "db:push": "turbo run db:push -F @muxima/db --",
-    "db:studio": "turbo run db:studio -F @muxima/db --",
-    "db:generate": "turbo run db:generate -F @muxima/db --",
-    "db:migrate": "turbo run db:migrate -F @muxima/db --",
-    "db:start": "docker compose up -d postgres",
-    "db:watch": "docker compose up postgres",
-    "db:stop": "docker compose stop postgres",
-    "db:down": "docker compose down postgres",
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d --build",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "check": "biome check --write .",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "@muxima/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.6",
-    "@muxima/config": "workspace:*",
-    "@types/node": "catalog:",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.2.0",
-    "turbo": "^2.10.7",
-    "typescript": "^6.0.3"
-  },
-  "lint-staged": {
-    "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
-      "biome check --write ."
-    ]
-  },
-  "packageManager": "pnpm@11.21.0"
+	"name": "muxima",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"type": "module",
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"check-types": "turbo run check-types",
+		"dev:native": "turbo run dev -F native --",
+		"dev:web": "turbo run dev -F web --",
+		"dev:server": "turbo run dev -F server --",
+		"db:push": "turbo run db:push -F @muxima/db --",
+		"db:studio": "turbo run db:studio -F @muxima/db --",
+		"db:generate": "turbo run db:generate -F @muxima/db --",
+		"db:migrate": "turbo run db:migrate -F @muxima/db --",
+		"db:start": "docker compose up -d postgres",
+		"db:watch": "docker compose up postgres",
+		"db:stop": "docker compose stop postgres",
+		"db:down": "docker compose down postgres",
+		"docker:build": "docker compose build",
+		"docker:up": "docker compose up -d --build",
+		"docker:down": "docker compose down",
+		"docker:logs": "docker compose logs -f",
+		"check": "biome check --write .",
+		"prepare": "husky"
+	},
+	"dependencies": {
+		"@hookform/resolvers": "^5.9.1",
+		"@muxima/env": "workspace:*",
+		"@tanstack/react-form": "catalog:",
+		"@types/js-cookie": "^3.0.6",
+		"date-fns": "^4.4.0",
+		"dotenv": "catalog:",
+		"js-cookie": "^3.0.8",
+		"lucide-react": "catalog:",
+		"sonner": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.6",
+		"@muxima/config": "workspace:*",
+		"@testing-library/jest-dom": "^7.0.1",
+		"@testing-library/react": "^16.3.3",
+		"@testing-library/user-event": "^14.6.6",
+		"@types/node": "catalog:",
+		"@vitejs/plugin-react": "^6.1.0",
+		"husky": "^9.1.7",
+		"jsdom": "^30.0.1",
+		"lint-staged": "^17.2.0",
+		"turbo": "^2.10.7",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.11"
+	},
+	"lint-staged": {
+		"*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
+			"biome check --write ."
+		]
+	},
+	"packageManager": "pnpm@11.21.0"
 }
