@@ -1,11 +1,9 @@
 export function formatCurrency(value: number): string {
-	return (
-		new Intl.NumberFormat("pt-AO", {
-			style: "decimal",
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 0,
-		}).format(value) + " Kz"
-	);
+	return `${new Intl.NumberFormat("pt-AO", {
+		style: "decimal",
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 0,
+	}).format(value)} Kz`;
 }
 
 export function formatCurrencyCompact(value: number): string {

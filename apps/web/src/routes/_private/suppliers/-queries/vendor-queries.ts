@@ -42,7 +42,7 @@ export function useUpdateVendor() {
 
 	return useMutation(
 		orpc.vendors.update.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: (_data) => {
 				queryClient.invalidateQueries({ queryKey: vendorKeys.all });
 			},
 		}),

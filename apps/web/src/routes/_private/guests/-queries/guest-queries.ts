@@ -43,7 +43,7 @@ export function useUpdateGuest() {
 
 	return useMutation(
 		orpc.guests.update.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: (_data) => {
 				queryClient.invalidateQueries({ queryKey: guestKeys.all });
 			},
 		}),

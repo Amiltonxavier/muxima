@@ -42,7 +42,7 @@ export function useUpdateInventoryItem() {
 
 	return useMutation(
 		orpc.inventory.update.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: (_data) => {
 				queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
 			},
 		}),

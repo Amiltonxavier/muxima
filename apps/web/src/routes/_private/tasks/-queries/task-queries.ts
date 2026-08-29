@@ -44,7 +44,7 @@ export function useUpdateTask() {
 
 	return useMutation(
 		orpc.tasks.update.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: (_data) => {
 				queryClient.invalidateQueries({ queryKey: taskKeys.all });
 			},
 		}),

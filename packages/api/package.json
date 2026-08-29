@@ -23,7 +23,9 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@fastify/cors": "^11.3.0",
 		"@muxima/config": "workspace:*",
+		"fastify": "^5.10.0",
 		"typescript": "^6.0.3"
 	}
 }
