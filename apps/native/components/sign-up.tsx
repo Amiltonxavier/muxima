@@ -88,7 +88,9 @@ export function SignUp() {
 							label: error.error?.message || "Failed to sign up",
 						});
 					},
-					onSuccess() {
+					onSuccess: async () => {
+						// Sign out after registration to ensure single auth point at login
+						await authClient.signOut();
 						formApi.reset();
 						toast.show({
 							variant: "success",

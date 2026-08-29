@@ -1,5 +1,5 @@
+import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 import { cn } from "@muxima/ui/lib/utils";
-import * as ProgressPrimitive from "@radix-ui/react-progress";
 import * as React from "react";
 
 const Progress = React.forwardRef<
@@ -8,6 +8,7 @@ const Progress = React.forwardRef<
 >(({ className, value, ...props }, ref) => (
 	<ProgressPrimitive.Root
 		ref={ref}
+		value={value ?? null}
 		className={cn(
 			"relative h-4 w-full overflow-hidden rounded-full bg-secondary",
 			className,
@@ -20,6 +21,6 @@ const Progress = React.forwardRef<
 		/>
 	</ProgressPrimitive.Root>
 ));
-Progress.displayName = ProgressPrimitive.Root.displayName;
+Progress.displayName = "Progress";
 
 export { Progress };

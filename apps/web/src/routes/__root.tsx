@@ -1,7 +1,6 @@
 import type { AppRouterClient } from "@muxima/api/routers/index";
 import { Toaster } from "@muxima/ui/components/sonner";
 import { createORPCClient } from "@orpc/client";
-import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
@@ -12,7 +11,6 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
-import Header from "@/shared/components/header";
 import { link, type orpc } from "@/utils/orpc";
 
 import "../index.css";
@@ -27,11 +25,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	head: () => ({
 		meta: [
 			{
-				title: "muxima",
+				title: "Muxima",
 			},
 			{
 				name: "description",
-				content: "muxima is a web application",
+				content: "Gestão de noivados e casamentos",
 			},
 		],
 		links: [
@@ -44,8 +42,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-	const [client] = useState<AppRouterClient>(() => createORPCClient(link));
-	const [_orpcUtils] = useState(() => createTanstackQueryUtils(client));
+	const [_client] = useState<AppRouterClient>(() => createORPCClient(link));
 
 	return (
 		<>
@@ -56,10 +53,7 @@ function RootComponent() {
 				disableTransitionOnChange
 				storageKey="vite-ui-theme"
 			>
-				<div className="grid h-svh grid-rows-[auto_1fr]">
-					<Header />
-					<Outlet />
-				</div>
+				<Outlet />
 				<Toaster richColors />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />

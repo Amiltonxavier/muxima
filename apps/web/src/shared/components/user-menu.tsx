@@ -31,8 +31,8 @@ export default function UserMenu() {
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="outline">{session.user.name}</Button>
+			<DropdownMenuTrigger render={<Button variant="outline" />}>
+				{session.user.name}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="bg-card">
 				<DropdownMenuGroup>
