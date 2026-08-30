@@ -98,6 +98,7 @@ async function main() {
 			neighborhood: "Maianga",
 			reference: "Próximo ao Hospital Central",
 			capacity: 250,
+			limitGuestCapacity: true,
 			currency: "AOA",
 			description:
 				"Casamento civil e religioso com recepção no jardim do convento.",
@@ -122,6 +123,7 @@ async function main() {
 			municipality: "Luanda",
 			neighborhood: "Miramar",
 			capacity: 120,
+			limitGuestCapacity: false,
 			currency: "AOA",
 			description:
 				"Festa de noivado intimista com familiares e amigos próximos.",
@@ -783,7 +785,7 @@ async function main() {
 	console.log("  ✅ Guest Companions");
 
 	// ================================================================
-	// 10. GUEST INVITATIONS
+	// 10. GUEST INVITATIONS (uses InvitationGuest junction table)
 	// ================================================================
 	for (let i = 0; i < weddingGuestIds.length; i++) {
 		const statuses = [
@@ -794,13 +796,13 @@ async function main() {
 			"CREATED",
 		] as const;
 		const status = statuses[i % statuses.length];
+		const invId = `gi_wed_${String(i + 1).padStart(3, "0")}`;
 		await prisma.guestInvitation.upsert({
-			where: { id: `gi_wed_${String(i + 1).padStart(3, "0")}` },
+			where: { id: invId },
 			update: {},
 			create: {
-				id: `gi_wed_${String(i + 1).padStart(3, "0")}`,
+				id: invId,
 				eventId: EVENT_WEDDING,
-				guestId: weddingGuestIds[i],
 				code: `MUX-${String(1000 + i)}`,
 				status,
 				sentAt: status !== "CREATED" ? daysAgo(60 - i * 2) : null,
@@ -809,6 +811,22 @@ async function main() {
 						? daysAgo(55 - i * 2)
 						: null,
 				respondedAt: status === "RESPONDED" ? daysAgo(50 - i * 2) : null,
+			},
+		});
+
+		// Create junction table record
+		await prisma.invitationGuest.upsert({
+			where: {
+				invitationId_guestId: {
+					invitationId: invId,
+					guestId: weddingGuestIds[i],
+				},
+			},
+			update: {},
+			create: {
+				id: `ig_${String(i + 1).padStart(3, "0")}`,
+				invitationId: invId,
+				guestId: weddingGuestIds[i],
 			},
 		});
 	}
