@@ -16,6 +16,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { CurrencyInput } from "@/shared/components/currency-input";
 import { Progress } from "@muxima/ui/components/progress";
 import {
 	Table,
@@ -592,13 +593,9 @@ function BudgetDialog({
 						{(field) => (
 							<div className="space-y-2">
 								<Label>Valor planeado (Kz)</Label>
-								<Input
-									type="number"
-									placeholder="Ex: 5000000"
-									value={field.state.value || ""}
-									onChange={(e) =>
-										field.handleChange(Number(e.target.value) || 0)
-									}
+								<CurrencyInput
+									value={field.state.value || 0}
+									onChange={(v) => field.handleChange(v)}
 									disabled={isLoading}
 								/>
 							</div>
@@ -608,13 +605,9 @@ function BudgetDialog({
 						{(field) => (
 							<div className="space-y-2">
 								<Label>Reserva (Kz)</Label>
-								<Input
-									type="number"
-									placeholder="Valor de reserva (opcional)"
-									value={field.state.value || ""}
-									onChange={(e) =>
-										field.handleChange(Number(e.target.value) || 0)
-									}
+								<CurrencyInput
+									value={field.state.value || 0}
+									onChange={(v) => field.handleChange(v)}
 									disabled={isLoading}
 								/>
 								<p className="text-muted-foreground text-xs">
@@ -734,12 +727,9 @@ function ExpenseDialog({
 							{(field) => (
 								<div className="space-y-2">
 									<Label>Valor (Kz)</Label>
-									<Input
-										type="number"
-										value={field.state.value || ""}
-										onChange={(e) =>
-											field.handleChange(Number(e.target.value) || 0)
-										}
+									<CurrencyInput
+										value={field.state.value || 0}
+										onChange={(v) => field.handleChange(v)}
 										disabled={isLoading}
 									/>
 								</div>

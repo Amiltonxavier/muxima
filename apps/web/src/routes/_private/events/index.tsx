@@ -16,6 +16,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { CurrencyInput } from "@/shared/components/currency-input";
 import {
 	Select,
 	SelectContent,
@@ -374,25 +375,19 @@ function CreateEventDialog({
 								/>
 							</div>
 						)}
-					</form.Field>
-
-					<form.Field name="budgetAmount">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Orçamento (Kz)</Label>
-								<Input
-									id={field.name}
-									type="number"
-									placeholder="Valor em Kwanzas"
-									value={field.state.value || ""}
-									onChange={(e) =>
-										field.handleChange(Number(e.target.value) || 0)
-									}
-									disabled={isLoading}
-								/>
-							</div>
-						)}
-					</form.Field>
+					</form.Field>						<form.Field name="budgetAmount">
+							{(field) => (
+								<div className="space-y-2">
+									<Label htmlFor={field.name}>Orçamento (Kz)</Label>
+									<CurrencyInput
+										id={field.name}
+										value={field.state.value || 0}
+										onChange={(v) => field.handleChange(v)}
+										disabled={isLoading}
+									/>
+								</div>
+							)}
+						</form.Field>
 
 					<form.Field name="description">
 						{(field) => (
