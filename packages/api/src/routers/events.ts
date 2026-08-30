@@ -157,6 +157,7 @@ export const eventsRouter = {
 				neighborhood: z.string().optional(),
 				reference: z.string().optional(),
 				capacity: z.number().int().positive().optional(),
+				limitGuestCapacity: z.boolean().optional(),
 				description: z.string().optional(),
 				status: z
 					.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])
@@ -198,9 +199,10 @@ export const eventsRouter = {
 					municipality: input.municipality,
 					neighborhood: input.neighborhood,
 					reference: input.reference,
-					capacity: input.capacity,
-					description: input.description,
-					status: input.status,
+				capacity: input.capacity,
+				limitGuestCapacity: input.limitGuestCapacity,
+				description: input.description,
+				status: input.status,
 				},
 			});
 

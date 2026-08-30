@@ -115,3 +115,59 @@ export function useInvitation(guestId: string) {
 		enabled: !!guestId,
 	});
 }
+
+export function useGuestStats(eventId: string) {
+	return useQuery({
+		...orpc.guests.getGuestStats.queryOptions({ input: { eventId } }),
+		queryKey: [...guestKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}
+
+export function useUpdateCompanion() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.guests.updateCompanion.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
+			},
+		}),
+	);
+}
+
+export function useAddCompanion() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.guests.addCompanion.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
+			},
+		}),
+	);
+}
+
+export function useRemoveCompanion() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.guests.removeCompanion.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
+			},
+		}),
+	);
+}
+
+export function useRespondToInvitation() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.guests.respondToInvitation.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
+			},
+		}),
+	);
+}

@@ -378,4 +378,137 @@ export const guestsRouter = {
 
 			return invitations;
 		}),
+
+	updateCompanion: protectedProcedure
+		.input(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).optional(),
+				status: z.enum(["PENDING", "CONFIRMED", "DECLINED"]).optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const companion = await db.guestCompanion.findUnique({
+				where: { id: input.id },
+				include: { guest: { select: { eventId: true } } },
+			});
+			if (companion) {
+				await requireEventAccess(
+					context.session.user.id,
+					companion.guest.eventId,
+				);
+			}
+
+			const updated = await db.guestCompanion.update({
+				where: { id: input.id },
+				data: {
+					name: input.name,
+					status: input.status,
+				},
+			});
+
+			return updated;
+		}),
+
+	getGuestStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const event = await db.event.findUnique({
+				where: { id: input.eventId },
+				select: { capacity: true, limitGuestCapacity: true },
+			});
+
+			const guests = await db.guest.findMany({
+				where: { eventId: input.eventId },
+				include: {
+					companions: true,
+				},
+			});
+
+			const totalGuests = guests.length;
+			const confirmed = guests.filter((g) => g.status === "CONFIRMED").length;
+			const pending = guests.filter((g) => g.status === "PENDING").length;
+			const declined = guests.filter((g) => g.status === "DECLINED").length;
+			const waiting = guests.filter((g) => g.status === "WAITING").length;
+
+			const totalCompanions = guests.reduce(
+				(sum, g) => sum + g.companions.length,
+				0,
+			);
+			const confirmedCompanions = guests.reduce(
+				(sum, g) =>
+					sum +
+					g.companions.filter((c) => c.status === "CONFIRMED").length,
+				0,
+			);
+
+			const totalConfirmedPeople = confirmed + confirmedCompanions;
+			const capacity = event?.capacity ?? 0;
+			const limitGuestCapacity = event?.limitGuestCapacity ?? false;
+
+			return {
+				totalGuests,
+				confirmed,
+				pending,
+				declined,
+				waiting,
+				totalCompanions,
+				confirmedCompanions,
+				totalConfirmedPeople,
+				capacity,
+				limitGuestCapacity,
+				atCapacity: capacity > 0 && totalConfirmedPeople >= capacity,
+			};
+		}),
+
+	respondToInvitation: protectedProcedure
+		.input(
+			z.object({
+				code: z.string(),
+				response: z.enum(["CONFIRM", "DECLINE"]),
+			}),
+		)
+		.handler(async ({ input }) => {
+			const invitation = await db.guestInvitation.findUnique({
+				where: { code: input.code },
+				include: {
+					guests: {
+						include: { guest: true },
+					},
+				},
+			});
+
+			if (!invitation) {
+				throw new Error("Convite não encontrado");
+			}
+
+			if (invitation.status === "EXPIRED") {
+				throw new Error("Este convite expirou");
+			}
+
+			const guestStatus =
+				input.response === "CONFIRM" ? "CONFIRMED" : "DECLINED";
+
+			await db.guest.updateMany({
+				where: {
+					id: {
+						in: invitation.guests.map((ig) => ig.guestId),
+					},
+				},
+				data: { status: guestStatus },
+			});
+
+			const updated = await db.guestInvitation.update({
+				where: { id: invitation.id },
+				data: {
+					status: "RESPONDED",
+					respondedAt: new Date(),
+					response: input.response,
+				},
+			});
+
+			return updated;
+		}),
 };

@@ -244,6 +244,7 @@ model Event {
   latitude    Float?
   longitude   Float?
   capacity    Int?
+  limitGuestCapacity Boolean @default(false)
   currency    String      @default("AOA")
   description String?
   createdAt   DateTime    @default(now())
@@ -481,10 +482,12 @@ model GuestInvitation {
   id         String                  @id @default(uuid())
   eventId    String
   code       String
+  url        String?
   status     GuestInvitationStatus   @default(CREATED)
   sentAt     DateTime?
   openedAt   DateTime?
   respondedAt DateTime?
+  response   String?
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
 

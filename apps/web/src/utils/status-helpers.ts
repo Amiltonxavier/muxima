@@ -116,6 +116,25 @@ export const INVENTORY_UNIT_LABELS: Record<string, string> = {
 	OTHER: "Outro",
 };
 
+export const COMPANION_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Pendente",
+	CONFIRMED: "Confirmado",
+	DECLINED: "Recusado",
+};
+
+export const INVITATION_STATUS_LABELS: Record<string, string> = {
+	CREATED: "Criado",
+	SENT: "Enviado",
+	OPENED: "Aberto",
+	RESPONDED: "Respondido",
+	EXPIRED: "Expirado",
+};
+
+export const INVITATION_RESPONSE_LABELS: Record<string, string> = {
+	CONFIRM: "Confirmar",
+	DECLINE: "Recusar",
+};
+
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 	CONTRACT: "Contrato",
 	RECEIPT: "Recibo",

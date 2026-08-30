@@ -37,6 +37,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
 	AlertTriangle,
 	Calendar,
+	Check,
 	Clock,
 	Copy,
 	Eye,
@@ -49,25 +50,34 @@ import {
 	Share2,
 	Trash2,
 	User,
+	Users,
+	X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
 import {
+	useAddCompanion,
 	useCreateGuest,
 	useCreateInvitation,
 	useDeleteGuest,
 	useGuests,
+	useGuestStats,
 	useInvitation,
+	useRemoveCompanion,
+	useUpdateCompanion,
 	useUpdateGuest,
+	useRespondToInvitation,
 } from "@/shared/queries/guest-queries";
 import { useTables } from "@/shared/queries/table-queries";
 import { formatDate } from "@/utils/format-date";
-import { guestSchema } from "@/utils/guest-schemas";
+import { guestCompanionSchema, guestSchema } from "@/utils/guest-schemas";
 import {
+	COMPANION_STATUS_LABELS,
 	GUEST_STATUS_LABELS,
 	GUEST_TYPE_LABELS,
+	INVITATION_STATUS_LABELS,
 	getStatusColor,
 	getStatusLabel,
 	toSelectItems,
@@ -81,6 +91,7 @@ function GuestsPage() {
 	const { eventId } = Route.useParams();
 
 	const guestsQuery = useGuests(eventId);
+	const statsQuery = useGuestStats(eventId);
 	const tablesQuery = useTables(eventId);
 	const createGuest = useCreateGuest();
 	const updateGuest = useUpdateGuest();
@@ -107,8 +118,14 @@ function GuestsPage() {
 		unknown
 	> | null>(null);
 
+	// Companion state
+	const [managingCompanionGuest, setManagingCompanionGuest] = useState<
+		Record<string, unknown> | null
+	>(null);
+
 	const guests = guestsQuery.data ?? [];
 	const tables = tablesQuery.data ?? [];
+	const stats = statsQuery.data;
 
 	const filteredGuests = useMemo(() => {
 		return guests.filter((guest: Record<string, unknown>) => {
@@ -132,16 +149,6 @@ function GuestsPage() {
 		});
 	}, [guests, searchQuery, filterStatus, filterType]);
 
-	const confirmedCount = guests.filter(
-		(g: Record<string, unknown>) => g.status === "CONFIRMED",
-	).length;
-	const pendingCount = guests.filter(
-		(g: Record<string, unknown>) => g.status === "PENDING",
-	).length;
-	const declinedCount = guests.filter(
-		(g: Record<string, unknown>) => g.status === "DECLINED",
-	).length;
-
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
@@ -149,7 +156,14 @@ function GuestsPage() {
 				<div>
 					<h1 className="font-semibold text-2xl">Convidados</h1>
 					<p className="text-muted-foreground text-sm">
-						{guests.length} convidados
+						{stats ? (
+							<>
+								{stats.totalGuests} convidados ·{" "}
+								{stats.totalConfirmedPeople} pessoas confirmadas
+							</>
+						) : (
+							`${guests.length} convidados`
+						)}
 					</p>
 				</div>
 				<Button onClick={() => setShowCreateDialog(true)}>
@@ -158,44 +172,104 @@ function GuestsPage() {
 				</Button>
 			</div>
 
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Confirmados
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-green-600">
-							{confirmedCount}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Pendentes
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-amber-600">
-							{pendingCount}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Recusados
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-red-600">
-							{declinedCount}
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			{/* Capacity Alert */}
+			{stats && stats.atCapacity && (
+				<div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+					<AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
+					<div>
+						<p className="font-medium text-red-800 text-sm">
+							Capacidade atingida
+						</p>
+						<p className="text-red-600 text-xs">
+							{stats.limitGuestCapacity
+								? `O evento atingiu a capacidade máxima de ${stats.capacity} pessoas. Novas confirmações estão bloqueadas.`
+								: `O evento atingiu a capacidade máxima de ${stats.capacity} pessoas. Considere aumentar a capacidade.`}
+						</p>
+					</div>
+				</div>
+			)}
+
+			{/* Stats Cards */}
+			{stats && (
+				<div className="grid gap-4 sm:grid-cols-6">
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Total
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl">{stats.totalGuests}</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Confirmados
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl text-green-600">
+								{stats.confirmed}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Pendentes
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl text-amber-600">
+								{stats.pending}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Recusados
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl text-red-600">
+								{stats.declined}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Acompanhantes
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl text-blue-600">
+								{stats.totalCompanions}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-2">
+							<CardTitle className="text-muted-foreground text-xs">
+								Pessoas confirmadas
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="font-semibold text-2xl text-emerald-600">
+								{stats.totalConfirmedPeople}
+								{stats.capacity > 0 && (
+									<span className="font-normal text-muted-foreground text-xs">
+										{" "}
+										/ {stats.capacity}
+									</span>
+								)}
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			)}
 
 			{/* Filters */}
 			<div className="flex flex-wrap items-center gap-3">
@@ -259,8 +333,9 @@ function GuestsPage() {
 								<TableHead>Grupo</TableHead>
 								<TableHead>Tipo</TableHead>
 								<TableHead>Mesa</TableHead>
+								<TableHead>Acomp.</TableHead>
 								<TableHead>Estado</TableHead>
-								<TableHead className="w-28" />
+								<TableHead className="w-32" />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -273,6 +348,9 @@ function GuestsPage() {
 										? ((tableGuests[0]?.table as Record<string, unknown>)
 												?.name as string)
 										: null;
+								const companions = (guest.companions ?? []) as Array<
+									Record<string, unknown>
+								>;
 
 								return (
 									<TableRow key={guest.id as string}>
@@ -281,7 +359,6 @@ function GuestsPage() {
 										</TableCell>
 										<TableCell>
 											<div className="flex flex-col gap-0.5 text-muted-foreground text-xs">
-												{" "}
 												{guest.phone ? (
 													<span className="flex items-center gap-1">
 														<Phone className="h-3 w-3" />
@@ -298,7 +375,6 @@ function GuestsPage() {
 										</TableCell>
 										<TableCell>{(guest.group as string) || "—"}</TableCell>
 										<TableCell>
-											{" "}
 											{GUEST_TYPE_LABELS[(guest.type as string) || "FAMILY"] ||
 												String(guest.type || "FAMILY")}
 										</TableCell>
@@ -309,6 +385,28 @@ function GuestsPage() {
 												</Badge>
 											) : (
 												<span className="text-muted-foreground text-xs">—</span>
+											)}
+										</TableCell>
+										<TableCell>
+											{companions.length > 0 ? (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													className="h-7 gap-1 text-xs"
+													onClick={() => setManagingCompanionGuest(guest)}
+												>
+													<Users className="h-3.5 w-3.5" />
+													{companions.length}
+												</Button>
+											) : (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													className="h-7 text-muted-foreground"
+													onClick={() => setManagingCompanionGuest(guest)}
+												>
+													<Plus className="h-3.5 w-3.5" />
+												</Button>
 											)}
 										</TableCell>
 										<TableCell>
@@ -464,6 +562,14 @@ function GuestsPage() {
 				</DialogContent>
 			</Dialog>
 
+			{/* Companion Management Dialog */}
+			{managingCompanionGuest && (
+				<CompanionManagerDialog
+					guest={managingCompanionGuest}
+					onClose={() => setManagingCompanionGuest(null)}
+				/>
+			)}
+
 			{/* View Invitation Dialog */}
 			{viewingInvitationGuestId && (
 				<ViewInvitationDialog
@@ -486,6 +592,155 @@ function GuestsPage() {
 }
 
 // ========================
+// Companion Manager Dialog
+// ========================
+function CompanionManagerDialog({
+	guest,
+	onClose,
+}: {
+	guest: Record<string, unknown>;
+	onClose: () => void;
+}) {
+	const addCompanion = useAddCompanion();
+	const updateCompanion = useUpdateCompanion();
+	const removeCompanion = useRemoveCompanion();
+	const [newName, setNewName] = useState("");
+
+	const companions = (guest.companions ?? []) as Array<Record<string, unknown>>;
+
+	const handleAdd = () => {
+		const result = guestCompanionSchema.safeParse({ name: newName });
+		if (!result.success) {
+			toast.error(result.error.issues[0].message);
+			return;
+		}
+		addCompanion.mutate(
+			{ guestId: guest.id as string, name: newName },
+			{
+				onSuccess: () => {
+					toast.success("Acompanhante adicionado");
+					setNewName("");
+				},
+				onError: (e) => toast.error(e.message),
+			},
+		);
+	};
+
+	const handleStatusChange = (companionId: string, status: string) => {
+		updateCompanion.mutate(
+			{ id: companionId, status: status as "PENDING" | "CONFIRMED" | "DECLINED" },
+			{
+				onSuccess: () => toast.success("Estado atualizado"),
+				onError: (e) => toast.error(e.message),
+			},
+		);
+	};
+
+	const handleRemove = (companionId: string) => {
+		removeCompanion.mutate(
+			{ id: companionId },
+			{
+				onSuccess: () => toast.success("Acompanhante removido"),
+				onError: (e) => toast.error(e.message),
+			},
+		);
+	};
+
+	return (
+		<Dialog open onOpenChange={() => onClose()}>
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle className="flex items-center gap-2">
+						<Users className="h-4 w-4" />
+						Acompanhantes
+					</DialogTitle>
+					<DialogDescription>
+						Gerir acompanhantes de <strong>{guest.name as string}</strong>
+					</DialogDescription>
+				</DialogHeader>
+
+				<div className="space-y-4">
+					{/* Add new companion */}
+					<div className="flex gap-2">
+						<Input
+							placeholder="Nome do acompanhante"
+							value={newName}
+							onChange={(e) => setNewName(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") {
+									e.preventDefault();
+									handleAdd();
+								}
+							}}
+							disabled={addCompanion.isPending}
+						/>
+						<Button
+							onClick={handleAdd}
+							disabled={!newName.trim() || addCompanion.isPending}
+							size="sm"
+						>
+							<Plus className="h-4 w-4" />
+						</Button>
+					</div>
+
+					{/* Companion list */}
+					{companions.length === 0 ? (
+						<p className="py-4 text-center text-muted-foreground text-sm">
+							Nenhum acompanhante adicionado.
+						</p>
+					) : (
+						<div className="space-y-2">
+							{companions.map((companion) => (
+								<div
+									key={companion.id as string}
+									className="flex items-center justify-between rounded-md border p-3"
+								>
+									<div className="flex items-center gap-3">
+										<span className="text-sm">{companion.name as string}</span>
+										<Select
+											value={(companion.status as string) || "PENDING"}
+											onValueChange={(v) =>
+												handleStatusChange(companion.id as string, v as string)
+											}
+										>
+											<SelectTrigger className="h-7 w-[120px] text-xs">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{toSelectItems(COMPANION_STATUS_LABELS).map((item) => (
+													<SelectItem key={item.value} value={item.value}>
+														{item.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										className="h-7 text-destructive"
+										onClick={() => handleRemove(companion.id as string)}
+										disabled={removeCompanion.isPending}
+									>
+										<Trash2 className="h-3.5 w-3.5" />
+									</Button>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+
+				<DialogFooter>
+					<Button variant="outline" onClick={onClose}>
+						Fechar
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// ========================
 // View Invitation Dialog
 // ========================
 function ViewInvitationDialog({
@@ -499,21 +754,24 @@ function ViewInvitationDialog({
 }) {
 	const invitationQuery = useInvitation(guestId);
 	const createInvitation = useCreateInvitation();
+	const respondToInvitation = useRespondToInvitation();
+	// biome-ignore lint/suspicious/noExplicitAny: oRPC return type
 	const invitation = invitationQuery.data as any;
 
 	const event = invitation?.event;
-	const guest = invitation?.guest;
-	const tableGuests = (guest?.tableGuests ?? []) as Array<
-		Record<string, unknown>
-	>;
-	const table =
-		tableGuests.length > 0
-			? (tableGuests[0]?.table as Record<string, unknown>)
-			: null;
+	const allGuests = (invitation?.guests ?? []) as Array<Record<string, unknown>>;
+
+	// Get table from the first guest
+	const firstGuest = allGuests.length > 0 ? allGuests[0]?.guest as Record<string, unknown> | undefined : undefined;
+	const tableGuests = (firstGuest?.tableGuests ?? []) as Array<Record<string, unknown>>;
+	const table = tableGuests.length > 0 ? (tableGuests[0]?.table as Record<string, unknown>) : null;
 
 	const handleCreate = () => {
+		const guestIds = allGuests.length > 0
+			? allGuests.map((ig: Record<string, unknown>) => (ig.guest as Record<string, unknown>)?.id as string)
+			: [guestId];
 		createInvitation.mutate(
-			{ guestId, eventId },
+			{ guestIds, eventId },
 			{
 				onSuccess: () => toast.success("Convite criado com sucesso"),
 				onError: (e) => toast.error(e.message),
@@ -526,6 +784,24 @@ function ViewInvitationDialog({
 			navigator.clipboard.writeText(String(invitation.code));
 			toast.success("Código copiado!");
 		}
+	};
+
+	const handleResponse = (response: "CONFIRM" | "DECLINE") => {
+		if (!invitation?.code) return;
+		respondToInvitation.mutate(
+			{ code: String(invitation.code), response },
+			{
+				onSuccess: () => {
+					toast.success(
+						response === "CONFIRM"
+							? "Convite confirmado"
+							: "Convite recusado",
+					);
+					invitationQuery.refetch();
+				},
+				onError: (e) => toast.error(e.message),
+			},
+		);
 	};
 
 	return (
@@ -551,11 +827,9 @@ function ViewInvitationDialog({
 							<p className="mb-2 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.16em]">
 								Convite para
 							</p>
-
 							<h2 className="font-semibold text-2xl tracking-tight">
 								{String(event.name)}
 							</h2>
-
 							<div className="mt-2 flex items-center gap-2 text-muted-foreground text-xs">
 								<span>{getStatusLabel(String(event.status), "event")}</span>
 								<span>·</span>
@@ -565,33 +839,47 @@ function ViewInvitationDialog({
 							</div>
 						</section>
 
-						{/* Guest */}
+						{/* Guest(s) */}
 						<section>
 							<div className="mb-3 flex items-center gap-2">
 								<User className="h-4 w-4 text-muted-foreground" />
-								<h3 className="font-semibold text-sm">Convidado</h3>
+								<h3 className="font-semibold text-sm">
+									{allGuests.length > 1
+										? `Convidados (${allGuests.length})`
+										: "Convidado"}
+								</h3>
 							</div>
-
-							<p className="font-medium text-base">
-								{String(guest?.name || "")}
-							</p>
-
-							{(guest?.email || guest?.phone) && (
-								<div className="mt-1.5 space-y-1 text-muted-foreground text-xs">
-									{guest?.phone && (
-										<p className="flex items-center gap-2">
-											<Phone className="h-3.5 w-3.5" />
-											{String(guest.phone)}
-										</p>
-									)}
-
-									{guest?.email && (
-										<p className="flex items-center gap-2">
-											<Mail className="h-3.5 w-3.5" />
-											{String(guest.email)}
-										</p>
-									)}
+							{allGuests.length > 0 ? (
+								<div className="space-y-2">
+									{allGuests.map((ig: Record<string, unknown>) => {
+										const g = ig.guest as Record<string, unknown>;
+										return (
+											<div key={ig.id as string} className="rounded-md border p-3">
+												<p className="font-medium text-sm">{String(g?.name)}</p>
+												{((g?.email as string) || (g?.phone as string)) ? (
+																		<div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
+																			{g?.phone ? (
+																				<p className="flex items-center gap-2">
+																					<Phone className="h-3.5 w-3.5" />
+																					{String(g.phone)}
+																				</p>
+																			) : null}
+																			{g?.email ? (
+																				<p className="flex items-center gap-2">
+																					<Mail className="h-3.5 w-3.5" />
+																					{String(g.email)}
+																				</p>
+																			) : null}
+																		</div>
+																		) : null}
+											</div>
+										);
+									})}
 								</div>
+							) : (
+								<p className="font-medium text-base">
+									{String(firstGuest?.name || "")}
+								</p>
 							)}
 						</section>
 
@@ -600,7 +888,6 @@ function ViewInvitationDialog({
 							<h3 className="mb-3 font-semibold text-sm">
 								Informações do evento
 							</h3>
-
 							<div className="divide-y border-y">
 								{event.eventDate && (
 									<div className="flex items-center justify-between py-3">
@@ -610,13 +897,11 @@ function ViewInvitationDialog({
 												Data
 											</span>
 										</div>
-
 										<span className="font-medium text-sm">
 											{formatDate(String(event.eventDate))}
 										</span>
 									</div>
 								)}
-
 								{(event.startTime || event.endTime) && (
 									<div className="flex items-center justify-between py-3">
 										<div className="flex items-center gap-2.5">
@@ -625,19 +910,16 @@ function ViewInvitationDialog({
 												Horário
 											</span>
 										</div>
-
 										<span className="font-medium text-sm">
 											{event.startTime ? String(event.startTime) : "—"}
 											{event.endTime ? ` — ${String(event.endTime)}` : ""}
 										</span>
 									</div>
 								)}
-
 								{event.venueName && (
 									<div className="flex items-start justify-between gap-4 py-3">
 										<div className="flex items-start gap-2.5">
 											<MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
 											<div>
 												<p className="text-muted-foreground text-sm">Local</p>
 												<p className="mt-0.5 font-medium text-sm">
@@ -645,7 +927,6 @@ function ViewInvitationDialog({
 												</p>
 											</div>
 										</div>
-
 										{event.address && (
 											<p className="max-w-[220px] text-right text-muted-foreground text-xs leading-relaxed">
 												{String(event.address)}
@@ -667,14 +948,12 @@ function ViewInvitationDialog({
 						{table && (
 							<section className="border-y py-4">
 								<p className="text-muted-foreground text-xs">Mesa atribuída</p>
-
 								<p className="mt-1 font-semibold text-sm">
 									{String(table.name)}
 									{table.number
 										? ` · ${String(table.number as string | number)}`
 										: ""}
 								</p>
-
 								{table.location ? (
 									<p className="mt-1 text-muted-foreground text-xs">
 										{String(table.location)}
@@ -690,14 +969,12 @@ function ViewInvitationDialog({
 									<User className="h-4 w-4 text-muted-foreground" />
 									<h3 className="font-semibold text-sm">Anfitrião</h3>
 								</div>
-
 								<p className="font-medium text-sm">
 									{String(
 										(event.owner as Record<string, unknown>).name ||
 											(event.owner as Record<string, unknown>).email,
 									)}
 								</p>
-
 								{(event.owner as Record<string, unknown>).email ? (
 									<p className="mt-1 flex items-center gap-2 text-muted-foreground text-xs">
 										<Mail className="h-3.5 w-3.5" />
@@ -711,7 +988,6 @@ function ViewInvitationDialog({
 						<section className="border-l-2 px-4 py-1">
 							<div className="flex items-start gap-2.5">
 								<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
 								<div>
 									<p className="font-medium text-sm">Informação importante</p>
 									<p className="mt-1 text-muted-foreground text-xs leading-relaxed">
@@ -729,12 +1005,10 @@ function ViewInvitationDialog({
 								<p className="text-[11px] text-muted-foreground uppercase tracking-wider">
 									Código de confirmação
 								</p>
-
 								<p className="mt-1 font-mono font-semibold text-lg tracking-[0.15em]">
 									{String(invitation.code)}
 								</p>
 							</div>
-
 							<Button
 								variant="outline"
 								size="sm"
@@ -752,15 +1026,13 @@ function ViewInvitationDialog({
 								<p className="text-muted-foreground text-xs">
 									Estado do convite
 								</p>
-
 								<p className="mt-1 font-medium text-sm">
-									{String(invitation.status)}
+									{INVITATION_STATUS_LABELS[String(invitation.status)] ||
+										String(invitation.status)}
 								</p>
 							</div>
-
 							<div className="py-3 pl-4">
 								<p className="text-muted-foreground text-xs">Enviado em</p>
-
 								<p className="mt-1 font-medium text-sm">
 									{invitation.sentAt
 										? formatDate(String(invitation.sentAt))
@@ -768,13 +1040,52 @@ function ViewInvitationDialog({
 								</p>
 							</div>
 						</section>
+
+						{/* Response Buttons */}
+						{invitation.status !== "RESPONDED" &&
+							invitation.status !== "EXPIRED" && (
+								<section className="flex gap-3 border-y py-4">
+									<Button
+										className="flex-1 bg-green-600 text-white hover:bg-green-700"
+										onClick={() => handleResponse("CONFIRM")}
+										disabled={respondToInvitation.isPending}
+									>
+										<Check className="mr-2 h-4 w-4" />
+										Confirmar presença
+									</Button>
+									<Button
+										variant="outline"
+										className="flex-1"
+										onClick={() => handleResponse("DECLINE")}
+										disabled={respondToInvitation.isPending}
+									>
+										<X className="mr-2 h-4 w-4" />
+										Recusar convite
+									</Button>
+								</section>
+							)}
+
+						{invitation.response && (
+							<section className="border-y py-4">
+								<p className="text-muted-foreground text-xs">Resposta</p>
+								<p className="mt-1 font-medium text-sm">
+									{invitation.response === "CONFIRM"
+										? "✅ Confirmado"
+										: "❌ Recusado"}
+									{invitation.respondedAt && (
+										<span className="ml-2 text-muted-foreground text-xs">
+											— {formatDate(String(invitation.respondedAt))}
+										</span>
+									)}
+								</p>
+							</section>
+						)}
 					</div>
 				) : (
 					<div className="py-8 text-center">
 						<p className="text-muted-foreground text-sm">
 							Nenhum convite criado para este convidado.
 						</p>
-
 						<Button
 							className="mt-4 rounded-none"
 							onClick={handleCreate}
@@ -832,7 +1143,7 @@ function ShareInvitationDialog({
 
 	const handleCreateAndShare = () => {
 		createInvitation.mutate(
-			{ guestId: guest.id as string, eventId },
+			{ guestIds: [guest.id as string], eventId },
 			{
 				onSuccess: () => {
 					toast.success("Convite criado!");
@@ -1042,7 +1353,7 @@ function GuestDialog({
 									<Select
 										items={toSelectItems(GUEST_TYPE_LABELS)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) => field.handleChange(v as "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER")}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -1079,13 +1390,6 @@ function GuestDialog({
 							<div className="space-y-2">
 								<Label>Mesa</Label>
 								<Select
-									items={[
-										{ value: "", label: "Sem mesa" },
-										...tables.map((t) => ({
-											value: t.id as string,
-											label: `${t.name as string}${t.number ? ` (#${t.number})` : ""} — ${t.capacity} lugares`,
-										})),
-									]}
 									value={field.state.value}
 									onValueChange={(v) => field.handleChange(v as string)}
 								>
@@ -1096,7 +1400,6 @@ function GuestDialog({
 										<SelectItem value="">Sem mesa</SelectItem>
 										{tables.map((t) => (
 											<SelectItem key={t.id as string} value={t.id as string}>
-												{" "}
 												{String(t.name)}
 												{t.number ? ` (#${String(t.number)})` : ""} —{" "}
 												{String(t.capacity)} lugares
@@ -1116,7 +1419,7 @@ function GuestDialog({
 									<Select
 										items={toSelectItems(GUEST_STATUS_LABELS)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) => field.handleChange(v as "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING")}
 									>
 										<SelectTrigger>
 											<SelectValue />
