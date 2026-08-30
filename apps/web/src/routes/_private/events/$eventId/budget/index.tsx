@@ -17,6 +17,13 @@ import {
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { CurrencyInput } from "@/shared/components/currency-input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@muxima/ui/components/select";
 import { Progress } from "@muxima/ui/components/progress";
 import {
 	Table,
@@ -42,6 +49,7 @@ import {
 	useUpdateExpense,
 	useUpsertBudget,
 } from "@/shared/queries/budget-queries";
+import { useVendors } from "@/shared/queries/vendor-queries";
 import { expenseSchema } from "@/utils/budget-schemas";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
@@ -61,10 +69,13 @@ function BudgetPage() {
 
 	const budgetQuery = useBudget(eventId);
 	const expensesQuery = useExpenses(eventId);
+	const vendorsQuery = useVendors(eventId);
 	const createExpense = useCreateExpense();
 	const updateExpense = useUpdateExpense();
 	const deleteExpense = useDeleteExpense();
 	const upsertBudget = useUpsertBudget();
+
+	const vendors = (vendorsQuery.data ?? []) as Array<Record<string, unknown>>;
 
 	const [showCreateExpenseDialog, setShowCreateExpenseDialog] = useState(false);
 	const [showEditBudgetDialog, setShowEditBudgetDialog] = useState(false);
@@ -178,21 +189,26 @@ function BudgetPage() {
 				}}
 			>
 				<Card>
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>Descrição</TableHead>
-								<TableHead>Valor</TableHead>
-								<TableHead>Estado</TableHead>
-								<TableHead>Data</TableHead>
-								<TableHead className="w-24" />
-							</TableRow>
-						</TableHeader>
-						<TableBody>
+					<Table>					<TableHeader>
+						<TableRow>
+							<TableHead>Descrição</TableHead>
+							<TableHead>Fornecedor</TableHead>
+							<TableHead>Valor</TableHead>
+							<TableHead>Estado</TableHead>
+							<TableHead>Data</TableHead>
+							<TableHead className="w-24" />
+						</TableRow>
+					</TableHeader>
+					<TableBody>
 							{expenses.map((expense: Record<string, unknown>) => (
 								<TableRow key={expense.id as string}>
 									<TableCell className="font-medium">
 										{expense.description as string}
+									</TableCell>
+									<TableCell>
+										{expense.vendor
+											? String((expense.vendor as Record<string, unknown>).name)
+											: "—"}
 									</TableCell>
 									<TableCell>
 										{formatCurrency(Number(expense.totalAmount))}
@@ -284,6 +300,7 @@ function BudgetPage() {
 			<ExpenseDialog
 				open={showCreateExpenseDialog}
 				onOpenChange={setShowCreateExpenseDialog}
+				vendors={vendors}
 				onSubmit={(values) => {
 					createExpense.mutate(
 						{ ...values, eventId },
@@ -304,8 +321,10 @@ function BudgetPage() {
 				<ExpenseDialog
 					open={!!editingExpense}
 					onOpenChange={() => setEditingExpense(null)}
+					vendors={vendors}
 					initialValues={{
 						description: String(editingExpense.description ?? ""),
+						vendorId: (editingExpense.vendorId as string) || null,
 						totalAmount: Number(editingExpense.totalAmount ?? 0),
 						dueDate: editingExpense.dueDate
 							? new Date(editingExpense.dueDate as string)
@@ -656,11 +675,13 @@ function ExpenseDialog({
 	initialValues,
 	onSubmit,
 	isLoading,
+	vendors = [],
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
 	initialValues?: {
 		description: string;
+		vendorId?: string | null;
 		totalAmount: number;
 		dueDate: string;
 		notes: string;
@@ -668,12 +689,14 @@ function ExpenseDialog({
 	};
 	onSubmit: (values: any) => void;
 	isLoading: boolean;
+	vendors?: Array<Record<string, unknown>>;
 }) {
 	const isEditing = !!initialValues;
 
 	const form = useForm({
 		defaultValues: {
 			description: initialValues?.description ?? "",
+			vendorId: initialValues?.vendorId ?? "",
 			totalAmount: initialValues?.totalAmount ?? 0,
 			dueDate: initialValues?.dueDate ?? "",
 			notes: initialValues?.notes ?? "",
@@ -690,7 +713,11 @@ function ExpenseDialog({
 				toast.error(result.error.issues[0].message);
 				return;
 			}
-			onSubmit({ ...result.data, status: value.status });
+			onSubmit({
+				...result.data,
+				vendorId: value.vendorId || undefined,
+				status: value.status,
+			});
 		},
 	});
 
@@ -719,6 +746,32 @@ function ExpenseDialog({
 									onChange={(e) => field.handleChange(e.target.value)}
 									disabled={isLoading}
 								/>
+							</div>
+						)}
+					</form.Field>
+					<form.Field name="vendorId">
+						{(field) => (
+							<div className="space-y-2">
+								<Label>Fornecedor</Label>
+								<Select
+									value={field.state.value ?? ""}										onValueChange={(v) => field.handleChange(v ?? "")}
+									disabled={isLoading}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Selecionar fornecedor (opcional)" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="">Sem fornecedor</SelectItem>
+										{vendors.map((v) => (
+											<SelectItem
+												key={v.id as string}
+												value={v.id as string}
+											>
+												{v.name as string}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						)}
 					</form.Field>

@@ -185,6 +185,7 @@ export const budgetRouter = {
 			z.object({
 				id: z.string(),
 				description: z.string().min(1).optional(),
+				vendorId: z.string().nullable().optional(),
 				totalAmount: z.number().positive().optional(),
 				dueDate: z.string().optional(),
 				notes: z.string().optional(),
@@ -202,6 +203,7 @@ export const budgetRouter = {
 				where: { id: input.id },
 				data: {
 					description: input.description,
+					vendorId: input.vendorId,
 					totalAmount: input.totalAmount,
 					dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
 					notes: input.notes,
