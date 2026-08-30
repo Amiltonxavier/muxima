@@ -43,7 +43,7 @@ export const dashboardRouter = {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
 			const event = await db.event.findUnique({
-				where: { eventId: input.eventId },
+				where: { id: input.eventId },
 				select: { capacity: true },
 			});
 
