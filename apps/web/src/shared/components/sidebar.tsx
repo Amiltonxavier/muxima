@@ -103,6 +103,16 @@ const eventNavGroups: NavGroup[] = [
 			},
 		],
 	},
+	{
+		label: "Equipa",
+		items: [
+			{
+				label: "Membros",
+				icon: <Users className="h-4 w-4" />,
+				to: "/events/$eventId/members",
+			},
+		],
+	},
 ];
 
 const globalNavGroups: NavGroup[] = [

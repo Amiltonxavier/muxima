@@ -6,6 +6,7 @@ import { documentsRouter } from "./documents";
 import { eventsRouter } from "./events";
 import { guestsRouter } from "./guests";
 import { inventoryRouter } from "./inventory";
+import { membersRouter } from "./members";
 import { notificationsRouter } from "./notifications";
 import { tasksRouter } from "./tasks";
 import { usersRouter } from "./users";
@@ -22,6 +23,7 @@ export const appRouter = {
 	tasks: tasksRouter,
 	inventory: inventoryRouter,
 	documents: documentsRouter,
+	members: membersRouter,
 	notifications: notificationsRouter,
 	users: usersRouter,
 };
