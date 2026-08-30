@@ -3,8 +3,6 @@ import { Button } from "@muxima/ui/components/button";
 import {
 	Card,
 	CardContent,
-	CardHeader,
-	CardTitle,
 } from "@muxima/ui/components/card";
 import {
 	Dialog,
@@ -32,7 +30,7 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
 import { orpc } from "@/utils/orpc";
-import { MEMBER_ROLE_LABELS, toSelectItems } from "@/utils/status-helpers";
+import { toSelectItems } from "@/utils/status-helpers";
 
 export const Route = createFileRoute("/_private/events/$eventId/members/")({
 	component: MembersPage,
