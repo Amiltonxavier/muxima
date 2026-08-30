@@ -67,6 +67,13 @@ export const guestsRouter = {
 				companionsLimit: z.number().int().min(0).optional().default(0),
 				notes: z.string().optional(),
 				tableId: z.string().optional(),
+				companions: z
+					.array(
+						z.object({
+							name: z.string().min(1),
+						}),
+					)
+					.optional(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -91,6 +98,16 @@ export const guestsRouter = {
 						tableId: input.tableId,
 						guestId: guest.id,
 					},
+				});
+			}
+
+			if (input.companions && input.companions.length > 0) {
+				await db.guestCompanion.createMany({
+					data: input.companions.map((c) => ({
+						guestId: guest.id,
+						name: c.name,
+						status: "PENDING",
+					})),
 				});
 			}
 

@@ -1250,10 +1250,29 @@ function GuestDialog({
 		notes?: string;
 		status?: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
 		tableId?: string;
+		companions?: Array<{ name: string }>;
 	}) => void;
 	isLoading: boolean;
 }) {
 	const isEditing = !!initialValues;
+	const [companionNames, setCompanionNames] = useState<string[]>([]);
+	const [companionInput, setCompanionInput] = useState("");
+
+	const addLocalCompanion = () => {
+		const name = companionInput.trim();
+		if (!name) return;
+		const result = guestCompanionSchema.safeParse({ name });
+		if (!result.success) {
+			toast.error(result.error.issues[0].message);
+			return;
+		}
+		setCompanionNames((prev) => [...prev, name]);
+		setCompanionInput("");
+	};
+
+	const removeLocalCompanion = (index: number) => {
+		setCompanionNames((prev) => prev.filter((_, i) => i !== index));
+	};
 
 	const form = useForm({
 		defaultValues: {
@@ -1284,6 +1303,10 @@ function GuestDialog({
 			onSubmit({
 				...result.data,
 				tableId: value.tableId || undefined,
+				companions:
+					companionNames.length > 0
+						? companionNames.map((name) => ({ name }))
+						: undefined,
 			});
 		},
 	});
@@ -1435,6 +1458,60 @@ function GuestDialog({
 								</div>
 							)}
 						</form.Field>
+					)}
+
+					{/* Companions (only when creating) */}
+					{!isEditing && (
+						<div className="space-y-2">
+							<Label className="flex items-center gap-2">
+								<Users className="h-4 w-4" />
+								Acompanhantes
+							</Label>
+							<div className="flex gap-2">
+								<Input
+									placeholder="Nome do acompanhante"
+									value={companionInput}
+									onChange={(e) => setCompanionInput(e.target.value)}
+									onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										e.preventDefault();
+										addLocalCompanion();
+									}
+								}}
+									disabled={isLoading}
+								/>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={addLocalCompanion}
+									disabled={!companionInput.trim() || isLoading}
+								>
+									<Plus className="h-4 w-4" />
+								</Button>
+							</div>
+							{companionNames.length > 0 && (
+								<div className="space-y-1.5">
+									{companionNames.map((name, idx) => (
+										<div
+											key={`${name}-${idx}`}
+											className="flex items-center justify-between rounded-md border px-3 py-1.5"
+										>
+											<span className="text-sm">{name}</span>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon-sm"
+												className="h-6 w-6 text-destructive"
+												onClick={() => removeLocalCompanion(idx)}
+											>
+												<X className="h-3 w-3" />
+											</Button>
+										</div>
+									))}
+								</div>
+							)}
+						</div>
 					)}
 
 					<form.Field name="notes">
