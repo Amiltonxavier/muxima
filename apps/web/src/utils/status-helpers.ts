@@ -6,6 +6,11 @@ export const EVENT_STATUS_LABELS: Record<string, string> = {
 	CANCELLED: "Cancelado",
 };
 
+export const EXPENSE_TYPE_LABELS: Record<string, string> = {
+	EXPENSE: "Despesa",
+	INCOME: "Receita",
+};
+
 export const EXPENSE_STATUS_LABELS: Record<string, string> = {
 	PLANNED: "Planeado",
 	PARTIALLY_PAID: "Parcialmente pago",

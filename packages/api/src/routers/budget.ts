@@ -146,13 +146,20 @@ export const budgetRouter = {
 				budgetCategoryId: z.string().optional(),
 				vendorId: z.string().optional(),
 				description: z.string().min(1),
+				type: z.enum(["EXPENSE", "INCOME"]).optional().default("EXPENSE"),
 				totalAmount: z.number().positive(),
 				dueDate: z.string().optional(),
+				paidPercentage: z.number().min(0).max(100).optional().default(0),
 				notes: z.string().optional(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const paidPercentage = input.paidPercentage ?? 0;
+			let status: "PLANNED" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "CANCELLED" = "PLANNED";
+			if (paidPercentage >= 100) status = "PAID";
+			else if (paidPercentage > 0) status = "PARTIALLY_PAID";
 
 			const expense = await db.expense.create({
 				data: {
@@ -160,8 +167,11 @@ export const budgetRouter = {
 					budgetCategoryId: input.budgetCategoryId,
 					vendorId: input.vendorId,
 					description: input.description,
+					type: input.type as "EXPENSE" | "INCOME",
 					totalAmount: input.totalAmount,
 					dueDate: input.dueDate ? new Date(input.dueDate) : null,
+					status,
+					paidPercentage,
 					notes: input.notes,
 					createdBy: context.session.user.id,
 				},
