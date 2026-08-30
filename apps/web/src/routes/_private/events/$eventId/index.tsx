@@ -17,6 +17,7 @@ import {
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { Progress } from "@muxima/ui/components/progress";
+import { ProgressDonut } from "@/shared/components/charts";
 import {
 	Select,
 	SelectContent,
@@ -283,6 +284,9 @@ function EventDetailPage() {
 
 			{/* Quick Stats */}
 			<EventStats eventId={eventId} />
+
+			{/* Charts */}
+			<EventCharts eventId={eventId} />
 
 			{/* Event Type */}
 			<Card>
@@ -999,6 +1003,121 @@ function EventStats({ eventId }: { eventId: string }) {
 						>
 							Ver cronograma completo →
 						</Button>
+					</CardContent>
+				</Card>
+			)}
+		</div>
+	);
+}
+
+// ── Event Charts ──────────────────────────────────────────────
+function EventCharts({ eventId }: { eventId: string }) {
+	const guestChartQuery = useQuery(
+		orpc.dashboard.getGuestChart.queryOptions({ input: { eventId } }),
+	);
+	const budgetChartQuery = useQuery(
+		orpc.dashboard.getBudgetChart.queryOptions({ input: { eventId } }),
+	);
+
+	const guestData = guestChartQuery.data as
+		| { capacity: number; invited: number; confirmed: number; remaining: number; percentage: number }
+		| undefined;
+	const budgetData = budgetChartQuery.data as
+		| { totalBudget: number; reserve: number; planned: number; spent: number; available: number }
+		| undefined;
+
+	if (!guestData && !budgetData) return null;
+
+	return (
+		<div className="grid gap-4 sm:grid-cols-2">
+			{/* Guest Capacity Chart */}
+			{guestData && guestData.capacity > 0 && (
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2 text-sm">
+							<Users className="h-4 w-4" />
+							Capacidade de Convidados
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						<div className="flex items-center justify-center">
+							<ProgressDonut
+								value={guestData.invited}
+								max={guestData.capacity}
+								color="#3b82f6"
+								size={140}
+								centerLabel="convidados"
+							/>
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="rounded-md border p-3 text-center">
+								<p className="text-muted-foreground text-xs">Capacidade</p>
+								<p className="font-semibold text-lg">{guestData.capacity}</p>
+							</div>
+							<div className="rounded-md border p-3 text-center">
+								<p className="text-muted-foreground text-xs">Convidados</p>
+								<p className="font-semibold text-lg">{guestData.invited}</p>
+							</div>
+							<div className="rounded-md border p-3 text-center">
+								<p className="text-muted-foreground text-xs">Confirmados</p>
+								<p className="font-semibold text-lg text-green-600">{guestData.confirmed}</p>
+							</div>
+							<div className="rounded-md border p-3 text-center">
+								<p className="text-muted-foreground text-xs">Disponíveis</p>
+								<p className="font-semibold text-lg text-blue-600">{guestData.remaining}</p>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
+			{/* Budget Chart */}
+			{budgetData && (
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2 text-sm">
+							<CreditCard className="h-4 w-4" />
+							Resumo Financeiro
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						{budgetData.totalBudget > 0 ? (
+							<>
+								<div className="flex items-center justify-center">
+									<ProgressDonut
+										value={budgetData.spent}
+										max={budgetData.totalBudget}
+										color="#f59e0b"
+										size={140}
+										centerLabel="gasto"
+								/>
+								</div>
+								<div className="grid grid-cols-2 gap-3">
+									<div className="rounded-md border p-3 text-center">
+										<p className="text-muted-foreground text-xs">Total</p>
+										<p className="font-semibold text-lg">{formatCurrency(budgetData.totalBudget)}</p>
+									</div>
+									<div className="rounded-md border p-3 text-center">
+										<p className="text-muted-foreground text-xs">Gasto</p>
+										<p className="font-semibold text-lg text-amber-600">{formatCurrency(budgetData.spent)}</p>
+									</div>
+									{budgetData.planned > 0 && (
+										<div className="rounded-md border p-3 text-center">
+											<p className="text-muted-foreground text-xs">Planeado</p>
+											<p className="font-semibold text-lg text-blue-600">{formatCurrency(budgetData.planned)}</p>
+										</div>
+									)}
+									<div className="rounded-md border p-3 text-center">
+										<p className="text-muted-foreground text-xs">Disponível</p>
+										<p className={`font-semibold text-lg ${budgetData.available < 0 ? "text-red-600" : "text-green-600"}`}>{formatCurrency(budgetData.available > 0 ? budgetData.available : 0)}</p>
+									</div>
+								</div>
+							</>
+						) : (
+							<p className="text-center text-muted-foreground text-sm">
+								Nenhum orçamento definido
+							</p>
+						)}
 					</CardContent>
 				</Card>
 			)}
