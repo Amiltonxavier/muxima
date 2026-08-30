@@ -18,10 +18,35 @@ import {
 	SelectValue,
 } from "@muxima/ui/components/select";
 import { Textarea } from "@muxima/ui/components/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muxima/ui/components/tabs";
+import {
+	KanbanBoard,
+	KanbanCard,
+	KanbanCards,
+	KanbanHeader,
+	KanbanProvider,
+	type DragEndEvent,
+} from "@muxima/ui/components/kibo-ui/kanban";
+import {
+	ListGroup,
+	ListHeader,
+	ListItem,
+	ListItems,
+	ListProvider,
+} from "@muxima/ui/components/kibo-ui/list";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, Circle, Clock, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import {
+	CheckCircle2,
+	Circle,
+	Clock,
+	Columns3,
+	GripVertical,
+	List,
+	Plus,
+	Trash2,
+} from "lucide-react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
@@ -32,12 +57,42 @@ import {
 	useUpdateTask,
 } from "@/shared/queries/task-queries";
 import { formatDate } from "@/utils/format-date";
-import { getStatusColor, TASK_CATEGORY_LABELS } from "@/utils/status-helpers";
+import { getStatusColor, TASK_CATEGORY_LABELS, TASK_STATUS_LABELS } from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
 	component: TasksPage,
 });
+
+// ── Kanban column definitions ────────────────────────────────────
+
+const KANBAN_COLUMNS = [
+	{ id: "TODO", name: "Por fazer" },
+	{ id: "IN_PROGRESS", name: "Em andamento" },
+	{ id: "COMPLETED", name: "Concluído" },
+];
+
+const COLUMN_ICONS: Record<string, React.ReactNode> = {
+	TODO: <Circle className="h-4 w-4 text-muted-foreground" />,
+	IN_PROGRESS: <Clock className="h-4 w-4 text-blue-500" />,
+	COMPLETED: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+	LOW: "bg-blue-50 text-blue-700",
+	MEDIUM: "bg-neutral-100 text-neutral-700",
+	HIGH: "bg-amber-50 text-amber-700",
+	URGENT: "bg-red-50 text-red-700",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+	LOW: "Baixa",
+	MEDIUM: "Média",
+	HIGH: "Alta",
+	URGENT: "Urgente",
+};
+
+// ── Main Page ────────────────────────────────────────────────────
 
 function TasksPage() {
 	const { eventId } = Route.useParams();
@@ -48,31 +103,72 @@ function TasksPage() {
 	const deleteTask = useDeleteTask();
 
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editingTask, setEditingTask] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
+	const [editingTask, setEditingTask] = useState<Record<string, unknown> | null>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
+	const [activeTab, setActiveTab] = useState("kanban");
 
-	const tasks = tasksQuery.data ?? [];
-	const todoTasks = tasks.filter(
-		(t: Record<string, unknown>) => t.status === "TODO",
+	const tasks = (tasksQuery.data ?? []) as Record<string, unknown>[];
+
+	// ── Kanban drag-end handler ───────────────────────────────────
+
+	const handleKanbanDragEnd = useCallback(
+		(event: DragEndEvent) => {
+			const { active, over } = event;
+			if (!over) return;
+
+			const taskId = active.id as string;
+			const newStatus = over.id as string;
+
+			// Only update if dragged to a column (not another card)
+			if (!KANBAN_COLUMNS.find((c) => c.id === newStatus)) return;
+
+			const task = tasks.find((t) => t.id === taskId);
+			if (task && task.status !== newStatus) {
+				updateTask.mutate(
+					{ id: taskId, status: newStatus as any },
+					{
+						onSuccess: () => {
+							toast.success(`Tarefa movida para "${TASK_STATUS_LABELS[newStatus] || newStatus}"`);
+						},
+						onError: (e) => toast.error(e.message),
+					},
+				);
+			}
+		},
+		[tasks, updateTask],
 	);
-	const inProgressTasks = tasks.filter(
-		(t: Record<string, unknown>) => t.status === "IN_PROGRESS",
-	);
-	const completedTasks = tasks.filter(
-		(t: Record<string, unknown>) => t.status === "COMPLETED",
-	);
+
+// ── Kanban data mapping ──────────────────────────────────────
+
+type KanbanTaskItem = {
+	id: string;
+	name: string;
+	column: string;
+	description?: string;
+	category?: string;
+	priority?: string;
+	dueDate?: string;
+};
+
+const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
+	id: t.id as string,
+	name: t.title as string,
+	column: (t.status as string) || "TODO",
+	description: t.description as string | undefined,
+	category: t.category as string | undefined,
+	priority: t.priority as string | undefined,
+	dueDate: t.dueDate as string | undefined,
+}));
 
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
+
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="font-semibold text-2xl">Tarefas</h1>
 					<p className="text-muted-foreground text-sm">
-						{todoTasks.length} por fazer
+						{tasks.length} tarefa{tasks.length !== 1 ? "s" : ""}
 					</p>
 				</div>
 				<Button onClick={() => setShowCreateDialog(true)}>
@@ -89,49 +185,184 @@ function TasksPage() {
 					hasData: tasks.length > 0,
 				}}
 			>
-				<div className="grid gap-6 lg:grid-cols-3">
-					<TaskColumn
-						title="Por fazer"
-						icon={<Circle className="h-4 w-4 text-muted-foreground" />}
-						tasks={todoTasks}
-						onEdit={setEditingTask}
-						onDelete={setDeleteId}
-						onToggleStatus={(task) => {
-							updateTask.mutate({
-								id: task.id as string,
-								status: "IN_PROGRESS",
-							});
-						}}
-					/>
-					<TaskColumn
-						title="Em andamento"
-						icon={<Clock className="h-4 w-4 text-blue-500" />}
-						tasks={inProgressTasks}
-						onEdit={setEditingTask}
-						onDelete={setDeleteId}
-						onToggleStatus={(task) => {
-							updateTask.mutate({
-								id: task.id as string,
-								status: "COMPLETED",
-							});
-						}}
-					/>
-					<TaskColumn
-						title="Concluído"
-						icon={<CheckCircle2 className="h-4 w-4 text-green-500" />}
-						tasks={completedTasks}
-						onEdit={setEditingTask}
-						onDelete={setDeleteId}
-						onToggleStatus={(task) => {
-							updateTask.mutate({
-								id: task.id as string,
-								status: "TODO",
-							});
-						}}
-					/>
-				</div>
+				<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+					<TabsList>
+						<TabsTrigger value="kanban">
+							<Columns3 className="mr-2 h-4 w-4" />
+							Kanban
+						</TabsTrigger>
+						<TabsTrigger value="list">
+							<List className="mr-2 h-4 w-4" />
+							Lista
+						</TabsTrigger>
+					</TabsList>
+
+					{/* ── Kanban View ─────────────────────────────────── */}
+					<TabsContent value="kanban">
+						<KanbanProvider
+							columns={KANBAN_COLUMNS}
+							data={kanbanData}
+							onDragEnd={handleKanbanDragEnd}
+						>
+							{(column) => (
+								<KanbanBoard key={column.id} id={column.id}>
+									<KanbanHeader>
+										<div className="flex items-center gap-2">
+											{COLUMN_ICONS[column.id]}
+											<span>{column.name}</span>
+											<Badge variant="secondary" className="ml-auto">
+												{kanbanData.filter((t) => t.column === column.id).length}
+											</Badge>
+										</div>
+									</KanbanHeader>								<KanbanCards id={column.id}>
+									{(item: KanbanTaskItem) => (
+										<KanbanCard key={item.id} id={item.id} name={item.name} column={item.column}>
+											<div className="space-y-2">
+												<div className="flex items-start justify-between gap-2">
+													<p className="m-0 font-medium text-sm">{item.name}</p>
+													{item.priority && (
+														<Badge
+															className={PRIORITY_COLORS[item.priority] || ""}
+															variant="secondary"
+														>
+																{PRIORITY_LABELS[item.priority] || item.priority}
+														</Badge>
+													)}
+												</div>
+												{item.description && (
+													<p className="m-0 text-muted-foreground text-xs line-clamp-2">
+														{item.description}
+												</p>
+												)}
+												<div className="flex items-center gap-2 text-muted-foreground text-xs">
+													{item.category && (
+														<span>
+															{TASK_CATEGORY_LABELS[item.category] || item.category}
+													</span>
+													)}
+													{item.dueDate && (
+														<>
+															<span>·</span>
+															<span>{formatDate(item.dueDate)}</span>
+														</>
+													)}
+												</div>
+													<div className="flex justify-end gap-1 pt-1">
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															onClick={(e) => {
+																e.stopPropagation();
+																setEditingTask(item as Record<string, unknown>);
+															}}
+														>
+															<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															className="text-destructive"
+															onClick={(e) => {
+																e.stopPropagation();
+																setDeleteId(item.id);
+															}}
+														>
+															<Trash2 className="h-3.5 w-3.5" />
+														</Button>
+													</div>
+												</div>
+											</KanbanCard>
+										)}
+									</KanbanCards>
+								</KanbanBoard>
+							)}
+						</KanbanProvider>
+					</TabsContent>
+
+					{/* ── List View ───────────────────────────────────── */}
+					<TabsContent value="list">
+						<ListProvider onDragEnd={() => {}}>
+							<div className="space-y-4">
+								{KANBAN_COLUMNS.map((col) => {
+									const colTasks = kanbanData.filter((t) => t.column === col.id);
+									return (
+										<ListGroup key={col.id} id={col.id}>
+											<ListHeader name={col.name} color={getStatusColor(col.id)} />
+											<ListItems>
+												{colTasks.length === 0 ? (
+													<p className="py-4 text-center text-muted-foreground text-xs">
+														Nenhuma tarefa
+													</p>
+												) : (
+													colTasks.map((task, index) => (
+														<ListItem
+															key={task.id}
+															id={task.id}
+															name={task.name}
+															index={index}
+															parent={col.id}
+														>
+															<div className="flex w-full items-center gap-2">
+																<GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+																<div className="min-w-0 flex-1">
+																	<p className="m-0 truncate font-medium text-sm">
+																		{task.name}
+																	</p>
+																	<div className="flex items-center gap-2 text-muted-foreground text-xs">
+																		{task.category && (
+																			<span>
+																				{TASK_CATEGORY_LABELS[task.category] ||
+																					task.category}
+																			</span>
+																		)}
+																		{task.dueDate && (
+																			<>
+																				<span>·</span>
+																				<span>{formatDate(task.dueDate)}</span>
+																			</>
+																		)}
+																	</div>
+																</div>
+																{task.priority && (
+																	<Badge
+																		className={PRIORITY_COLORS[task.priority] || ""}
+																		variant="secondary"
+																	>
+																		{PRIORITY_LABELS[task.priority] || task.priority}
+																	</Badge>
+																)}
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
+																	onClick={() =>
+																		setEditingTask(task as Record<string, unknown>)
+																	}
+																>
+																	<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+																</Button>
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
+																	className="text-destructive"
+																	onClick={() => setDeleteId(task.id)}
+																>
+																	<Trash2 className="h-3.5 w-3.5" />
+																</Button>
+															</div>
+														</ListItem>
+													))
+												)}
+											</ListItems>
+										</ListGroup>
+									);
+								})}
+							</div>
+						</ListProvider>
+					</TabsContent>
+				</Tabs>
 			</QueryState>
 
+			{/* ── Create Dialog ────────────────────────────────────── */}
 			<TaskDialog
 				open={showCreateDialog}
 				onOpenChange={setShowCreateDialog}
@@ -150,6 +381,7 @@ function TasksPage() {
 				isLoading={createTask.isPending}
 			/>
 
+			{/* ── Edit Dialog ──────────────────────────────────────── */}
 			{editingTask && (
 				<TaskDialog
 					open={!!editingTask}
@@ -180,11 +412,15 @@ function TasksPage() {
 				/>
 			)}
 
+			{/* ── Delete Dialog ────────────────────────────────────── */}
 			<Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Eliminar tarefa</DialogTitle>
 					</DialogHeader>
+					<p className="text-muted-foreground text-sm">
+						Tem certeza que deseja eliminar esta tarefa? Esta ação não pode ser desfeita.
+					</p>
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setDeleteId(null)}>
 							Cancelar
@@ -216,101 +452,7 @@ function TasksPage() {
 	);
 }
 
-function TaskColumn({
-	title,
-	icon,
-	tasks,
-	onEdit,
-	onDelete,
-	onToggleStatus,
-}: {
-	title: string;
-	icon: React.ReactNode;
-	tasks: Record<string, unknown>[];
-	onEdit: (task: Record<string, unknown>) => void;
-	onDelete: (id: string) => void;
-	onToggleStatus: (task: Record<string, unknown>) => void;
-}) {
-	return (
-		<div className="space-y-3">
-			<div className="flex items-center gap-2">
-				{icon}
-				<h3 className="font-medium text-sm">{title}</h3>
-				<Badge variant="secondary" className="ml-auto">
-					{tasks.length}
-				</Badge>
-			</div>
-			<div className="space-y-2">
-				{tasks.map((task) => (
-					<Card key={task.id as string}>
-						<CardContent className="p-4">
-							<div className="space-y-2">
-								<div className="flex items-start justify-between">
-									<p className="font-medium text-sm">{task.title as string}</p>
-									<Badge
-										className={getStatusColor(
-											(task.priority as string) || "MEDIUM",
-										)}
-									>
-										{task.priority as string}
-									</Badge>
-								</div>
-								{(task.description as string) && (
-									<p className="text-muted-foreground text-xs">
-										{task.description as string}
-									</p>
-								)}
-								<div className="flex items-center gap-2 text-muted-foreground text-xs">
-									<span>
-										{TASK_CATEGORY_LABELS[task.category as string] ||
-											(task.category as string)}
-									</span>
-									{Boolean(task.dueDate) && (
-										<>
-											<span>·</span>
-											<span>{formatDate(task.dueDate as string)}</span>
-										</>
-									)}
-								</div>
-								<div className="flex items-center justify-between pt-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => onToggleStatus(task)}
-									>
-										Avançar →
-									</Button>
-									<div className="flex gap-1">
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											onClick={() => onEdit(task)}
-										>
-											<Plus className="h-3.5 w-3.5" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											className="text-destructive"
-											onClick={() => onDelete(task.id as string)}
-										>
-											<Trash2 className="h-3.5 w-3.5" />
-										</Button>
-									</div>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-				))}
-				{tasks.length === 0 && (
-					<p className="py-4 text-center text-muted-foreground text-xs">
-						Nenhuma tarefa
-					</p>
-				)}
-			</div>
-		</div>
-	);
-}
+// ── Task Dialog ──────────────────────────────────────────────────
 
 function TaskDialog({
 	open,
@@ -456,6 +598,36 @@ function TaskDialog({
 							)}
 						</form.Field>
 					</div>
+
+					{isEditing && (
+						<form.Field name="status">
+							{(field) => (
+								<div className="space-y-2">
+									<Label>Estado</Label>{" "}
+									<Select
+										items={[
+											{ value: "TODO", label: "Por fazer" },
+											{ value: "IN_PROGRESS", label: "Em andamento" },
+											{ value: "COMPLETED", label: "Concluído" },
+											{ value: "CANCELLED", label: "Cancelado" },
+										]}
+										value={field.state.value}
+										onValueChange={(v) => field.handleChange(v as any)}
+									>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="TODO">Por fazer</SelectItem>
+											<SelectItem value="IN_PROGRESS">Em andamento</SelectItem>
+											<SelectItem value="COMPLETED">Concluído</SelectItem>
+											<SelectItem value="CANCELLED">Cancelado</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+							)}
+						</form.Field>
+					)}
 
 					<form.Field name="dueDate">
 						{(field) => (
