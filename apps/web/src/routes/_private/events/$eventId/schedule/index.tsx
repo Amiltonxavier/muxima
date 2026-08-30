@@ -1,6 +1,5 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import { Card, CardContent } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -11,10 +10,27 @@ import {
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { Textarea } from "@muxima/ui/components/textarea";
+import {
+	GanttFeatureItem,
+	GanttFeatureList,
+	GanttFeatureListGroup,
+	GanttFeatureRow,
+	GanttHeader,
+	GanttMarker,
+	GanttProvider,
+	GanttSidebar,
+	GanttSidebarGroup,
+	GanttSidebarItem,
+	GanttToday,
+	GanttTimeline,
+	type GanttFeature,
+	type GanttStatus,
+} from "@muxima/ui/components/kibo-ui/gantt";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
+import { format } from "date-fns";
 import { Clock, MapPin, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
@@ -22,14 +38,26 @@ import {
 	useCreateSchedule,
 	useDeleteSchedule,
 	useSchedules,
-	useUpdateSchedule,
 } from "@/shared/queries/schedule-queries";
-import { formatDateTime } from "@/utils/format-date";
 import { scheduleSchema } from "@/utils/task-schemas";
 
 export const Route = createFileRoute("/_private/events/$eventId/schedule/")({
 	component: SchedulePage,
 });
+
+const STATUS_MAP: Record<string, GanttStatus> = {
+	PENDING: { id: "PENDING", name: "Pendente", color: "#eab308" },
+	IN_PROGRESS: { id: "IN_PROGRESS", name: "Em andamento", color: "#3b82f6" },
+	COMPLETED: { id: "COMPLETED", name: "Concluído", color: "#22c55e" },
+	CANCELLED: { id: "CANCELLED", name: "Cancelado", color: "#ef4444" },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+	PENDING: "Pendente",
+	IN_PROGRESS: "Em andamento",
+	COMPLETED: "Concluído",
+	CANCELLED: "Cancelado",
+};
 
 function SchedulePage() {
 	const { eventId } = Route.useParams();
@@ -37,12 +65,67 @@ function SchedulePage() {
 	const schedulesQuery = useSchedules(eventId);
 	const createSchedule = useCreateSchedule();
 	const deleteSchedule = useDeleteSchedule();
-	const _updateSchedule = useUpdateSchedule();
 
 	const [showCreate, setShowCreate] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
 	const schedules = schedulesQuery.data ?? [];
+
+	// Convert schedules to Gantt features
+	const ganttFeatures: GanttFeature[] = useMemo(() => {
+		return schedules
+			.filter((s: Record<string, unknown>) => {
+				const start = s.startAt ? new Date(s.startAt as string) : null;
+				return start && !Number.isNaN(start.getTime());
+			})
+			.map((s: Record<string, unknown>) => {
+				const startAt = new Date(s.startAt as string);
+				const endAt = s.endAt
+					? new Date(s.endAt as string)
+					: new Date(startAt.getTime() + 2 * 60 * 60 * 1000); // default 2h
+
+				return {
+					id: s.id as string,
+					name: (s.title as string) || "Sem título",
+					startAt,
+					endAt,
+					status: STATUS_MAP[(s.status as string) || "PENDING"] || STATUS_MAP.PENDING,
+					lane: (s.responsible as string) || undefined,
+				};
+			});
+	}, [schedules]);
+
+	// Group features by responsible
+	const groupedFeatures = useMemo(() => {
+		const groups: Record<string, GanttFeature[]> = {};
+		for (const feature of ganttFeatures) {
+			const lane = feature.lane || "Geral";
+			if (!groups[lane]) groups[lane] = [];
+			groups[lane].push(feature);
+		}
+		return groups;
+	}, [ganttFeatures]);
+
+	// Markers for schedules with locations
+	const markers = useMemo(() => {
+		return ganttFeatures
+			.filter((f) => {
+				const schedule = schedules.find(
+					(s: Record<string, unknown>) => s.id === f.id,
+				);
+				return schedule?.location;
+			})
+			.map((f) => {
+				const schedule = schedules.find(
+					(s: Record<string, unknown>) => s.id === f.id,
+				);
+				return {
+					id: `marker-${f.id}`,
+					date: f.startAt,
+					label: `${f.name} — ${String(schedule?.location || "")}`,
+				};
+			});
+	}, [ganttFeatures, schedules]);
 
 	return (
 		<div className="space-y-6">
@@ -68,40 +151,110 @@ function SchedulePage() {
 					hasData: schedules.length > 0,
 				}}
 			>
-				<div className="space-y-3">
-					{schedules.map((schedule: Record<string, unknown>) => (
-						<Card key={schedule.id as string}>
-							<CardContent className="p-4">
-								<div className="flex items-center justify-between">
-									<div className="space-y-1">
-										<div className="flex items-center gap-2">
-											<p className="font-medium text-sm">
-												{String(schedule.title || "")}
-											</p>
-											<Badge variant="secondary">
-												{(schedule.status as string) || "PENDING"}
-											</Badge>
-										</div>
-										<div className="flex items-center gap-4 text-muted-foreground text-xs">
-											<span className="flex items-center gap-1">
-												<Clock className="h-3 w-3" />
-												{schedule.startAt
-													? formatDateTime(schedule.startAt as string)
-													: "—"}
-											</span>
-											{Boolean(schedule.location) && (
+				<div className="rounded-lg border">
+					<GanttProvider range="monthly" zoom={100}>
+						<GanttSidebar>
+							{Object.entries(groupedFeatures).map(([lane, features]) => (
+								<GanttSidebarGroup key={lane} name={lane}>
+									{features.map((feature) => (
+										<GanttSidebarItem
+											key={feature.id}
+											feature={feature}
+										/>
+									))}
+								</GanttSidebarGroup>
+							))}
+						</GanttSidebar>
+						<GanttTimeline>
+							<GanttHeader />
+							<GanttFeatureList>
+								{Object.entries(groupedFeatures).map(([lane, features]) => (
+									<GanttFeatureListGroup key={lane}>
+										<GanttFeatureRow
+											features={features}
+											onMove={(id, startAt, endAt) => {
+												toast.info(
+													`Arrastar ${id}: ${format(startAt, "dd/MM/yyyy")} — ${endAt ? format(endAt, "dd/MM/yyyy") : "—"}`,
+												);
+											}}
+										>
+											{(feature) => {
+												const schedule = schedules.find(
+													(s: Record<string, unknown>) => s.id === feature.id,
+												);
+												return (
+													<div className="flex items-center gap-2 px-2 text-xs">
+														<p className="flex-1 truncate">{feature.name}</p>
+														{schedule?.location && (
+															<MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+														)}
+													</div>
+												);
+											}}
+										</GanttFeatureRow>
+									</GanttFeatureListGroup>
+								))}
+							</GanttFeatureList>
+							{markers.map((marker) => (
+								<GanttMarker
+									key={marker.id}
+									id={marker.id}
+									date={marker.date}
+									label={marker.label}
+								/>
+							))}
+							<GanttToday />
+						</GanttTimeline>
+					</GanttProvider>
+				</div>
+			</QueryState>
+
+			{/* Schedule List (compact view below Gantt) */}
+			{schedules.length > 0 && (
+				<div className="space-y-2">
+					<h2 className="font-medium text-lg">Lista de atividades</h2>
+					<div className="space-y-1">
+						{schedules.map((schedule: Record<string, unknown>) => (
+							<div
+								key={schedule.id as string}
+								className="flex items-center justify-between rounded-md border px-4 py-2"
+							>
+								<div className="flex items-center gap-3">
+									<div
+										className="h-2.5 w-2.5 rounded-full"
+										style={{
+											backgroundColor:
+												STATUS_MAP[(schedule.status as string) || "PENDING"]
+													?.color || "#eab308",
+										}}
+									/>
+									<div>
+										<p className="font-medium text-sm">
+											{String(schedule.title || "")}
+										</p>
+										<div className="flex items-center gap-3 text-muted-foreground text-xs">
+											{schedule.startAt ? (
+												<span className="flex items-center gap-1">
+													<Clock className="h-3 w-3" />
+													{format(new Date(schedule.startAt as string), "dd/MM/yyyy HH:mm")}
+													{schedule.endAt
+														? ` — ${format(new Date(schedule.endAt as string), "HH:mm")}`
+														: ""}
+												</span>
+											) : null}
+											{schedule.location ? (
 												<span className="flex items-center gap-1">
 													<MapPin className="h-3 w-3" />
-													{String(schedule.location || "")}
+													{String(schedule.location)}
 												</span>
-											)}
+											) : null}
 										</div>
-										{Boolean(schedule.description) && (
-											<p className="text-muted-foreground text-xs">
-												{String(schedule.description || "")}
-											</p>
-										)}
 									</div>
+								</div>
+								<div className="flex items-center gap-2">
+									<Badge variant="secondary">
+										{STATUS_LABELS[(schedule.status as string) || "PENDING"] || "Pendente"}
+									</Badge>
 									<Button
 										variant="ghost"
 										size="icon-sm"
@@ -111,18 +264,19 @@ function SchedulePage() {
 										<Trash2 className="h-3.5 w-3.5" />
 									</Button>
 								</div>
-							</CardContent>
-						</Card>
-					))}
+							</div>
+						))}
+					</div>
 				</div>
-			</QueryState>
+			)}
 
+			{/* Create Dialog */}
 			<ScheduleDialog
 				open={showCreate}
 				onOpenChange={setShowCreate}
 				onSubmit={(values) => {
 					createSchedule.mutate(
-						{ ...values, eventId },
+						{ ...values, eventId } as never,
 						{
 							onSuccess: () => {
 								toast.success("Atividade criada");
@@ -135,6 +289,7 @@ function SchedulePage() {
 				isLoading={createSchedule.isPending}
 			/>
 
+			{/* Delete Confirmation */}
 			<Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
 				<DialogContent>
 					<DialogHeader>
@@ -170,6 +325,9 @@ function SchedulePage() {
 	);
 }
 
+// ========================
+// Schedule Dialog (Create)
+// ========================
 function ScheduleDialog({
 	open,
 	onOpenChange,
@@ -178,7 +336,7 @@ function ScheduleDialog({
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
-	onSubmit: (v: any) => void;
+	onSubmit: (v: Record<string, unknown>) => void;
 	isLoading: boolean;
 }) {
 	const form = useForm({
