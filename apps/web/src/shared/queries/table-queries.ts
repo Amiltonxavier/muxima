@@ -24,3 +24,25 @@ export function useCreateTable() {
 		}),
 	);
 }
+
+export function useUpdateTable() {
+	const queryClient = useQueryClient();
+	return useMutation(
+		orpc.guests.updateTable.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: tableKeys.all });
+			},
+		}),
+	);
+}
+
+export function useDeleteTable() {
+	const queryClient = useQueryClient();
+	return useMutation(
+		orpc.guests.deleteTable.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: tableKeys.all });
+			},
+		}),
+	);
+}

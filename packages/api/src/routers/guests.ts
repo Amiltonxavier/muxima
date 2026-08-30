@@ -222,7 +222,7 @@ export const guestsRouter = {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
 			const tables = await db.table.findMany({
-				where: { eventId: input.eventId },
+				where: { eventId: input.eventId, deletedAt: null },
 				include: {
 					tableGuests: {
 						include: {
@@ -264,6 +264,63 @@ export const guestsRouter = {
 			});
 
 			return table;
+		}),
+
+	updateTable: protectedProcedure
+		.input(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).optional(),
+				number: z.number().int().positive().optional(),
+				capacity: z.number().int().positive().optional(),
+				location: z.string().optional(),
+				notes: z.string().optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const table = await db.table.findUnique({
+				where: { id: input.id },
+				select: { eventId: true },
+			});
+			if (table) {
+				await requireEventAccess(context.session.user.id, table.eventId);
+			}
+
+			const updated = await db.table.update({
+				where: { id: input.id },
+				data: {
+					name: input.name,
+					number: input.number,
+					capacity: input.capacity,
+					location: input.location,
+					notes: input.notes,
+				},
+			});
+
+			return updated;
+		}),
+
+	deleteTable: protectedProcedure
+		.input(z.object({ id: z.string() }))
+		.handler(async ({ context, input }) => {
+			const table = await db.table.findUnique({
+				where: { id: input.id },
+				select: { eventId: true },
+			});
+			if (table) {
+				await requireEventAccess(context.session.user.id, table.eventId);
+			}
+
+			// Soft delete: set deletedAt, remove all guest assignments
+			await db.tableGuest.deleteMany({
+				where: { tableId: input.id },
+			});
+			await db.table.update({
+				where: { id: input.id },
+				data: { deletedAt: new Date() },
+			});
+
+			return { success: true };
 		}),
 
 	assignGuestToTable: protectedProcedure
