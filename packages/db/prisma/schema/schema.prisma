@@ -48,6 +48,11 @@ enum InvitationStatus {
   CANCELLED
 }
 
+enum ExpenseType {
+  EXPENSE
+  INCOME
+}
+
 enum ExpenseStatus {
   PLANNED
   PARTIALLY_PAID
@@ -344,9 +349,11 @@ model Expense {
   budgetCategoryId String?
   vendorId         String?
   description      String
+  type             ExpenseType   @default(EXPENSE)
   totalAmount      Decimal
   dueDate          DateTime?
   status           ExpenseStatus @default(PLANNED)
+  paidPercentage   Float         @default(0)
   notes            String?
   createdBy        String
   createdAt        DateTime      @default(now())
@@ -449,8 +456,8 @@ model Guest {
 
   event       Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   companions  GuestCompanion[]
-  invitations GuestInvitation[]
   tableGuests TableGuest[]
+  invitationGuests InvitationGuest[]
 
   @@index([eventId])
   @@map("guest")
@@ -473,7 +480,6 @@ model GuestCompanion {
 model GuestInvitation {
   id         String                  @id @default(uuid())
   eventId    String
-  guestId    String
   code       String
   status     GuestInvitationStatus   @default(CREATED)
   sentAt     DateTime?
@@ -482,14 +488,27 @@ model GuestInvitation {
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event  Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guests InvitationGuest[]
 
-  @@unique([eventId, guestId])
   @@unique([code])
   @@index([eventId])
-  @@index([guestId])
   @@map("guest_invitation")
+}
+
+model InvitationGuest {
+  id              String   @id @default(uuid())
+  invitationId    String
+  guestId         String
+  createdAt       DateTime @default(now())
+
+  invitation GuestInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  guest      Guest           @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([invitationId, guestId])
+  @@index([invitationId])
+  @@index([guestId])
+  @@map("invitation_guest")
 }
 
 model Table {

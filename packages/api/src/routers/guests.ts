@@ -38,7 +38,9 @@ export const guestsRouter = {
 					tableGuests: {
 						include: { table: true },
 					},
-					invitations: true,
+					invitationGuests: {
+						include: { invitation: true },
+					},
 				},
 			});
 
@@ -289,32 +291,29 @@ export const guestsRouter = {
 	createInvitation: protectedProcedure
 		.input(
 			z.object({
-				guestId: z.string(),
+				guestIds: z.array(z.string()).min(1),
 				eventId: z.string(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const existing = await db.guestInvitation.findUnique({
-				where: {
-					eventId_guestId: { eventId: input.eventId, guestId: input.guestId },
-				},
-			});
-
-			if (existing) {
-				return existing;
-			}
-
 			const code = Math.random().toString(36).substring(2, 10).toUpperCase();
 
 			const invitation = await db.guestInvitation.create({
 				data: {
 					eventId: input.eventId,
-					guestId: input.guestId,
 					code,
 					status: "SENT",
 					sentAt: new Date(),
+					guests: {
+						create: input.guestIds.map((guestId) => ({ guestId })),
+					},
+				},
+				include: {
+					guests: {
+						include: { guest: true },
+					},
 				},
 			});
 
@@ -324,28 +323,59 @@ export const guestsRouter = {
 	getInvitation: protectedProcedure
 		.input(z.object({ guestId: z.string() }))
 		.handler(async ({ context, input }) => {
-			const invitation = await db.guestInvitation.findFirst({
+			const invitationGuest = await db.invitationGuest.findFirst({
 				where: { guestId: input.guestId },
 				include: {
-					event: {
-						include: { owner: true },
-					},
-					guest: {
+					invitation: {
 						include: {
-							tableGuests: {
-								include: { table: true },
+							event: {
+								include: { owner: true },
+							},
+							guests: {
+								include: {
+									guest: {
+										include: {
+											tableGuests: {
+												include: { table: true },
+											},
+										},
+									},
+								},
 							},
 						},
 					},
 				},
 			});
 
-			if (!invitation) {
+			if (!invitationGuest) {
 				throw new Error("Convite não encontrado");
 			}
 
-			await requireEventAccess(context.session.user.id, invitation.eventId);
+			await requireEventAccess(
+				context.session.user.id,
+				invitationGuest.invitation.eventId,
+			);
 
-			return invitation;
+			return invitationGuest.invitation;
+		}),
+
+	getInvitationsByEvent: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const invitations = await db.guestInvitation.findMany({
+				where: { eventId: input.eventId },
+				include: {
+					guests: {
+						include: {
+							guest: true,
+						},
+					},
+				},
+				orderBy: { createdAt: "desc" },
+			});
+
+			return invitations;
 		}),
 };
