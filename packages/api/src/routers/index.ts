@@ -2,6 +2,7 @@ import type { RouterClient } from "@orpc/server";
 
 import { publicProcedure } from "../index";
 import { budgetRouter } from "./budget";
+import { dashboardRouter } from "./dashboard";
 import { documentsRouter } from "./documents";
 import { eventsRouter } from "./events";
 import { guestsRouter } from "./guests";
@@ -16,6 +17,7 @@ export const appRouter = {
 	healthCheck: publicProcedure.handler(() => {
 		return "OK";
 	}),
+	dashboard: dashboardRouter,
 	events: eventsRouter,
 	budget: budgetRouter,
 	vendors: vendorsRouter,
