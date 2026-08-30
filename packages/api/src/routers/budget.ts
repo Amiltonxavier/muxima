@@ -2,11 +2,16 @@ import db from "@muxima/db";
 import type { ExpenseStatus } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const budgetRouter = {
 	getByEventId: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 			const [budget, categories] = await Promise.all([
 				db.budget.findUnique({
 					where: { eventId: input.eventId },
@@ -28,7 +33,9 @@ export const budgetRouter = {
 				notes: z.string().optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const budget = await db.budget.upsert({
 				where: { eventId: input.eventId },
 				update: {
@@ -56,7 +63,9 @@ export const budgetRouter = {
 				plannedAmount: z.number().min(0).default(0),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const category = await db.budgetCategory.create({
 				data: {
 					eventId: input.eventId,
@@ -78,7 +87,15 @@ export const budgetRouter = {
 				plannedAmount: z.number().min(0).optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const catEventId = await getEventIdForResource(
+				"budgetCategory",
+				input.id,
+			);
+			if (catEventId) {
+				await requireEventAccess(context.session.user.id, catEventId);
+			}
+
 			const category = await db.budgetCategory.update({
 				where: { id: input.id },
 				data: {
@@ -93,7 +110,11 @@ export const budgetRouter = {
 
 	deleteCategory: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("budgetCategory", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
 			await db.budgetCategory.delete({
 				where: { id: input.id },
 			});
@@ -103,7 +124,8 @@ export const budgetRouter = {
 
 	getExpenses: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 			const expenses = await db.expense.findMany({
 				where: { eventId: input.eventId },
 				include: {
@@ -130,6 +152,8 @@ export const budgetRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const expense = await db.expense.create({
 				data: {
 					eventId: input.eventId,
@@ -142,6 +166,63 @@ export const budgetRouter = {
 					createdBy: context.session.user.id,
 				},
 			});
+
+			return expense;
+		}),
+
+	updateExpense: protectedProcedure
+		.input(
+			z.object({
+				id: z.string(),
+				description: z.string().min(1).optional(),
+				totalAmount: z.number().positive().optional(),
+				dueDate: z.string().optional(),
+				notes: z.string().optional(),
+				status: z
+					.enum(["PLANNED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"])
+					.optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const expense = await db.expense.findUnique({ where: { id: input.id } });
+			if (!expense) throw new Error("Despesa não encontrada");
+			await requireEventAccess(context.session.user.id, expense.eventId);
+
+			const updated = await db.expense.update({
+				where: { id: input.id },
+				data: {
+					description: input.description,
+					totalAmount: input.totalAmount,
+					dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+					notes: input.notes,
+					status: input.status,
+				},
+			});
+
+			return updated;
+		}),
+
+	deleteExpense: protectedProcedure
+		.input(z.object({ id: z.string() }))
+		.handler(async ({ context, input }) => {
+			const expense = await db.expense.findUnique({ where: { id: input.id } });
+			if (!expense) throw new Error("Despesa não encontrada");
+			await requireEventAccess(context.session.user.id, expense.eventId);
+
+			await db.expense.delete({ where: { id: input.id } });
+
+			return { success: true };
+		}),
+
+	getExpenseById: protectedProcedure
+		.input(z.object({ id: z.string() }))
+		.handler(async ({ context, input }) => {
+			const expense = await db.expense.findUnique({
+				where: { id: input.id },
+				include: { vendor: true, budgetCategory: true, payments: true },
+			});
+			if (!expense) throw new Error("Despesa não encontrada");
+			await requireEventAccess(context.session.user.id, expense.eventId);
 
 			return expense;
 		}),
@@ -172,6 +253,8 @@ export const budgetRouter = {
 			if (!expense) {
 				throw new Error("Despesa não encontrada");
 			}
+
+			await requireEventAccess(context.session.user.id, expense.eventId);
 
 			const totalPaid = await db.payment.aggregate({
 				where: { expenseId: input.expenseId },

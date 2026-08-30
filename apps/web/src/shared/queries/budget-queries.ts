@@ -55,6 +55,38 @@ export function useCreateExpense() {
 	);
 }
 
+export function useUpdateExpense() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.budget.updateExpense.mutationOptions({
+			onSuccess: (_data) => {
+				queryClient.invalidateQueries({ queryKey: budgetKeys.all });
+			},
+		}),
+	);
+}
+
+export function useDeleteExpense() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.budget.deleteExpense.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: budgetKeys.all });
+			},
+		}),
+	);
+}
+
+export function useExpense(id: string) {
+	return useQuery({
+		...orpc.budget.getExpenseById.queryOptions({ input: { id } }),
+		queryKey: [...budgetKeys.all, "expense", id],
+		enabled: !!id,
+	});
+}
+
 export function useCreatePayment() {
 	const queryClient = useQueryClient();
 

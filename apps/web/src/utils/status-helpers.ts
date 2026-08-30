@@ -14,6 +14,14 @@ export const EXPENSE_STATUS_LABELS: Record<string, string> = {
 	CANCELLED: "Cancelado",
 };
 
+export const GUEST_TYPE_LABELS: Record<string, string> = {
+	FAMILY: "Família",
+	FRIEND: "Amigo",
+	COLLEAGUE: "Colega",
+	VIP: "VIP",
+	OTHER: "Outro",
+};
+
 export const GUEST_STATUS_LABELS: Record<string, string> = {
 	PENDING: "Pendente",
 	CONFIRMED: "Confirmado",
@@ -92,6 +100,24 @@ export const INVENTORY_CATEGORY_LABELS: Record<string, string> = {
 	OTHER: "Outros",
 };
 
+export const INVENTORY_UNIT_LABELS: Record<string, string> = {
+	UNIT: "Unidade",
+	BOX: "Caixa",
+	CASE: "Pack",
+	BOTTLE: "Garrafa",
+	KG: "Kg",
+	LITER: "Litro",
+	PACKAGE: "Pacote",
+	OTHER: "Outro",
+};
+
+export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+	CONTRACT: "Contrato",
+	RECEIPT: "Recibo",
+	QUOTE: "Orçamento",
+	OTHER: "Outro",
+};
+
 export function getStatusColor(status: string): string {
 	const colors: Record<string, string> = {
 		DRAFT: "bg-neutral-100 text-neutral-700",
@@ -118,7 +144,7 @@ export function getStatusColor(status: string): string {
 
 export function getStatusLabel(
 	status: string,
-	type: "event" | "expense" | "guest" | "task" | "vendor" | "role",
+	type: "event" | "expense" | "guest" | "task" | "vendor" | "role" | "document",
 ): string {
 	const labels: Record<string, Record<string, string>> = {
 		event: EVENT_STATUS_LABELS,
@@ -127,6 +153,17 @@ export function getStatusLabel(
 		task: TASK_STATUS_LABELS,
 		vendor: VENDOR_STATUS_LABELS,
 		role: MEMBER_ROLE_LABELS,
+		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
 	};
 	return labels[type]?.[status] || status;
+}
+
+/** Convert a pt-pt label map to Base UI Select items format */
+export function toSelectItems(
+	labels: Record<string, string>,
+): Array<{ value: string; label: string }> {
+	return Object.entries(labels).map(([value, label]) => ({
+		value,
+		label,
+	}));
 }

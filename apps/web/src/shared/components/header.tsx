@@ -7,14 +7,6 @@ export function Header() {
 	const links = [
 		{ to: "/dashboard", label: "Dashboard" },
 		{ to: "/events", label: "Events" },
-		{ to: "/budget", label: "Budget" },
-		{ to: "/suppliers", label: "Suppliers" },
-		{ to: "/guests", label: "Guests" },
-		{ to: "/tables", label: "Tables" },
-		{ to: "/tasks", label: "Tasks" },
-		{ to: "/schedule", label: "Schedule" },
-		{ to: "/inventory", label: "Inventory" },
-		{ to: "/documents", label: "Documents" },
 		{ to: "/notifications", label: "Notifications" },
 		{ to: "/settings", label: "Settings" },
 	] as const;

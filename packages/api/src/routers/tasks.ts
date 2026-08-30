@@ -1,6 +1,10 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const tasksRouter = {
 	list: protectedProcedure
@@ -18,7 +22,7 @@ export const tasksRouter = {
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const task = await db.task.findUnique({
 				where: { id: input.id },
 			});
@@ -26,6 +30,8 @@ export const tasksRouter = {
 			if (!task) {
 				throw new Error("Tarefa não encontrada");
 			}
+
+			await requireEventAccess(context.session.user.id, task.eventId);
 
 			return task;
 		}),
@@ -125,7 +131,12 @@ export const tasksRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("task", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			await db.task.delete({
 				where: { id: input.id },
 			});
@@ -208,7 +219,12 @@ export const tasksRouter = {
 
 	deleteSchedule: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("schedule", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			await db.schedule.delete({
 				where: { id: input.id },
 			});

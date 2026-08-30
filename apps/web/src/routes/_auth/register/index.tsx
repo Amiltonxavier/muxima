@@ -26,7 +26,7 @@ function RegisterPage() {
 		onSubmit: async ({ value }) => {
 			const result = registerSchema.safeParse(value);
 			if (!result.success) {
-				toast.error(result.error.errors[0].message);
+				toast.error(result.error.issues[0].message);
 				return;
 			}
 

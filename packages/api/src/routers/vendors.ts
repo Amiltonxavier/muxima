@@ -1,11 +1,16 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const vendorsRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 			const vendors = await db.vendor.findMany({
 				where: { eventId: input.eventId },
 				include: {
@@ -22,7 +27,7 @@ export const vendorsRouter = {
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const vendor = await db.vendor.findUnique({
 				where: { id: input.id },
 				include: {
@@ -38,6 +43,8 @@ export const vendorsRouter = {
 			if (!vendor) {
 				throw new Error("Fornecedor não encontrado");
 			}
+
+			await requireEventAccess(context.session.user.id, vendor.eventId);
 
 			return vendor;
 		}),
@@ -79,7 +86,9 @@ export const vendorsRouter = {
 					.optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const vendor = await db.vendor.create({
 				data: {
 					eventId: input.eventId,
@@ -156,7 +165,12 @@ export const vendorsRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("vendor", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			await db.vendor.delete({
 				where: { id: input.id },
 			});

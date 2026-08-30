@@ -32,14 +32,14 @@ interface NavGroup {
 	items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
+const eventNavGroups: NavGroup[] = [
 	{
 		label: "",
 		items: [
 			{
-				label: "Dashboard",
+				label: "Visão geral",
 				icon: <Home className="h-4 w-4" />,
-				to: "/dashboard",
+				to: "/events/$eventId",
 			},
 		],
 	},
@@ -49,22 +49,22 @@ const navGroups: NavGroup[] = [
 			{
 				label: "Orçamento",
 				icon: <CreditCard className="h-4 w-4" />,
-				to: "/budget",
+				to: "/events/$eventId/budget",
 			},
 			{
 				label: "Fornecedores",
 				icon: <ShoppingCart className="h-4 w-4" />,
-				to: "/suppliers",
+				to: "/events/$eventId/suppliers",
 			},
 			{
 				label: "Tarefas",
 				icon: <LayoutGrid className="h-4 w-4" />,
-				to: "/tasks",
+				to: "/events/$eventId/tasks",
 			},
 			{
 				label: "Cronograma",
 				icon: <Calendar className="h-4 w-4" />,
-				to: "/schedule",
+				to: "/events/$eventId/schedule",
 			},
 		],
 	},
@@ -74,12 +74,12 @@ const navGroups: NavGroup[] = [
 			{
 				label: "Lista de convidados",
 				icon: <Users className="h-4 w-4" />,
-				to: "/guests",
+				to: "/events/$eventId/guests",
 			},
 			{
 				label: "Mesas",
 				icon: <TableProperties className="h-4 w-4" />,
-				to: "/tables",
+				to: "/events/$eventId/tables",
 			},
 		],
 	},
@@ -89,7 +89,7 @@ const navGroups: NavGroup[] = [
 			{
 				label: "Inventário",
 				icon: <Package className="h-4 w-4" />,
-				to: "/inventory",
+				to: "/events/$eventId/inventory",
 			},
 		],
 	},
@@ -99,7 +99,25 @@ const navGroups: NavGroup[] = [
 			{
 				label: "Documentos",
 				icon: <FileText className="h-4 w-4" />,
-				to: "/documents",
+				to: "/events/$eventId/documents",
+			},
+		],
+	},
+];
+
+const globalNavGroups: NavGroup[] = [
+	{
+		label: "",
+		items: [
+			{
+				label: "Dashboard",
+				icon: <Home className="h-4 w-4" />,
+				to: "/dashboard",
+			},
+			{
+				label: "Eventos",
+				icon: <Gift className="h-4 w-4" />,
+				to: "/events",
 			},
 		],
 	},
@@ -122,19 +140,49 @@ const navGroups: NavGroup[] = [
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 	const matchRoute = useMatchRoute();
+	const isEventContext = matchRoute({ to: "/events/$eventId", fuzzy: true });
+
+	const navGroups = isEventContext ? eventNavGroups : globalNavGroups;
+
+	const eventIdMatch = window.location.pathname.match(/\/events\/([^/]+)/);
+	const eventId = eventIdMatch?.[1];
 
 	return (
 		<div className="flex h-full flex-col">
 			<div className="flex h-14 items-center px-4">
-				<Link
-					to="/dashboard"
-					className="flex items-center gap-2 font-semibold"
-					onClick={onNavigate}
-				>
-					<Gift className="h-5 w-5" />
-					<span className="text-lg">MUXIMA</span>
-				</Link>
+				{isEventContext && eventId ? (
+					<Link
+						to="/events/$eventId"
+						params={{ eventId }}
+						className="flex items-center gap-2 font-semibold"
+						onClick={onNavigate}
+					>
+						<Gift className="h-5 w-5" />
+						<span className="text-lg">MUXIMA</span>
+					</Link>
+				) : (
+					<Link
+						to="/dashboard"
+						className="flex items-center gap-2 font-semibold"
+						onClick={onNavigate}
+					>
+						<Gift className="h-5 w-5" />
+						<span className="text-lg">MUXIMA</span>
+					</Link>
+				)}
 			</div>
+
+			{isEventContext && eventId && (
+				<div className="px-3 pb-2">
+					<Link
+						to="/events"
+						className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-xs hover:text-foreground"
+						onClick={onNavigate}
+					>
+						← Trocar evento
+					</Link>
+				</div>
+			)}
 
 			<nav className="flex-1 overflow-y-auto px-3 py-2">
 				{navGroups.map((group, i) => (
@@ -145,14 +193,20 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 							</p>
 						)}
 						{group.items.map((item) => {
-							const isActive = matchRoute({
-								to: item.to,
-								fuzzy: item.to !== "/dashboard",
-							});
+							const isActive = isEventContext
+								? matchRoute({
+										to: item.to,
+										params: { eventId: eventId || "" },
+									})
+								: matchRoute({
+										to: item.to,
+										fuzzy: item.to !== "/dashboard",
+									});
 							return (
 								<Link
 									key={item.to}
 									to={item.to}
+									params={isEventContext && eventId ? { eventId } : undefined}
 									onClick={onNavigate}
 									className={cn(
 										"flex items-center gap-3 rounded-md px-2 py-1.5 font-medium text-sm transition-colors",
@@ -197,20 +251,27 @@ function SidebarUserInfo() {
 
 function CollapsedNav() {
 	const matchRoute = useMatchRoute();
+	const isEventContext = matchRoute({ to: "/events/$eventId", fuzzy: true });
+	const navGroups = isEventContext ? eventNavGroups : globalNavGroups;
+	const eventIdMatch = window.location.pathname.match(/\/events\/([^/]+)/);
+	const eventId = eventIdMatch?.[1];
 
 	return (
 		<nav className="flex flex-col items-center gap-1 px-2">
 			{navGroups
 				.flatMap((g) => g.items)
 				.map((item) => {
-					const isActive = matchRoute({
-						to: item.to,
-						fuzzy: item.to !== "/dashboard",
-					});
+					const isActive = isEventContext
+						? matchRoute({ to: item.to, params: { eventId: eventId || "" } })
+						: matchRoute({
+								to: item.to,
+								fuzzy: item.to !== "/dashboard",
+							});
 					return (
 						<Link
 							key={item.to}
 							to={item.to}
+							params={isEventContext && eventId ? { eventId } : undefined}
 							className={cn(
 								"flex h-9 w-9 items-center justify-center rounded-md transition-colors",
 								isActive

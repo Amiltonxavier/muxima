@@ -1,16 +1,24 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const guestsRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const guests = await db.guest.findMany({
 				where: { eventId: input.eventId },
 				include: {
 					companions: true,
-					table: true,
+					tableGuests: {
+						include: { table: true },
+					},
 				},
 				orderBy: {
 					createdAt: "desc",
@@ -22,12 +30,14 @@ export const guestsRouter = {
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const guest = await db.guest.findUnique({
 				where: { id: input.id },
 				include: {
 					companions: true,
-					table: true,
+					tableGuests: {
+						include: { table: true },
+					},
 					invitations: true,
 				},
 			});
@@ -35,6 +45,8 @@ export const guestsRouter = {
 			if (!guest) {
 				throw new Error("Convidado não encontrado");
 			}
+
+			await requireEventAccess(context.session.user.id, guest.eventId);
 
 			return guest;
 		}),
@@ -52,9 +64,12 @@ export const guestsRouter = {
 					.optional(),
 				companionsLimit: z.number().int().min(0).optional().default(0),
 				notes: z.string().optional(),
+				tableId: z.string().optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const guest = await db.guest.create({
 				data: {
 					eventId: input.eventId,
@@ -67,6 +82,15 @@ export const guestsRouter = {
 					notes: input.notes,
 				},
 			});
+
+			if (input.tableId) {
+				await db.tableGuest.create({
+					data: {
+						tableId: input.tableId,
+						guestId: guest.id,
+					},
+				});
+			}
 
 			return guest;
 		}),
@@ -89,7 +113,12 @@ export const guestsRouter = {
 					.optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("guest", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			const guest = await db.guest.update({
 				where: { id: input.id },
 				data: {
@@ -109,7 +138,12 @@ export const guestsRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("guest", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			await db.guest.delete({
 				where: { id: input.id },
 			});
@@ -125,7 +159,12 @@ export const guestsRouter = {
 				status: z.enum(["PENDING", "CONFIRMED", "DECLINED"]).optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("guest", input.guestId);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
+
 			const companion = await db.guestCompanion.create({
 				data: {
 					guestId: input.guestId,
@@ -139,7 +178,18 @@ export const guestsRouter = {
 
 	removeCompanion: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const companion = await db.guestCompanion.findUnique({
+				where: { id: input.id },
+				include: { guest: { select: { eventId: true } } },
+			});
+			if (companion) {
+				await requireEventAccess(
+					context.session.user.id,
+					companion.guest.eventId,
+				);
+			}
+
 			await db.guestCompanion.delete({
 				where: { id: input.id },
 			});
@@ -149,7 +199,9 @@ export const guestsRouter = {
 
 	getTables: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const tables = await db.table.findMany({
 				where: { eventId: input.eventId },
 				include: {
@@ -178,7 +230,9 @@ export const guestsRouter = {
 				notes: z.string().optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
 			const table = await db.table.create({
 				data: {
 					eventId: input.eventId,
@@ -230,5 +284,68 @@ export const guestsRouter = {
 			});
 
 			return { success: true };
+		}),
+
+	createInvitation: protectedProcedure
+		.input(
+			z.object({
+				guestId: z.string(),
+				eventId: z.string(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const existing = await db.guestInvitation.findUnique({
+				where: {
+					eventId_guestId: { eventId: input.eventId, guestId: input.guestId },
+				},
+			});
+
+			if (existing) {
+				return existing;
+			}
+
+			const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+			const invitation = await db.guestInvitation.create({
+				data: {
+					eventId: input.eventId,
+					guestId: input.guestId,
+					code,
+					status: "SENT",
+					sentAt: new Date(),
+				},
+			});
+
+			return invitation;
+		}),
+
+	getInvitation: protectedProcedure
+		.input(z.object({ guestId: z.string() }))
+		.handler(async ({ context, input }) => {
+			const invitation = await db.guestInvitation.findFirst({
+				where: { guestId: input.guestId },
+				include: {
+					event: {
+						include: { owner: true },
+					},
+					guest: {
+						include: {
+							tableGuests: {
+								include: { table: true },
+							},
+						},
+					},
+				},
+			});
+
+			if (!invitation) {
+				throw new Error("Convite não encontrado");
+			}
+
+			await requireEventAccess(context.session.user.id, invitation.eventId);
+
+			return invitation;
 		}),
 };

@@ -58,7 +58,20 @@ export const eventsRouter = {
 			z.object({
 				name: z.string().min(1),
 				type: z.enum(["ENGAGEMENT", "WEDDING"]),
-				eventDate: z.string().optional(),
+				eventDate: z
+					.string()
+					.optional()
+					.refine(
+						(v) => {
+							if (!v) return true;
+							const d = new Date(v);
+							d.setHours(0, 0, 0, 0);
+							const today = new Date();
+							today.setHours(0, 0, 0, 0);
+							return d >= today;
+						},
+						{ message: "A data do evento não pode ser no passado" },
+					),
 				startTime: z.string().optional(),
 				endTime: z.string().optional(),
 				venueName: z.string().optional(),
@@ -121,7 +134,20 @@ export const eventsRouter = {
 			z.object({
 				id: z.string(),
 				name: z.string().min(1).optional(),
-				eventDate: z.string().optional(),
+				eventDate: z
+					.string()
+					.optional()
+					.refine(
+						(v) => {
+							if (!v) return true;
+							const d = new Date(v);
+							d.setHours(0, 0, 0, 0);
+							const today = new Date();
+							today.setHours(0, 0, 0, 0);
+							return d >= today;
+						},
+						{ message: "A data do evento não pode ser no passado" },
+					),
 				startTime: z.string().optional(),
 				endTime: z.string().optional(),
 				venueName: z.string().optional(),

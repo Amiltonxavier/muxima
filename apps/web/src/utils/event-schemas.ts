@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+export const futureDateRefine = (val: string | undefined | null) => {
+	if (!val) return true;
+	const d = new Date(val);
+	d.setHours(0, 0, 0, 0);
+	return d >= today;
+};
+
 export const createEventSchema = z.object({
 	type: z.enum(["ENGAGEMENT", "WEDDING"], {
 		message: "Tipo de evento é obrigatório",
@@ -8,7 +18,9 @@ export const createEventSchema = z.object({
 		.string()
 		.min(1, "Nome do evento é obrigatório")
 		.min(2, "Nome deve ter pelo menos 2 caracteres"),
-	eventDate: z.string().optional(),
+	eventDate: z.string().optional().refine(futureDateRefine, {
+		message: "A data do evento não pode ser no passado",
+	}),
 	startTime: z.string().optional(),
 	endTime: z.string().optional(),
 	venueName: z.string().optional(),
@@ -27,7 +39,9 @@ export type CreateEventInput = z.infer<typeof createEventSchema>;
 
 export const updateEventSchema = z.object({
 	name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
-	eventDate: z.string().optional(),
+	eventDate: z.string().optional().refine(futureDateRefine, {
+		message: "A data do evento não pode ser no passado",
+	}),
 	startTime: z.string().optional(),
 	endTime: z.string().optional(),
 	venueName: z.string().optional(),

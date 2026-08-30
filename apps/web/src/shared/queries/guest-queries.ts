@@ -95,3 +95,23 @@ export function useAssignGuestToTable() {
 		}),
 	);
 }
+
+export function useCreateInvitation() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.guests.createInvitation.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
+			},
+		}),
+	);
+}
+
+export function useInvitation(guestId: string) {
+	return useQuery({
+		...orpc.guests.getInvitation.queryOptions({ input: { guestId } }),
+		queryKey: [...guestKeys.all, "invitation", guestId],
+		enabled: !!guestId,
+	});
+}

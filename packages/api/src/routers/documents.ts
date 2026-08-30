@@ -1,11 +1,16 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const documentsRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 			const documents = await db.document.findMany({
 				where: { eventId: input.eventId },
 				include: {
@@ -21,7 +26,7 @@ export const documentsRouter = {
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const document = await db.document.findUnique({
 				where: { id: input.id },
 				include: {
@@ -32,6 +37,8 @@ export const documentsRouter = {
 			if (!document) {
 				throw new Error("Documento não encontrado");
 			}
+
+			await requireEventAccess(context.session.user.id, document.eventId);
 
 			return document;
 		}),
@@ -97,7 +104,11 @@ export const documentsRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("document", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
 			await db.document.delete({
 				where: { id: input.id },
 			});

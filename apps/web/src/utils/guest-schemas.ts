@@ -14,6 +14,7 @@ export const guestSchema = z.object({
 		.default(0),
 	notes: z.string().optional(),
 	status: z.enum(["PENDING", "CONFIRMED", "DECLINED", "WAITING"]).optional(),
+	tableId: z.string().optional(),
 });
 
 export type GuestInput = z.infer<typeof guestSchema>;

@@ -1,11 +1,16 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../shared/auth/event-access";
 
 export const inventoryRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 			const items = await db.inventoryItem.findMany({
 				where: { eventId: input.eventId },
 				include: {
@@ -27,7 +32,7 @@ export const inventoryRouter = {
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const item = await db.inventoryItem.findUnique({
 				where: { id: input.id },
 				include: {
@@ -43,6 +48,8 @@ export const inventoryRouter = {
 			if (!item) {
 				throw new Error("Item não encontrado");
 			}
+
+			await requireEventAccess(context.session.user.id, item.eventId);
 
 			return item;
 		}),
@@ -145,7 +152,11 @@ export const inventoryRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("inventoryItem", input.id);
+			if (eventId) {
+				await requireEventAccess(context.session.user.id, eventId);
+			}
 			await db.inventoryItem.delete({
 				where: { id: input.id },
 			});

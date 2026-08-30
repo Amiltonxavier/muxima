@@ -18,7 +18,9 @@
 		"db:migrate": "prisma migrate dev",
 		"db:migrate:deploy": "prisma migrate deploy",
 		"postinstall": "prisma generate",
-		"db:studio": "prisma studio"
+		"db:studio": "prisma studio",
+		"db:seed": "tsx prisma/seed.ts",
+		"db:reset": "prisma db push --force-reset && pnpm db:seed"
 	},
 	"dependencies": {
 		"@muxima/env": "workspace:*",
@@ -32,6 +34,7 @@
 		"@muxima/config": "workspace:*",
 		"@types/pg": "^8.20.0",
 		"prisma": "^7.9.1",
+		"tsx": "^4.19.0",
 		"typescript": "^6.0.3"
 	}
 }
