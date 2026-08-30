@@ -340,20 +340,42 @@ export const guestsRouter = {
 	getInvitation: protectedProcedure
 		.input(z.object({ guestId: z.string() }))
 		.handler(async ({ context, input }) => {
-			const invitationGuest = await db.invitationGuest.findFirst({
-				where: { guestId: input.guestId },
-				include: {
-					invitation: {
-						include: {
-							event: {
-								include: { owner: true },
-							},
-							guests: {
-								include: {
-									guest: {
-										include: {
-											tableGuests: {
-												include: { table: true },
+			try {
+				const invitationGuest = await db.invitationGuest.findFirst({
+					where: { guestId: input.guestId },
+					include: {
+						invitation: {
+							include: {
+								event: {
+									select: {
+										id: true,
+										name: true,
+										type: true,
+										status: true,
+									eventDate: true,
+									startTime: true,
+									endTime: true,
+									venueName: true,
+									address: true,
+									neighborhood: true,
+									municipality: true,
+									province: true,
+									owner: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+								},
+								guests: {
+									include: {
+										guest: {
+											include: {
+												tableGuests: {
+													include: { table: true },
+												},
 											},
 										},
 									},
@@ -361,19 +383,22 @@ export const guestsRouter = {
 							},
 						},
 					},
-				},
-			});
+				});
 
-			if (!invitationGuest) {
-				throw new Error("Convite não encontrado");
+				if (!invitationGuest) {
+					throw new Error("Convite não encontrado");
+				}
+
+				await requireEventAccess(
+					context.session.user.id,
+					invitationGuest.invitation.eventId,
+				);
+
+				return invitationGuest.invitation;
+			} catch (error) {
+				console.error("getInvitation error:", error);
+				throw error;
 			}
-
-			await requireEventAccess(
-				context.session.user.id,
-				invitationGuest.invitation.eventId,
-			);
-
-			return invitationGuest.invitation;
 		}),
 
 	getInvitationsByEvent: protectedProcedure
