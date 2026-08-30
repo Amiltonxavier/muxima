@@ -3,9 +3,15 @@ import { Button } from "@muxima/ui/components/button";
 import {
 	Card,
 	CardContent,
-	CardHeader,
-	CardTitle,
 } from "@muxima/ui/components/card";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@muxima/ui/components/table";
 import {
 	Dialog,
 	DialogContent,
@@ -36,6 +42,7 @@ import {
 	useUpdateVendor,
 	useVendors,
 } from "@/shared/queries/vendor-queries";
+import { formatCurrency } from "@/utils/format-currency";
 import {
 	getStatusColor,
 	getStatusLabel,
@@ -86,54 +93,75 @@ function SuppliersPage() {
 					hasData: vendors.length > 0,
 				}}
 			>
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{vendors.map((v: Record<string, unknown>) => (
-						<Card key={v.id as string}>
-							<CardHeader>
-								<div className="flex items-start justify-between">
-									<CardTitle>{v.name as string}</CardTitle>
-									<Badge
-										className={getStatusColor(
-											(v.status as string) || "PROSPECT",
-										)}
-									>
-										{getStatusLabel(
-											(v.status as string) || "PROSPECT",
-											"vendor",
-										)}
-									</Badge>
-								</div>
-								<p className="text-muted-foreground text-xs">
-									{VENDOR_CATEGORY_LABELS[v.category as string] ||
-										(v.category as string)}
-								</p>
-							</CardHeader>
-							<CardContent>
-								<div className="space-y-2 text-muted-foreground text-xs">
-									{Boolean(v.phone) && <p>Tel: {String(v.phone || "")}</p>}
-									{Boolean(v.email) && <p>Email: {String(v.email || "")}</p>}
-								</div>
-								<div className="flex justify-end gap-1 pt-3">
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										onClick={() => setEditing(v)}
-									>
-										<Pencil className="h-3.5 w-3.5" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										className="text-destructive"
-										onClick={() => setDeleteId(v.id as string)}
-									>
-										<Trash2 className="h-3.5 w-3.5" />
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
-					))}
-				</div>
+				<Card>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Fornecedor</TableHead>
+								<TableHead>Categoria</TableHead>
+								<TableHead>Contacto</TableHead>
+								<TableHead>Despesas</TableHead>
+								<TableHead>Estado</TableHead>
+								<TableHead className="w-24" />
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{vendors.map((v: Record<string, unknown>) => {
+								const expenses = (v.expenses as Array<Record<string, unknown>>) ?? [];
+								const totalExpenses = expenses.reduce(
+									(sum: number, e) => sum + Number(e.totalAmount || 0),
+									0,
+								);
+								return (
+									<TableRow key={v.id as string}>
+										<TableCell className="font-medium">
+											{v.name as string}
+										</TableCell>
+										<TableCell>
+											{VENDOR_CATEGORY_LABELS[v.category as string] ||
+												String(v.category)}
+										</TableCell>
+										<TableCell>
+											<div className="text-sm">
+												{Boolean(v.phone) && <p>{String(v.phone)}</p>}
+												{Boolean(v.email) && <p className="text-muted-foreground text-xs">{String(v.email)}</p>}
+											</div>
+										</TableCell>
+										<TableCell>
+											{totalExpenses > 0 ? (
+												<span className="font-medium text-sm">{expenses.length} ({formatCurrency(totalExpenses)})</span>
+											) : (
+												<span className="text-muted-foreground text-sm">—</span>
+											)}
+										</TableCell>
+										<TableCell>
+											<Badge
+												className={getStatusColor(
+													String(v.status || "PROSPECT"),
+												)}
+											>
+												{getStatusLabel(
+													String(v.status || "PROSPECT"),
+													"vendor",
+												)}
+											</Badge>
+										</TableCell>
+										<TableCell>
+											<div className="flex gap-1">
+												<Button variant="ghost" size="icon-sm" onClick={() => setEditing(v)}>
+													<Pencil className="h-3.5 w-3.5" />
+												</Button>
+												<Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeleteId(v.id as string)}>
+													<Trash2 className="h-3.5 w-3.5" />
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</Card>
 			</QueryState>
 
 			<VendorDialog
