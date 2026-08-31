@@ -206,12 +206,12 @@ function BudgetPage() {
 								<TableRow key={expense.id as string}>										<TableCell className="font-medium">
 											<div className="flex items-center gap-2">
 												{expense.description as string}
-												{expense.inventoryItem && (
-													<Badge variant="outline" className="text-xs">
-														<Package className="mr-1 h-3 w-3" />
-														Inventário
-													</Badge>
-												)}
+							{!!expense.inventoryItem && (
+								<Badge variant="outline" className="text-xs">
+									<Package className="mr-1 h-3 w-3" />
+									Inventário
+								</Badge>
+							)}
 											</div>
 									</TableCell>
 									<TableCell>
@@ -780,7 +780,7 @@ function ExpenseDialog({
 		},
 	});
 
-	const showInventory = form.useStore((s) => s.values.addToInventory);
+	const [showInventory, setShowInventory] = useState(initialValues?.addToInventory ?? false);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -893,8 +893,10 @@ function ExpenseDialog({
 								<label className="flex items-center gap-2 cursor-pointer">
 									<input
 									type="checkbox"
-									checked={field.state.value}
-									onChange={(e) => field.handleChange(e.target.checked)}
+									checked={field.state.value}																	onChange={(e) => {
+																		field.handleChange(e.target.checked);
+																		setShowInventory(e.target.checked);
+																	}}
 									className="h-4 w-4 rounded border-gray-300"
 									disabled={isLoading}
 								/>
