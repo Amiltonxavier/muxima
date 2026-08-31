@@ -132,6 +132,7 @@ export const budgetRouter = {
 					vendor: true,
 					budgetCategory: true,
 					payments: true,
+					inventoryItem: true,
 				},
 				orderBy: { createdAt: "desc" },
 			});
@@ -151,6 +152,16 @@ export const budgetRouter = {
 				dueDate: z.string().optional(),
 				paidPercentage: z.number().min(0).max(100).optional().default(0),
 				notes: z.string().optional(),
+				// Inventory fields (optional)
+				addToInventory: z.boolean().optional().default(false),
+				inventoryCategory: z
+					.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"])
+					.optional(),
+				inventoryUnit: z
+					.enum(["UNIT", "BOX", "CASE", "BOTTLE", "KG", "LITER", "PACKAGE", "OTHER"])
+					.optional(),
+				inventoryPlannedQuantity: z.number().min(0).optional(),
+				inventoryUnitPrice: z.number().min(0).optional(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -177,6 +188,28 @@ export const budgetRouter = {
 				},
 			});
 
+			// Create linked inventory item if requested
+			if (
+				input.addToInventory &&
+				input.inventoryCategory &&
+				input.inventoryUnit &&
+				input.inventoryPlannedQuantity != null
+			) {
+				await db.inventoryItem.create({
+					data: {
+						eventId: input.eventId,
+						expenseId: expense.id,
+						name: input.description,
+						category: input.inventoryCategory,
+						unit: input.inventoryUnit,
+						plannedQuantity: input.inventoryPlannedQuantity,
+						currentQuantity: 0,
+						unitPrice: input.inventoryUnitPrice,
+						vendorId: input.vendorId,
+					},
+				});
+			}
+
 			return expense;
 		}),
 
@@ -192,6 +225,16 @@ export const budgetRouter = {
 				status: z
 					.enum(["PLANNED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"])
 					.optional(),
+				// Inventory fields (optional)
+				addToInventory: z.boolean().optional(),
+				inventoryCategory: z
+					.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"])
+					.optional(),
+				inventoryUnit: z
+					.enum(["UNIT", "BOX", "CASE", "BOTTLE", "KG", "LITER", "PACKAGE", "OTHER"])
+					.optional(),
+				inventoryPlannedQuantity: z.number().min(0).optional(),
+				inventoryUnitPrice: z.number().min(0).optional(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -211,6 +254,54 @@ export const budgetRouter = {
 				},
 			});
 
+			// Handle inventory sync
+			const existingInventoryItem = await db.inventoryItem.findUnique({
+				where: { expenseId: input.id },
+			});
+
+			if (input.addToInventory === true) {
+				const inventoryData = {
+					name: input.description ?? expense.description,
+					category: input.inventoryCategory,
+					unit: input.inventoryUnit,
+					plannedQuantity: input.inventoryPlannedQuantity,
+					unitPrice: input.inventoryUnitPrice,
+					vendorId: input.vendorId ?? expense.vendorId,
+				};
+
+				if (existingInventoryItem) {
+					// Update existing linked inventory item
+					await db.inventoryItem.update({
+						where: { expenseId: input.id },
+						data: inventoryData,
+					});
+				} else if (
+					input.inventoryCategory &&
+					input.inventoryUnit &&
+					input.inventoryPlannedQuantity != null
+				) {
+					// Create new linked inventory item
+					await db.inventoryItem.create({
+						data: {
+							eventId: expense.eventId,
+							expenseId: expense.id,
+							name: input.description ?? expense.description,
+							category: input.inventoryCategory,
+							unit: input.inventoryUnit,
+							plannedQuantity: input.inventoryPlannedQuantity,
+							currentQuantity: 0,
+							unitPrice: input.inventoryUnitPrice,
+							vendorId: input.vendorId ?? expense.vendorId,
+						},
+					});
+				}
+			} else if (input.addToInventory === false && existingInventoryItem) {
+				// Remove linked inventory item if unchecked
+				await db.inventoryItem.delete({
+					where: { expenseId: input.id },
+				});
+			}
+
 			return updated;
 		}),
 
@@ -221,6 +312,8 @@ export const budgetRouter = {
 			if (!expense) throw new Error("Despesa não encontrada");
 			await requireEventAccess(context.session.user.id, expense.eventId);
 
+			// Delete linked inventory item first (if exists)
+			await db.inventoryItem.deleteMany({ where: { expenseId: input.id } });
 			await db.expense.delete({ where: { id: input.id } });
 
 			return { success: true };

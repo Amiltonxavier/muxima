@@ -25,6 +25,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
 	useCreateInventoryItem,
 	useDeleteInventoryItem,
@@ -32,6 +33,7 @@ import {
 	useUpdateInventoryItem,
 } from "@/shared/queries/inventory-queries";
 import { inventoryItemSchema } from "@/utils/inventory-schemas";
+import { formatCurrency } from "@/utils/format-currency";
 import {
 	INVENTORY_CATEGORY_LABELS,
 	INVENTORY_UNIT_LABELS,
@@ -41,7 +43,7 @@ export const Route = createFileRoute("/_private/events/$eventId/inventory/")({
 	component: InventoryPage,
 });
 
-// ── Status helpers ───────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────
 
 const CATEGORY_BADGE_COLORS: Record<string, string> = {
 	DRINK: "bg-blue-50 text-blue-700",
@@ -71,6 +73,8 @@ function InventoryPage() {
 	const deleteItem = useDeleteInventoryItem();
 
 	const [search, setSearch] = useState("");
+	const [categoryFilter, setCategoryFilter] = useState("ALL");
+	const [stockFilter, setStockFilter] = useState("ALL");
 	const [showCreate, setShowCreate] = useState(false);
 	const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
 	const [viewingItem, setViewingItem] = useState<Record<string, unknown> | null>(null);
@@ -79,13 +83,26 @@ function InventoryPage() {
 	const items = (itemsQuery.data ?? []) as Record<string, unknown>[];
 
 	const filteredItems = items.filter((item) => {
-		if (!search) return true;
 		const q = search.toLowerCase();
-		return (
+		const matchesSearch =
+			!q ||
 			(item.name as string)?.toLowerCase().includes(q) ||
 			(item.category as string)?.toLowerCase().includes(q) ||
-			(item.notes as string)?.toLowerCase().includes(q)
-		);
+			(item.notes as string)?.toLowerCase().includes(q);
+
+		const matchesCategory =
+			categoryFilter === "ALL" || item.category === categoryFilter;
+
+		const planned = Number(item.plannedQuantity) || 0;
+		const current = Number(item.currentQuantity) || 0;
+		const percent = planned > 0 ? (current / planned) * 100 : 100;
+		const matchesStock =
+			stockFilter === "ALL" ||
+			(stockFilter === "LOW" && percent < 50) ||
+			(stockFilter === "OK" && percent >= 50 && percent < 100) ||
+			(stockFilter === "FULL" && percent >= 100);
+
+		return matchesSearch && matchesCategory && matchesStock;
 	});
 
 	// ── Metrics ──────────────────────────────────────────────────
@@ -96,11 +113,11 @@ function InventoryPage() {
 		(sum, i) => sum + (Number(i.currentQuantity) || 0) * (Number(i.unitPrice) || 0),
 		0,
 	);
-	const lowStockItems = items.filter((i) => {
+	const lowStockCount = items.filter((i) => {
 		const planned = Number(i.plannedQuantity) || 0;
 		const current = Number(i.currentQuantity) || 0;
 		return planned > 0 && current < planned * 0.5;
-	});
+	}).length;
 
 	return (
 		<div className="space-y-6">
@@ -109,7 +126,9 @@ function InventoryPage() {
 			<div className="flex items-center justify-between">
 				<div>
 					<h1 className="font-semibold text-2xl">Inventário</h1>
-					<p className="text-muted-foreground text-sm">{items.length} itens</p>
+					<p className="text-muted-foreground text-sm">
+						{filteredItems.length} de {items.length} itens
+					</p>
 				</div>
 				<Button onClick={() => setShowCreate(true)}>
 					<Plus className="mr-2 h-4 w-4" />
@@ -117,30 +136,70 @@ function InventoryPage() {
 				</Button>
 			</div>
 
-			{/* ── Metrics ─────────────────────────────────────────── */}
+			{/* ── Stats ──────────────────────────────────────────── */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				<MetricCard label="Total planeado" value={totalPlanned} />
-				<MetricCard label="Total em stock" value={totalCurrent} />
-				<MetricCard
-					label="Valor total"
-					value={`${totalValue.toLocaleString("pt-AO")} Kz`}
+				<StatsCard
+					title="Total planeado"
+					value={totalPlanned}
+					description="itens"
 				/>
-				<MetricCard
-					label="Stock baixo"
-					value={lowStockItems.length}
-					highlight={lowStockItems.length > 0}
+				<StatsCard
+					title="Em stock"
+					value={totalCurrent}
+					description="itens"
+				/>
+				<StatsCard
+					title="Valor total"
+					value={formatCurrency(totalValue)}
+				/>
+				<StatsCard
+					title="Stock baixo"
+					value={lowStockCount}
+					description={lowStockCount > 0 ? "⚠️" : "itens"}
 				/>
 			</div>
 
-			{/* ── Search ──────────────────────────────────────────── */}
-			<div className="relative max-w-sm">
-				<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-				<Input
-					placeholder="Pesquisar item..."
-					value={search}
-					onChange={(e) => setSearch(e.target.value)}
-					className="pl-9"
-				/>
+			{/* ── Filters ─────────────────────────────────────────── */}
+			<div className="flex flex-wrap items-center gap-3">
+				<div className="relative max-w-sm flex-1">
+					<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						placeholder="Pesquisar item..."
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						className="pl-9"
+					/>
+				</div>
+				<Select
+					value={categoryFilter}
+					onValueChange={(v) => setCategoryFilter(v)}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Categoria" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todas categorias</SelectItem>
+						{Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, l]) => (
+							<SelectItem key={k} value={k}>
+								{l}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select
+					value={stockFilter}
+					onValueChange={(v) => setStockFilter(v)}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Stock" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todo stock</SelectItem>
+						<SelectItem value="LOW">Stock baixo</SelectItem>
+						<SelectItem value="OK">Stock parcial</SelectItem>
+						<SelectItem value="FULL">Stock completo</SelectItem>
+					</SelectContent>
+				</Select>
 			</div>
 
 			{/* ── Table ───────────────────────────────────────────── */}
@@ -378,11 +437,10 @@ function InventoryPage() {
 								<div className="rounded-md bg-muted p-3 text-sm">
 									<p className="text-muted-foreground">Valor total</p>
 									<p className="font-semibold text-lg">
-										{(
+										{formatCurrency(
 											(Number(viewingItem.currentQuantity) || 0) *
-											(Number(viewingItem.unitPrice) || 0)
-										).toLocaleString("pt-AO")}{" "}
-										Kz
+												(Number(viewingItem.unitPrice) || 0),
+										)}
 									</p>
 								</div>
 							)}
@@ -481,31 +539,6 @@ function InventoryPage() {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-		</div>
-	);
-}
-
-// ── Metric Card ──────────────────────────────────────────────────
-
-function MetricCard({
-	label,
-	value,
-	highlight,
-}: {
-	label: string;
-	value: string | number;
-	highlight?: boolean;
-}) {
-	return (
-		<div
-			className={`rounded-md border p-4 ${
-				highlight ? "border-red-200 bg-red-50" : ""
-			}`}
-		>
-			<p className="text-muted-foreground text-xs">{label}</p>
-			<p className={`font-semibold text-2xl ${highlight ? "text-red-600" : ""}`}>
-				{value}
-			</p>
 		</div>
 	);
 }

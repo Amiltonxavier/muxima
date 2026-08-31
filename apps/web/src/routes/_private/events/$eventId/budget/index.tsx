@@ -36,7 +36,7 @@ import {
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, Pencil, Package, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
@@ -57,6 +57,8 @@ import {
 	EXPENSE_STATUS_LABELS,
 	getStatusColor,
 	getStatusLabel,
+	INVENTORY_CATEGORY_LABELS,
+	INVENTORY_UNIT_LABELS,
 	toSelectItems,
 } from "@/utils/status-helpers";
 
@@ -201,9 +203,16 @@ function BudgetPage() {
 					</TableHeader>
 					<TableBody>
 							{expenses.map((expense: Record<string, unknown>) => (
-								<TableRow key={expense.id as string}>
-									<TableCell className="font-medium">
-										{expense.description as string}
+								<TableRow key={expense.id as string}>										<TableCell className="font-medium">
+											<div className="flex items-center gap-2">
+												{expense.description as string}
+												{expense.inventoryItem && (
+													<Badge variant="outline" className="text-xs">
+														<Package className="mr-1 h-3 w-3" />
+														Inventário
+													</Badge>
+												)}
+											</div>
 									</TableCell>
 									<TableCell>
 										{expense.vendor
@@ -314,6 +323,7 @@ function BudgetPage() {
 					);
 				}}
 				isLoading={createExpense.isPending}
+				eventId={eventId}
 			/>
 
 			{/* Edit Expense Dialog */}
@@ -333,6 +343,20 @@ function BudgetPage() {
 							: "",
 						notes: String(editingExpense.notes ?? ""),
 						status: String(editingExpense.status ?? "PLANNED"),
+						// Inventory sync
+						addToInventory: !!(editingExpense.inventoryItem as Record<string, unknown> | null),
+						inventoryCategory:
+							(editingExpense.inventoryItem as Record<string, unknown> | null)
+								?.category as string || "OTHER",
+						inventoryUnit:
+							(editingExpense.inventoryItem as Record<string, unknown> | null)
+								?.unit as string || "UNIT",
+						inventoryPlannedQuantity:
+							Number((editingExpense.inventoryItem as Record<string, unknown> | null)
+								?.plannedQuantity) || 0,
+						inventoryUnitPrice:
+							Number((editingExpense.inventoryItem as Record<string, unknown> | null)
+								?.unitPrice) || 0,
 					}}
 					onSubmit={(values) => {
 						updateExpense.mutate(
@@ -347,6 +371,7 @@ function BudgetPage() {
 						);
 					}}
 					isLoading={updateExpense.isPending}
+					eventId={eventId}
 				/>
 			)}
 
@@ -498,6 +523,25 @@ function ViewExpenseDialog({
 							) : null}
 						</div>
 					)}
+
+				{(expense.inventoryItem as Record<string, unknown> | null) && (
+					<div className="rounded border p-3">
+						<p className="text-muted-foreground text-xs">Item de inventário</p>
+						<div className="mt-1 flex items-center gap-2">
+							<Package className="h-4 w-4" />
+							<p className="font-medium text-sm">
+								{String((expense.inventoryItem as Record<string, unknown>).name)}
+							</p>
+						</div>
+						<p className="text-muted-foreground text-xs">
+							{String((expense.inventoryItem as Record<string, unknown>).plannedQuantity)} {" "}
+							{String((expense.inventoryItem as Record<string, unknown>).unit)}
+							{Number((expense.inventoryItem as Record<string, unknown>).unitPrice) > 0
+								? ` · ${formatCurrency(Number((expense.inventoryItem as Record<string, unknown>).unitPrice))}/unid`
+								: ""}
+						</p>
+					</div>
+				)}
 
 					{expense.notes ? (
 						<div className="rounded border p-3">
@@ -664,9 +708,7 @@ function BudgetDialog({
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-// ========================
+}// ========================
 // Expense Dialog (Create / Edit)
 // ========================
 function ExpenseDialog({
@@ -676,6 +718,7 @@ function ExpenseDialog({
 	onSubmit,
 	isLoading,
 	vendors = [],
+	eventId,
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
@@ -686,10 +729,16 @@ function ExpenseDialog({
 		dueDate: string;
 		notes: string;
 		status?: string;
+		addToInventory?: boolean;
+		inventoryCategory?: string;
+		inventoryUnit?: string;
+		inventoryPlannedQuantity?: number;
+		inventoryUnitPrice?: number;
 	};
 	onSubmit: (values: any) => void;
 	isLoading: boolean;
 	vendors?: Array<Record<string, unknown>>;
+	eventId?: string;
 }) {
 	const isEditing = !!initialValues;
 
@@ -706,6 +755,11 @@ function ExpenseDialog({
 				| "PAID"
 				| "OVERDUE"
 				| "CANCELLED",
+			addToInventory: initialValues?.addToInventory ?? false,
+			inventoryCategory: (initialValues?.inventoryCategory ?? "OTHER") as any,
+			inventoryUnit: (initialValues?.inventoryUnit ?? "UNIT") as any,
+			inventoryPlannedQuantity: initialValues?.inventoryPlannedQuantity ?? 0,
+			inventoryUnitPrice: initialValues?.inventoryUnitPrice ?? 0,
 		},
 		onSubmit: async ({ value }) => {
 			const result = expenseSchema.safeParse(value);
@@ -717,9 +771,16 @@ function ExpenseDialog({
 				...result.data,
 				vendorId: value.vendorId || undefined,
 				status: value.status,
+				addToInventory: value.addToInventory,
+				inventoryCategory: value.addToInventory ? value.inventoryCategory : undefined,
+				inventoryUnit: value.addToInventory ? value.inventoryUnit : undefined,
+				inventoryPlannedQuantity: value.addToInventory ? value.inventoryPlannedQuantity : undefined,
+				inventoryUnitPrice: value.addToInventory ? value.inventoryUnitPrice : undefined,
 			});
 		},
 	});
+
+	const showInventory = form.useStore((s) => s.values.addToInventory);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -754,7 +815,8 @@ function ExpenseDialog({
 							<div className="space-y-2">
 								<Label>Fornecedor</Label>
 								<Select
-									value={field.state.value ?? ""}										onValueChange={(v) => field.handleChange(v ?? "")}
+									value={field.state.value ?? ""}
+									onValueChange={(v) => field.handleChange(v ?? "")}
 									disabled={isLoading}
 								>
 									<SelectTrigger>
@@ -823,6 +885,123 @@ function ExpenseDialog({
 							)}
 						</form.Field>
 					)}
+
+					{/* ── Inventory Section ──────────────────────────── */}
+					<div className="rounded-md border border-dashed p-4 space-y-4">
+						<form.Field name="addToInventory">
+							{(field) => (
+								<label className="flex items-center gap-2 cursor-pointer">
+									<input
+									type="checkbox"
+									checked={field.state.value}
+									onChange={(e) => field.handleChange(e.target.checked)}
+									className="h-4 w-4 rounded border-gray-300"
+									disabled={isLoading}
+								/>
+									<div className="flex items-center gap-2">
+										<Package className="h-4 w-4 text-muted-foreground" />
+										<span className="font-medium text-sm">
+											Faz parte do inventário?
+										</span>
+									</div>
+								</label>
+							)}
+						</form.Field>
+
+						{showInventory && (
+							<div className="space-y-4 pt-2">
+								<div className="grid grid-cols-2 gap-4">
+									<form.Field name="inventoryCategory">
+										{(field) => (
+											<div className="space-y-2">
+												<Label>Categoria</Label>
+												<Select
+													items={Object.entries(INVENTORY_CATEGORY_LABELS).map(
+														([value, label]) => ({ value, label }),
+													)}
+													value={field.state.value}
+													onValueChange={(v) => field.handleChange(v as any)}
+												>
+													<SelectTrigger>
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{Object.entries(INVENTORY_CATEGORY_LABELS).map(
+															([k, l]) => (
+																<SelectItem key={k} value={k}>
+																	{l}
+																</SelectItem>
+															),
+														)}
+													</SelectContent>
+												</Select>
+											</div>
+										)}
+									</form.Field>
+									<form.Field name="inventoryUnit">
+										{(field) => (
+											<div className="space-y-2">
+												<Label>Unidade</Label>
+												<Select
+													items={Object.entries(INVENTORY_UNIT_LABELS).map(
+														([value, label]) => ({ value, label }),
+													)}
+													value={field.state.value}
+													onValueChange={(v) => field.handleChange(v as any)}
+												>
+													<SelectTrigger>
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{Object.entries(INVENTORY_UNIT_LABELS).map(
+															([k, l]) => (
+																<SelectItem key={k} value={k}>
+																	{l}
+																</SelectItem>
+															),
+													)}
+													</SelectContent>
+												</Select>
+											</div>
+										)}
+									</form.Field>
+								</div>
+								<div className="grid grid-cols-2 gap-4">
+									<form.Field name="inventoryPlannedQuantity">
+										{(field) => (
+											<div className="space-y-2">
+												<Label>Quantidade planeada</Label>
+												<Input
+													type="number"
+													value={field.state.value || ""}
+													onChange={(e) =>
+														field.handleChange(Number(e.target.value) || 0)
+													}
+													disabled={isLoading}
+												/>
+											</div>
+										)}
+									</form.Field>
+									<form.Field name="inventoryUnitPrice">
+										{(field) => (
+											<div className="space-y-2">
+												<Label>Preço por unidade (Kz)</Label>
+												<Input
+													type="number"
+													value={field.state.value || ""}
+													onChange={(e) =>
+														field.handleChange(Number(e.target.value) || 0)
+													}
+													disabled={isLoading}
+												/>
+											</div>
+										)}
+									</form.Field>
+								</div>
+							</div>
+						)}
+					</div>
+
 					<form.Field name="notes">
 						{(field) => (
 							<div className="space-y-2">

@@ -366,6 +366,7 @@ model Expense {
   payments       Payment[]
   documents      Document[]
   creator        User           @relation(fields: [createdBy], references: [id])
+  inventoryItem  InventoryItem?
 
   @@index([eventId])
   @@index([budgetCategoryId])
@@ -597,6 +598,7 @@ model Schedule {
 model InventoryItem {
   id               String            @id @default(uuid())
   eventId          String
+  expenseId        String?
   name             String
   category         InventoryCategory
   plannedQuantity  Decimal
@@ -610,10 +612,13 @@ model InventoryItem {
 
   event     Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   vendor    Vendor?            @relation(fields: [vendorId], references: [id])
+  expense   Expense?           @relation(fields: [expenseId], references: [id], onDelete: SetNull)
   movements InventoryMovement[]
 
+  @@unique([expenseId])
   @@index([eventId])
   @@index([vendorId])
+  @@index([expenseId])
   @@map("inventory_item")
 }
 

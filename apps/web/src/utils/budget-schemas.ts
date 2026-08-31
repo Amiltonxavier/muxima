@@ -27,6 +27,16 @@ export const expenseSchema = z.object({
 	totalAmount: z.number().positive("Valor deve ser maior que zero"),
 	dueDate: z.string().optional(),
 	notes: z.string().optional(),
+	// Inventory fields (optional)
+	addToInventory: z.boolean().optional().default(false),
+	inventoryCategory: z
+		.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"])
+		.optional(),
+	inventoryUnit: z
+		.enum(["UNIT", "BOX", "CASE", "BOTTLE", "KG", "LITER", "PACKAGE", "OTHER"])
+		.optional(),
+	inventoryPlannedQuantity: z.number().min(0).optional(),
+	inventoryUnitPrice: z.number().min(0).optional(),
 });
 
 export type ExpenseInput = z.infer<typeof expenseSchema>;
