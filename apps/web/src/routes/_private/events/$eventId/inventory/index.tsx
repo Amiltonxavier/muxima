@@ -18,25 +18,41 @@ import {
 	SelectValue,
 } from "@muxima/ui/components/select";
 import { Textarea } from "@muxima/ui/components/textarea";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
-import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+	Cake,
+	Eye,
+	Pencil,
+	Package,
+	Plus,
+	Search,
+	Trash2,
+	ArrowDownCircle,
+	ArrowUpCircle,
+	RefreshCw,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
+	useAddInventoryMovement,
 	useCreateInventoryItem,
 	useDeleteInventoryItem,
 	useInventoryItems,
 	useUpdateInventoryItem,
 } from "@/shared/queries/inventory-queries";
-import { inventoryItemSchema } from "@/utils/inventory-schemas";
+import { inventoryItemSchema, inventoryMovementSchema } from "@/utils/inventory-schemas";
 import { formatCurrency } from "@/utils/format-currency";
+import { formatDate } from "@/utils/format-date";
 import {
+	CAKE_TYPE_LABELS,
 	INVENTORY_CATEGORY_LABELS,
 	INVENTORY_UNIT_LABELS,
+	MOVEMENT_TYPE_LABELS,
 } from "@/utils/status-helpers";
 
 export const Route = createFileRoute("/_private/events/$eventId/inventory/")({
@@ -53,14 +69,23 @@ const CATEGORY_BADGE_COLORS: Record<string, string> = {
 	OTHER: "bg-neutral-100 text-neutral-700",
 };
 
-const MOVEMENT_TYPE_LABELS: Record<string, string> = {
-	PURCHASE: "Compra",
-	ADD: "Adição",
-	CONSUMPTION: "Consumo",
-	ADJUSTMENT: "Ajuste",
-	LOSS: "Perda",
-	RETURN: "Devolução",
+const MOVEMENT_ICONS: Record<string, React.ReactNode> = {
+	PURCHASE: <ArrowUpCircle className="h-4 w-4 text-green-500" />,
+	ADD: <ArrowUpCircle className="h-4 w-4 text-blue-500" />,
+	CONSUMPTION: <ArrowDownCircle className="h-4 w-4 text-amber-500" />,
+	ADJUSTMENT: <RefreshCw className="h-4 w-4 text-purple-500" />,
+	LOSS: <ArrowDownCircle className="h-4 w-4 text-red-500" />,
+	RETURN: <ArrowUpCircle className="h-4 w-4 text-emerald-500" />,
 };
+
+const MOVEMENT_TYPE_OPTIONS = [
+	{ value: "PURCHASE", label: "Compra" },
+	{ value: "ADD", label: "Adição" },
+	{ value: "CONSUMPTION", label: "Consumo" },
+	{ value: "ADJUSTMENT", label: "Ajuste" },
+	{ value: "LOSS", label: "Perda" },
+	{ value: "RETURN", label: "Devolução" },
+];
 
 // ── Main Page ────────────────────────────────────────────────────
 
@@ -71,6 +96,7 @@ function InventoryPage() {
 	const createItem = useCreateInventoryItem();
 	const updateItem = useUpdateInventoryItem();
 	const deleteItem = useDeleteInventoryItem();
+	const addMovement = useAddInventoryMovement();
 
 	const [search, setSearch] = useState("");
 	const [categoryFilter, setCategoryFilter] = useState("ALL");
@@ -78,6 +104,7 @@ function InventoryPage() {
 	const [showCreate, setShowCreate] = useState(false);
 	const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
 	const [viewingItem, setViewingItem] = useState<Record<string, unknown> | null>(null);
+	const [movementItem, setMovementItem] = useState<Record<string, unknown> | null>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
 	const items = (itemsQuery.data ?? []) as Record<string, unknown>[];
@@ -119,6 +146,18 @@ function InventoryPage() {
 		return planned > 0 && current < planned * 0.5;
 	}).length;
 
+	// ── Beverage Planning ────────────────────────────────────────
+
+	const drinkItems = items.filter((i) => i.category === "DRINK");
+	const totalPlannedDrinks = drinkItems.reduce(
+		(sum, i) => sum + (Number(i.plannedQuantity) || 0),
+		0,
+	);
+	const totalCurrentDrinks = drinkItems.reduce(
+		(sum, i) => sum + (Number(i.currentQuantity) || 0),
+		0,
+	);
+
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
@@ -138,26 +177,55 @@ function InventoryPage() {
 
 			{/* ── Stats ──────────────────────────────────────────── */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				<StatsCard
-					title="Total planeado"
-					value={totalPlanned}
-					description="itens"
-				/>
-				<StatsCard
-					title="Em stock"
-					value={totalCurrent}
-					description="itens"
-				/>
-				<StatsCard
-					title="Valor total"
-					value={formatCurrency(totalValue)}
-				/>
+				<StatsCard title="Total planeado" value={totalPlanned} description="itens" />
+				<StatsCard title="Em stock" value={totalCurrent} description="itens" />
+				<StatsCard title="Valor total" value={formatCurrency(totalValue)} />
 				<StatsCard
 					title="Stock baixo"
 					value={lowStockCount}
 					description={lowStockCount > 0 ? "⚠️" : "itens"}
 				/>
 			</div>
+
+			{/* ── Beverage Planning ──────────────────────────────── */}
+			{drinkItems.length > 0 && (
+				<div className="rounded-md border border-dashed p-4">
+					<div className="mb-3 flex items-center gap-2">
+						<Package className="h-4 w-4 text-blue-500" />
+						<h3 className="font-medium text-sm">Planeamento de Bebidas</h3>
+					</div>
+					<div className="grid gap-3 sm:grid-cols-3">
+						<div>
+							<p className="text-muted-foreground text-xs">Itens planeados</p>
+							<p className="font-semibold text-lg">{drinkItems.length}</p>
+						</div>
+						<div>
+							<p className="text-muted-foreground text-xs">Quantidade total planeada</p>
+							<p className="font-semibold text-lg">{totalPlannedDrinks}</p>
+						</div>
+						<div>
+							<p className="text-muted-foreground text-xs">Quantidade total em stock</p>
+							<p className="font-semibold text-lg">{totalCurrentDrinks}</p>
+						</div>
+					</div>
+					<div className="mt-3 space-y-1">
+						{drinkItems.map((item) => {
+							const planned = Number(item.plannedQuantity) || 0;
+							const current = Number(item.currentQuantity) || 0;
+							const pct = planned > 0 ? Math.round((current / planned) * 100) : 0;
+							return (
+								<div key={item.id as string} className="flex items-center gap-3 text-xs">
+									<span className="w-32 truncate font-medium">{item.name as string}</span>
+									<Progress value={pct} className="h-1.5 flex-1" />
+									<span className="tabular-nums text-muted-foreground">
+										{current}/{planned} {INVENTORY_UNIT_LABELS[item.unit as string] || ""}
+									</span>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			)}
 
 			{/* ── Filters ─────────────────────────────────────────── */}
 			<div className="flex flex-wrap items-center gap-3">
@@ -170,26 +238,18 @@ function InventoryPage() {
 						className="pl-9"
 					/>
 				</div>
-				<Select
-					value={categoryFilter}
-					onValueChange={(v) => setCategoryFilter(v)}
-				>
+				<Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "ALL")}>
 					<SelectTrigger className="w-[160px]">
 						<SelectValue placeholder="Categoria" />
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="ALL">Todas categorias</SelectItem>
 						{Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, l]) => (
-							<SelectItem key={k} value={k}>
-								{l}
-							</SelectItem>
+							<SelectItem key={k} value={k}>{l}</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
-				<Select
-					value={stockFilter}
-					onValueChange={(v) => setStockFilter(v)}
-				>
+				<Select value={stockFilter} onValueChange={(v) => setStockFilter(v ?? "ALL")}>
 					<SelectTrigger className="w-[160px]">
 						<SelectValue placeholder="Stock" />
 					</SelectTrigger>
@@ -215,38 +275,21 @@ function InventoryPage() {
 					<table className="w-full caption-bottom text-sm">
 						<thead className="border-b bg-muted/50">
 							<tr>
-								<th className="h-10 px-4 text-left font-medium text-muted-foreground">
-									Nome
-								</th>
-								<th className="h-10 px-4 text-left font-medium text-muted-foreground">
-									Categoria
-								</th>
-								<th className="h-10 px-4 text-left font-medium text-muted-foreground">
-									Unidade
-								</th>
-								<th className="h-10 px-4 text-right font-medium text-muted-foreground">
-									Planeado
-								</th>
-								<th className="h-10 px-4 text-right font-medium text-muted-foreground">
-									Atual
-								</th>
-								<th className="h-10 px-4 text-left font-medium text-muted-foreground">
-									Progresso
-								</th>
-								<th className="h-10 px-4 text-right font-medium text-muted-foreground">
-									Preço/unid.
-								</th>
-								<th className="h-10 px-4 text-right font-medium text-muted-foreground">
-									Ações
-								</th>
+								<th className="h-10 px-4 text-left font-medium text-muted-foreground">Nome</th>
+								<th className="h-10 px-4 text-left font-medium text-muted-foreground">Categoria</th>
+								<th className="h-10 px-4 text-left font-medium text-muted-foreground">Unidade</th>
+								<th className="h-10 px-4 text-right font-medium text-muted-foreground">Planeado</th>
+								<th className="h-10 px-4 text-right font-medium text-muted-foreground">Atual</th>
+								<th className="h-10 px-4 text-left font-medium text-muted-foreground">Progresso</th>
+								<th className="h-10 px-4 text-right font-medium text-muted-foreground">Preço/unid.</th>
+								<th className="h-10 px-4 text-right font-medium text-muted-foreground">Ações</th>
 							</tr>
 						</thead>
 						<tbody>
 							{filteredItems.map((item) => {
 								const planned = Number(item.plannedQuantity) || 0;
 								const current = Number(item.currentQuantity) || 0;
-								const percent =
-									planned > 0 ? Math.round((current / planned) * 100) : 0;
+								const percent = planned > 0 ? Math.round((current / planned) * 100) : 0;
 								const unitPrice = Number(item.unitPrice) || 0;
 
 								return (
@@ -254,43 +297,49 @@ function InventoryPage() {
 										key={item.id as string}
 										className="border-b transition-colors hover:bg-muted/50"
 									>
-										<td className="p-4 font-medium">{item.name as string}</td>
+										<td className="p-4">
+											<div className="flex items-center gap-2">
+												{item.category === "CAKE" && <Cake className="h-4 w-4 text-pink-400" />}
+												<span className="font-medium">{item.name as string}</span>
+											</div>
+										</td>
 										<td className="p-4">
 											<Badge
 												variant="secondary"
-												className={
-													CATEGORY_BADGE_COLORS[item.category as string] || ""
-												}
+												className={CATEGORY_BADGE_COLORS[item.category as string] || ""}
 											>
-												{INVENTORY_CATEGORY_LABELS[item.category as string] ||
-													(item.category as string)}
+												{INVENTORY_CATEGORY_LABELS[item.category as string] || (item.category as string)}
 											</Badge>
 										</td>
 										<td className="p-4 text-muted-foreground">
-											{INVENTORY_UNIT_LABELS[item.unit as string] ||
-												(item.unit as string)}
+											{String(INVENTORY_UNIT_LABELS[item.unit as string] || item.unit || "")}
 										</td>
 										<td className="p-4 text-right tabular-nums">{planned}</td>
-										<td className="p-4 text-right tabular-nums">{current}</td>
+										<td className="p-4 text-right tabular-nums font-medium">{current}</td>
 										<td className="p-4">
 											<div className="flex items-center gap-2">
 												<Progress value={percent} className="h-2 w-20" />
-												<span className="text-muted-foreground text-xs tabular-nums">
-													{percent}%
-												</span>
+												<span className="text-muted-foreground text-xs tabular-nums">{percent}%</span>
 											</div>
 										</td>
 										<td className="p-4 text-right tabular-nums">
-											{unitPrice > 0
-												? `${unitPrice.toLocaleString("pt-AO")} Kz`
-												: "—"}
+											{unitPrice > 0 ? `${unitPrice.toLocaleString("pt-AO")} Kz` : "—"}
 										</td>
 										<td className="p-4 text-right">
 											<div className="flex justify-end gap-1">
 												<Button
 													variant="ghost"
 													size="icon-sm"
+													onClick={() => setMovementItem(item)}
+													title="Movimentar"
+												>
+													<RefreshCw className="h-3.5 w-3.5" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon-sm"
 													onClick={() => setViewingItem(item)}
+													title="Ver detalhes"
 												>
 													<Eye className="h-3.5 w-3.5" />
 												</Button>
@@ -298,6 +347,7 @@ function InventoryPage() {
 													variant="ghost"
 													size="icon-sm"
 													onClick={() => setEditingItem(item)}
+													title="Editar"
 												>
 													<Pencil className="h-3.5 w-3.5" />
 												</Button>
@@ -306,6 +356,7 @@ function InventoryPage() {
 													size="icon-sm"
 													className="text-destructive"
 													onClick={() => setDeleteId(item.id as string)}
+													title="Eliminar"
 												>
 													<Trash2 className="h-3.5 w-3.5" />
 												</Button>
@@ -350,6 +401,11 @@ function InventoryPage() {
 						currentQuantity: Number(editingItem.currentQuantity) || 0,
 						unit: (editingItem.unit as string) || "UNIT",
 						unitPrice: Number(editingItem.unitPrice) || 0,
+						cakeType: (editingItem.cakeType as string) || "",
+						weight: Number(editingItem.weight) || 0,
+						deliveryDate: editingItem.deliveryDate
+							? new Date(editingItem.deliveryDate as string).toISOString().split("T")[0]
+							: "",
 						notes: (editingItem.notes as string) || "",
 					}}
 					onSubmit={(values) => {
@@ -368,139 +424,38 @@ function InventoryPage() {
 				/>
 			)}
 
+			{/* ── Movement Dialog ──────────────────────────────────── */}
+			{movementItem && (
+				<MovementDialog
+					open={!!movementItem}
+					onOpenChange={() => setMovementItem(null)}
+					item={movementItem}
+					onSubmit={(values) => {
+						addMovement.mutate(
+							{ inventoryItemId: movementItem.id as string, ...values },
+							{
+								onSuccess: () => {
+									toast.success("Movimento registado");
+									setMovementItem(null);
+								},
+								onError: (e) => toast.error(e.message),
+							},
+						);
+					}}
+					isLoading={addMovement.isPending}
+				/>
+			)}
+
 			{/* ── View Detail Dialog ───────────────────────────────── */}
 			{viewingItem && (
-				<Dialog open={!!viewingItem} onOpenChange={() => setViewingItem(null)}>
-					<DialogContent className="max-w-lg">
-						<DialogHeader>
-							<DialogTitle>Detalhes do item</DialogTitle>
-						</DialogHeader>
-						<div className="space-y-4">
-							<div className="flex items-center justify-between">
-								<h3 className="font-semibold text-lg">
-									{viewingItem.name as string}
-								</h3>
-								<Badge
-									variant="secondary"
-									className={
-										CATEGORY_BADGE_COLORS[viewingItem.category as string] || ""
-									}
-								>
-									{INVENTORY_CATEGORY_LABELS[viewingItem.category as string] ||
-										(viewingItem.category as string)}
-								</Badge>
-							</div>
-
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div>
-									<p className="text-muted-foreground">Unidade</p>
-									<p className="font-medium">
-										{INVENTORY_UNIT_LABELS[viewingItem.unit as string] ||
-											(viewingItem.unit as string)}
-									</p>
-								</div>
-								<div>
-									<p className="text-muted-foreground">Preço por unidade</p>
-									<p className="font-medium">
-										{Number(viewingItem.unitPrice) > 0
-											? `${Number(viewingItem.unitPrice).toLocaleString("pt-AO")} Kz`
-											: "Não definido"}
-									</p>
-								</div>
-							</div>
-
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm">
-									<span className="text-muted-foreground">
-										Planeado: {Number(viewingItem.plannedQuantity) || 0}{" "}
-										{INVENTORY_UNIT_LABELS[viewingItem.unit as string] ||
-											(viewingItem.unit as string)}
-									</span>
-									<span>
-										Atual: {Number(viewingItem.currentQuantity) || 0}
-									</span>
-								</div>
-								<Progress
-									value={
-										(Number(viewingItem.plannedQuantity) || 0) > 0
-											? Math.round(
-													((Number(viewingItem.currentQuantity) || 0) /
-														(Number(viewingItem.plannedQuantity) || 0)) *
-														100,
-												)
-											: 0
-									}
-								/>
-							</div>
-
-							{Number(viewingItem.unitPrice) > 0 && (
-								<div className="rounded-md bg-muted p-3 text-sm">
-									<p className="text-muted-foreground">Valor total</p>
-									<p className="font-semibold text-lg">
-										{formatCurrency(
-											(Number(viewingItem.currentQuantity) || 0) *
-												(Number(viewingItem.unitPrice) || 0),
-										)}
-									</p>
-								</div>
-							)}
-
-							{(viewingItem.notes as string) && (
-								<div>
-									<p className="text-muted-foreground text-sm">Notas</p>
-									<p className="text-sm">{viewingItem.notes as string}</p>
-								</div>
-							)}
-
-							{/* Movements */}
-							{Array.isArray(viewingItem.movements) &&
-								(viewingItem.movements as Record<string, unknown>[]).length >
-									0 && (
-									<div className="space-y-2">
-										<p className="font-medium text-sm">Últimos movimentos</p>
-										<div className="space-y-1">
-											{(viewingItem.movements as Record<string, unknown>[]).map(
-												(m) => (
-													<div
-														key={m.id as string}
-														className="flex items-center justify-between rounded-md border p-2 text-xs"
-													>
-														<div className="flex items-center gap-2">
-															<Badge variant="outline">
-																{MOVEMENT_TYPE_LABELS[m.type as string] ||
-																	(m.type as string)}
-															</Badge>
-															<span>{m.reason as string}</span>
-														</div>
-														<span className="tabular-nums">
-															{m.type === "CONSUMPTION" || m.type === "LOSS"
-																? "-"
-																: "+"}
-															{String(m.quantity)}
-														</span>
-													</div>
-												),
-											)}
-										</div>
-									</div>
-								)}
-						</div>
-						<DialogFooter>
-							<Button variant="outline" onClick={() => setViewingItem(null)}>
-								Fechar
-							</Button>
-							<Button
-								onClick={() => {
-									setEditingItem(viewingItem);
-									setViewingItem(null);
-								}}
-							>
-								<Pencil className="mr-2 h-4 w-4" />
-								Editar
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
+				<ViewDialog
+					item={viewingItem}
+					onClose={() => setViewingItem(null)}
+					onEdit={() => {
+						setEditingItem(viewingItem);
+						setViewingItem(null);
+					}}
+				/>
 			)}
 
 			{/* ── Delete Dialog ────────────────────────────────────── */}
@@ -510,13 +465,10 @@ function InventoryPage() {
 						<DialogTitle>Eliminar item</DialogTitle>
 					</DialogHeader>
 					<p className="text-muted-foreground text-sm">
-						Tem certeza que deseja eliminar este item do inventário? Esta ação não
-						pode ser desfeita.
+						Tem certeza que deseja eliminar este item do inventário? Esta ação não pode ser desfeita.
 					</p>
 					<DialogFooter>
-						<Button variant="outline" onClick={() => setDeleteId(null)}>
-							Cancelar
-						</Button>
+						<Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
 						<Button
 							variant="destructive"
 							onClick={() => {
@@ -543,6 +495,267 @@ function InventoryPage() {
 	);
 }
 
+// ── Movement Dialog ──────────────────────────────────────────────
+
+function MovementDialog({
+	open,
+	onOpenChange,
+	item,
+	onSubmit,
+	isLoading,
+}: {
+	open: boolean;
+	onOpenChange: (o: boolean) => void;
+	item: Record<string, unknown>;
+	onSubmit: (values: any) => void;
+	isLoading: boolean;
+}) {
+	const currentQty = Number(item.currentQuantity) || 0;
+
+	const form = useForm({
+		defaultValues: {
+			type: "CONSUMPTION" as any,
+			quantity: 0,
+			reason: "",
+		},
+		onSubmit: async ({ value }) => {
+			const result = inventoryMovementSchema.safeParse(value);
+			if (!result.success) {
+				toast.error(result.error.issues[0].message);
+				return;
+			}
+			if (
+				(value.type === "CONSUMPTION" || value.type === "LOSS") &&
+				value.quantity > currentQty
+			) {
+				toast.error(`Quantidade máxima disponível: ${currentQty}`);
+				return;
+			}
+			onSubmit(result.data);
+		},
+	});
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle>Movimentar item</DialogTitle>
+				</DialogHeader>
+				<div className="mb-2 rounded-md bg-muted p-3 text-sm">
+					<p className="font-medium">{item.name as string}</p>
+					<p className="text-muted-foreground">
+						Stock atual: <span className="font-medium tabular-nums">{currentQty}</span>{" "}
+						{INVENTORY_UNIT_LABELS[item.unit as string] || ""}
+					</p>
+				</div>
+				<form
+					onSubmit={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						form.handleSubmit();
+					}}
+					className="space-y-4"
+				>
+					<form.Field name="type">
+						{(field) => (
+							<div className="space-y-2">
+								<Label>Tipo de movimento</Label>
+								<Select
+									items={MOVEMENT_TYPE_OPTIONS}
+									value={field.state.value}
+									onValueChange={(v) => field.handleChange(v as any)}
+								>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{MOVEMENT_TYPE_OPTIONS.map((opt) => (
+											<SelectItem key={opt.value} value={opt.value}>
+												{opt.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						)}
+					</form.Field>
+					<form.Field name="quantity">
+						{(field) => (
+							<div className="space-y-2">
+								<Label>Quantidade</Label>
+								<Input
+									type="number"
+									value={field.state.value || ""}
+									onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+					<form.Field name="reason">
+						{(field) => (
+							<div className="space-y-2">
+								<Label>Motivo (opcional)</Label>
+								<Input
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									placeholder="Ex: Evento, Correção, etc."
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+					<DialogFooter>
+						<Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+							Cancelar
+						</Button>
+						<Button type="submit" disabled={isLoading}>
+							{isLoading ? "A registar..." : "Registar movimento"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// ── View Dialog ──────────────────────────────────────────────────
+
+function ViewDialog({
+	item,
+	onClose,
+	onEdit,
+}: {
+	item: Record<string, unknown>;
+	onClose: () => void;
+	onEdit: () => void;
+}) {
+	const planned = Number(item.plannedQuantity) || 0;
+	const current = Number(item.currentQuantity) || 0;
+	const percent = planned > 0 ? Math.round((current / planned) * 100) : 0;
+	const unitPrice = Number(item.unitPrice) || 0;
+	const movements = (item.movements as Record<string, unknown>[]) ?? [];
+
+	return (
+		<Dialog open onOpenChange={() => onClose()}>
+			<DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+				<DialogHeader>
+					<DialogTitle>{item.name as string}</DialogTitle>
+				</DialogHeader>
+				<div className="space-y-4">
+					<div className="flex items-center gap-2">
+					<Badge variant="secondary" className={CATEGORY_BADGE_COLORS[item.category as string] || ""}>
+						{String(INVENTORY_CATEGORY_LABELS[item.category as string] || item.category || "")}
+					</Badge>
+						{!!item.cakeType && (
+							<Badge variant="outline">
+								{String(CAKE_TYPE_LABELS[item.cakeType as string] || item.cakeType || "")}
+							</Badge>
+						)}
+					</div>
+
+					<div className="grid grid-cols-2 gap-3 text-sm">
+						<div className="rounded border p-3">
+							<p className="text-muted-foreground text-xs">Unidade</p>
+							<p className="font-medium">
+								{INVENTORY_UNIT_LABELS[item.unit as string] || (item.unit as string)}
+							</p>
+						</div>
+						<div className="rounded border p-3">
+							<p className="text-muted-foreground text-xs">Preço por unidade</p>
+							<p className="font-medium">
+								{unitPrice > 0 ? `${unitPrice.toLocaleString("pt-AO")} Kz` : "Não definido"}
+							</p>
+						</div>							{!!item.weight && Number(item.weight) > 0 && (
+							<div className="rounded border p-3">
+								<p className="text-muted-foreground text-xs">Peso</p>
+								<p className="font-medium">									{String(Number(item.weight))} kg</p>
+							</div>
+						)}
+						{!!item.deliveryDate && (
+							<div className="rounded border p-3">
+								<p className="text-muted-foreground text-xs">Data de entrega</p>
+								<p className="font-medium">{formatDate(item.deliveryDate as string)}</p>
+							</div>
+						)}
+					</div>
+
+					<div className="rounded border p-3">
+						<div className="mb-1 flex items-center justify-between text-sm">
+							<span className="text-muted-foreground">
+								Planeado: {planned} {INVENTORY_UNIT_LABELS[item.unit as string] || ""}
+							</span>
+							<span>Atual: {current}</span>
+						</div>
+						<Progress value={percent} />
+						<p className="mt-1 text-muted-foreground text-xs">{percent}% concluído</p>
+					</div>
+
+					{unitPrice > 0 && (
+						<div className="rounded-md bg-muted p-3 text-sm">
+							<p className="text-muted-foreground">Valor total</p>
+							<p className="font-semibold text-lg">
+								{formatCurrency(current * unitPrice)}
+							</p>
+						</div>
+					)}						{!!item.notes && (
+						<div>
+							<p className="text-muted-foreground text-sm">Notas</p>
+							<p className="text-sm">{item.notes as string}</p>
+						</div>
+					)}
+
+					{/* Movement History */}
+					<div className="space-y-2">
+						<p className="font-medium text-sm">Histórico de movimentos ({movements.length})</p>
+						{movements.length === 0 ? (
+							<p className="py-4 text-center text-muted-foreground text-xs">
+								Nenhum movimento registado
+							</p>
+						) : (
+							<div className="space-y-1">
+								{movements.map((m) => (
+									<div
+										key={m.id as string}
+										className="flex items-center justify-between rounded-md border p-2.5 text-xs"
+									>
+										<div className="flex items-center gap-2">
+											{MOVEMENT_ICONS[m.type as string]}
+											<div>
+												<Badge variant="outline">														{String(MOVEMENT_TYPE_LABELS[m.type as string] || m.type || "")}
+												</Badge>
+												{!!m.reason && (
+													<span className="ml-2 text-muted-foreground">{m.reason as string}</span>
+												)}
+											</div>
+										</div>
+										<div className="text-right">
+											<span className="tabular-nums font-medium">
+												{m.type === "CONSUMPTION" || m.type === "LOSS" ? "-" : "+"}
+												{String(m.quantity)}
+											</span>
+											<p className="text-muted-foreground">
+												{m.createdAt ? formatDate(m.createdAt as string) : ""}
+											</p>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				</div>
+				<DialogFooter>
+					<Button variant="outline" onClick={onClose}>Fechar</Button>
+					<Button onClick={onEdit}>
+						<Pencil className="mr-2 h-4 w-4" />
+						Editar
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 // ── Inventory Dialog (Create / Edit) ─────────────────────────────
 
 function InventoryDialog({
@@ -561,6 +774,9 @@ function InventoryDialog({
 		currentQuantity: number;
 		unit: string;
 		unitPrice: number;
+		cakeType?: string;
+		weight?: number;
+		deliveryDate?: string;
 		notes: string;
 	};
 	onSubmit: (v: any) => void;
@@ -576,6 +792,9 @@ function InventoryDialog({
 			currentQuantity: initialValues?.currentQuantity || 0,
 			unit: (initialValues?.unit || "UNIT") as any,
 			unitPrice: initialValues?.unitPrice || 0,
+			cakeType: (initialValues?.cakeType || "") as any,
+			weight: initialValues?.weight || 0,
+			deliveryDate: initialValues?.deliveryDate || "",
 			notes: initialValues?.notes || "",
 		},
 		onSubmit: async ({ value }) => {
@@ -584,9 +803,16 @@ function InventoryDialog({
 				toast.error(r.error.issues[0].message);
 				return;
 			}
-			onSubmit(r.data);
+			onSubmit({
+				...r.data,
+				cakeType: value.cakeType || undefined,
+				weight: value.weight || undefined,
+				deliveryDate: value.deliveryDate || undefined,
+			});
 		},
 	});
+
+	const [selectedCategory, setSelectedCategory] = useState(initialValues?.category || "DRINK");
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -632,13 +858,9 @@ function InventoryDialog({
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
-											{Object.entries(INVENTORY_CATEGORY_LABELS).map(
-												([k, l]) => (
-													<SelectItem key={k} value={k}>
-														{l}
-													</SelectItem>
-												),
-											)}
+											{Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, l]) => (
+												<SelectItem key={k} value={k}>{l}</SelectItem>
+											))}
 										</SelectContent>
 									</Select>
 								</div>
@@ -660,9 +882,7 @@ function InventoryDialog({
 										</SelectTrigger>
 										<SelectContent>
 											{Object.entries(INVENTORY_UNIT_LABELS).map(([k, l]) => (
-												<SelectItem key={k} value={k}>
-													{l}
-												</SelectItem>
+												<SelectItem key={k} value={k}>{l}</SelectItem>
 											))}
 										</SelectContent>
 									</Select>
@@ -678,9 +898,7 @@ function InventoryDialog({
 									<Input
 										type="number"
 										value={field.state.value || ""}
-										onChange={(e) =>
-											field.handleChange(Number(e.target.value) || 0)
-										}
+										onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
 										disabled={isLoading}
 									/>
 								</div>
@@ -693,9 +911,7 @@ function InventoryDialog({
 									<Input
 										type="number"
 										value={field.state.value || ""}
-										onChange={(e) =>
-											field.handleChange(Number(e.target.value) || 0)
-										}
+										onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
 										disabled={isLoading}
 									/>
 								</div>
@@ -710,15 +926,74 @@ function InventoryDialog({
 									<Input
 										type="number"
 										value={field.state.value || ""}
-										onChange={(e) =>
-											field.handleChange(Number(e.target.value) || 0)
-										}
+										onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
 										disabled={isLoading}
 									/>
 								</div>
 							)}
 						</form.Field>
 					)}
+
+					{/* ── Cake-specific fields ─────────────────────── */}
+					<div className="rounded-md border border-dashed p-4 space-y-4">
+						<div className="flex items-center gap-2">
+							<Cake className="h-4 w-4 text-pink-400" />
+							<span className="font-medium text-sm">Campos de bolo (opcional)</span>
+						</div>
+						<div className="grid grid-cols-2 gap-4">
+							<form.Field name="cakeType">
+								{(field) => (
+									<div className="space-y-2">
+										<Label>Tipo de bolo</Label>
+										<Select
+											items={Object.entries(CAKE_TYPE_LABELS).map(
+												([value, label]) => ({ value, label }),
+											)}
+											value={field.state.value}
+											onValueChange={(v) => field.handleChange(v as any)}
+										>
+											<SelectTrigger>
+												<SelectValue placeholder="Selecionar..." />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="">Nenhum</SelectItem>
+												{Object.entries(CAKE_TYPE_LABELS).map(([k, l]) => (
+													<SelectItem key={k} value={k}>{l}</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+								)}
+							</form.Field>
+							<form.Field name="weight">
+								{(field) => (
+									<div className="space-y-2">
+										<Label>Peso (kg)</Label>
+										<Input
+											type="number"
+											value={field.state.value || ""}
+											onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
+											disabled={isLoading}
+										/>
+									</div>
+								)}
+							</form.Field>
+						</div>
+						<form.Field name="deliveryDate">
+							{(field) => (
+								<div className="space-y-2">
+									<Label>Data de entrega</Label>
+									<Input
+										type="date"
+										value={field.state.value}
+										onChange={(e) => field.handleChange(e.target.value)}
+										disabled={isLoading}
+									/>
+								</div>
+							)}
+						</form.Field>
+					</div>
+
 					<form.Field name="notes">
 						{(field) => (
 							<div className="space-y-2">
@@ -732,19 +1007,11 @@ function InventoryDialog({
 						)}
 					</form.Field>
 					<DialogFooter>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => onOpenChange(false)}
-						>
+						<Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
 							Cancelar
 						</Button>
 						<Button type="submit" disabled={isLoading}>
-							{isLoading
-								? "A guardar..."
-								: isEditing
-									? "Guardar"
-									: "Adicionar"}
+							{isLoading ? "A guardar..." : isEditing ? "Guardar" : "Adicionar"}
 						</Button>
 					</DialogFooter>
 				</form>

@@ -74,6 +74,19 @@ export const inventoryRouter = {
 				]),
 				unitPrice: z.number().min(0).optional(),
 				vendorId: z.string().optional(),
+				cakeType: z
+					.enum([
+						"WEDDING_CAKE",
+						"GROOM_CAKE",
+						"BRIDE_CAKE",
+						"GUEST_CAKE",
+						"BIRTHDAY_CAKE",
+						"CHILDREN_CAKE",
+						"OTHER",
+					])
+					.optional(),
+				weight: z.number().min(0).optional(),
+				deliveryDate: z.string().optional(),
 				notes: z.string().optional(),
 			}),
 		)
@@ -88,6 +101,9 @@ export const inventoryRouter = {
 					unit: input.unit,
 					unitPrice: input.unitPrice,
 					vendorId: input.vendorId,
+					cakeType: input.cakeType,
+					weight: input.weight,
+					deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : null,
 					notes: input.notes,
 				},
 			});
@@ -130,6 +146,19 @@ export const inventoryRouter = {
 					.optional(),
 				unitPrice: z.number().min(0).optional(),
 				vendorId: z.string().optional(),
+				cakeType: z
+					.enum([
+						"WEDDING_CAKE",
+						"GROOM_CAKE",
+						"BRIDE_CAKE",
+						"GUEST_CAKE",
+						"BIRTHDAY_CAKE",
+						"CHILDREN_CAKE",
+						"OTHER",
+					])
+					.optional(),
+				weight: z.number().min(0).optional(),
+				deliveryDate: z.string().optional(),
 				notes: z.string().optional(),
 			}),
 		)
@@ -143,6 +172,9 @@ export const inventoryRouter = {
 					unit: input.unit,
 					unitPrice: input.unitPrice,
 					vendorId: input.vendorId,
+					cakeType: input.cakeType,
+					weight: input.weight,
+					deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : undefined,
 					notes: input.notes,
 				},
 			});

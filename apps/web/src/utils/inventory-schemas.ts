@@ -19,6 +19,19 @@ export const inventoryItemSchema = z.object({
 	),
 	unitPrice: z.number().min(0).optional(),
 	vendorId: z.string().optional(),
+	cakeType: z
+		.enum([
+			"WEDDING_CAKE",
+			"GROOM_CAKE",
+			"BRIDE_CAKE",
+			"GUEST_CAKE",
+			"BIRTHDAY_CAKE",
+			"CHILDREN_CAKE",
+			"OTHER",
+		])
+		.optional(),
+	weight: z.number().min(0).optional(),
+	deliveryDate: z.string().optional(),
 	notes: z.string().optional(),
 });
 

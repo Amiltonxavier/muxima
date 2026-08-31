@@ -194,6 +194,16 @@ enum MovementType {
   RETURN
 }
 
+enum CakeType {
+  WEDDING_CAKE
+  GROOM_CAKE
+  BRIDE_CAKE
+  GUEST_CAKE
+  BIRTHDAY_CAKE
+  CHILDREN_CAKE
+  OTHER
+}
+
 enum DocumentType {
   CONTRACT
   RECEIPT
@@ -606,6 +616,9 @@ model InventoryItem {
   unit             InventoryUnit
   unitPrice        Decimal?
   vendorId         String?
+  cakeType         CakeType?
+  weight           Decimal?
+  deliveryDate     DateTime?
   notes            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

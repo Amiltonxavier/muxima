@@ -135,6 +135,25 @@ export const INVITATION_RESPONSE_LABELS: Record<string, string> = {
 	DECLINE: "Recusar",
 };
 
+export const CAKE_TYPE_LABELS: Record<string, string> = {
+	WEDDING_CAKE: "Bolo de casamento",
+	GROOM_CAKE: "Bolo do noivo",
+	BRIDE_CAKE: "Bolo da noiva",
+	GUEST_CAKE: "Bolo para convidados",
+	BIRTHDAY_CAKE: "Bolo de aniversário",
+	CHILDREN_CAKE: "Bolo infantil",
+	OTHER: "Outro",
+};
+
+export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+	PURCHASE: "Compra",
+	ADD: "Adição",
+	CONSUMPTION: "Consumo",
+	ADJUSTMENT: "Ajuste",
+	LOSS: "Perda",
+	RETURN: "Devolução",
+};
+
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 	CONTRACT: "Contrato",
 	RECEIPT: "Recibo",
