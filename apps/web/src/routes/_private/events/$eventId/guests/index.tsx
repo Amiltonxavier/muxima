@@ -70,12 +70,12 @@ import {
 import { useTables } from "@/shared/queries/table-queries";
 import { formatDate } from "@/utils/format-date";
 import { guestCompanionSchema, guestSchema } from "@/utils/guest-schemas";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
 	COMPANION_STATUS_LABELS,
 	GUEST_STATUS_LABELS,
 	GUEST_TYPE_LABELS,
 	INVITATION_STATUS_LABELS,
-	getStatusColor,
 	getStatusLabel,
 	toSelectItems,
 } from "@/utils/status-helpers";
@@ -363,17 +363,13 @@ function GuestsPage() {
 												</Button>
 											)}
 										</TableCell>
-										<TableCell>
-											<Badge
-												className={getStatusColor(
-													(guest.status as string) || "PENDING",
-												)}
-											>
-												{getStatusLabel(
-													(guest.status as string) || "PENDING",
-													"guest",
-												)}
-											</Badge>
+										<TableCell>												<StatusBadge
+													status={(guest.status as any) || "PENDING"}
+													label={getStatusLabel(
+														(guest.status as string) || "PENDING",
+														"guest",
+													)}
+												/>
 										</TableCell>
 										<TableCell>
 											<div className="flex gap-1">

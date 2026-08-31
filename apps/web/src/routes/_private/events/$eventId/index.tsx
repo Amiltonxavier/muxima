@@ -49,6 +49,7 @@ import { BackButton } from "@/shared/components/back-to";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
 import { orpc } from "@/utils/orpc";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
 	EVENT_STATUS_LABELS,
 	getStatusColor,
@@ -890,17 +891,9 @@ function EventStats({ eventId }: { eventId: string }) {
 									key={String(vendor.id)}
 									className="flex items-center justify-between text-sm"
 								>
-									<span className="truncate">{String(vendor.name)}</span>
-									<Badge
-										className={getStatusColor(
-											String(vendor.status || "PROSPECT"),
-										)}
-									>
-										{String(
-											VENDOR_CATEGORY_LABELS[String(vendor.category)] ??
-												vendor.category,
-										)}
-									</Badge>
+									<span className="truncate">{String(vendor.name)}</span>									<StatusBadge
+										status={(vendor.status as any) || "PROSPECT"}
+									/>
 								</div>
 							))}
 							{vendors.length > 4 && (
@@ -974,17 +967,13 @@ function EventStats({ eventId }: { eventId: string }) {
 												? ` · ${String(schedule.responsible)}`
 												: ""}
 										</p>
-									</div>
-									<Badge
-										className={getStatusColor(
-											String(schedule.status || "PENDING"),
-										)}
-									>
-										{String(
+									</div>									<StatusBadge
+										status={(schedule.status as any) || "PENDING"}
+										label={String(
 											TASK_STATUS_LABELS[String(schedule.status)] ??
 												schedule.status,
 										)}
-									</Badge>
+									/>
 								</div>
 							))}
 							{schedules.length > 5 && (
@@ -1050,21 +1039,21 @@ function EventCharts({ eventId }: { eventId: string }) {
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-3">
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Capacidade</p>
 								<p className="font-semibold text-lg">{guestData.capacity}</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Convidados</p>
 								<p className="font-semibold text-lg">{guestData.invited}</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Confirmados</p>
-								<p className="font-semibold text-lg text-green-600">{guestData.confirmed}</p>
+								<p className="font-semibold text-lg">{guestData.confirmed}</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Disponíveis</p>
-								<p className="font-semibold text-lg text-blue-600">{guestData.remaining}</p>
+								<p className="font-semibold text-lg ">{guestData.remaining}</p>
 							</div>
 						</div>
 					</CardContent>
@@ -1093,21 +1082,21 @@ function EventCharts({ eventId }: { eventId: string }) {
 								/>
 								</div>
 								<div className="grid grid-cols-2 gap-3">
-									<div className="rounded-md border p-3 text-center">
+									<div className="border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Total</p>
 										<p className="font-semibold text-lg">{formatCurrency(budgetData.totalBudget)}</p>
 									</div>
-									<div className="rounded-md border p-3 text-center">
+									<div className="border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Gasto</p>
-										<p className="font-semibold text-lg text-amber-600">{formatCurrency(budgetData.spent)}</p>
+										<p className="font-semibold text-lg ">{formatCurrency(budgetData.spent)}</p>
 									</div>
 									{budgetData.planned > 0 && (
-										<div className="rounded-md border p-3 text-center">
+										<div className="border p-3 text-center">
 											<p className="text-muted-foreground text-xs">Planeado</p>
-											<p className="font-semibold text-lg text-blue-600">{formatCurrency(budgetData.planned)}</p>
+											<p className="font-semibold text-lg ">{formatCurrency(budgetData.planned)}</p>
 										</div>
 									)}
-									<div className="rounded-md border p-3 text-center">
+									<div className="border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Disponível</p>
 										<p className={`font-semibold text-lg ${budgetData.available < 0 ? "text-red-600" : "text-green-600"}`}>{formatCurrency(budgetData.available > 0 ? budgetData.available : 0)}</p>
 									</div>

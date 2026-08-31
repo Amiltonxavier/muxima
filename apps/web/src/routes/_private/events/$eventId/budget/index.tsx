@@ -53,9 +53,9 @@ import { useVendors } from "@/shared/queries/vendor-queries";
 import { expenseSchema } from "@/utils/budget-schemas";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
 	EXPENSE_STATUS_LABELS,
-	getStatusColor,
 	getStatusLabel,
 	INVENTORY_CATEGORY_LABELS,
 	INVENTORY_UNIT_LABELS,
@@ -222,17 +222,13 @@ function BudgetPage() {
 									<TableCell>
 										{formatCurrency(Number(expense.totalAmount))}
 									</TableCell>
-									<TableCell>
-										<Badge
-											className={getStatusColor(
-												(expense.status as string) || "PLANNED",
-											)}
-										>
-											{getStatusLabel(
+									<TableCell>										<StatusBadge
+											status={(expense.status as any) || "PLANNED"}
+											label={getStatusLabel(
 												(expense.status as string) || "PLANNED",
 												"expense",
 											)}
-										</Badge>
+									/>
 									</TableCell>
 									<TableCell>
 										{expense.dueDate
@@ -467,12 +463,10 @@ function ViewExpenseDialog({
 							</p>
 						</div>
 						<div className="rounded border p-3">
-							<p className="text-muted-foreground text-xs">Estado</p>
-							<Badge
-								className={getStatusColor(String(expense.status ?? "PLANNED"))}
-							>
-								{getStatusLabel(String(expense.status ?? "PLANNED"), "expense")}
-							</Badge>
+							<p className="text-muted-foreground text-xs">Estado</p>								<StatusBadge
+									status={(String(expense.status ?? "PLANNED") as any)}
+									label={getStatusLabel(String(expense.status ?? "PLANNED"), "expense")}
+								/>
 						</div>
 					</div>
 

@@ -1,3 +1,4 @@
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
@@ -33,7 +34,7 @@ import { toast } from "sonner";
 import { QueryState } from "@/shared/components/states";
 import { createEventSchema } from "@/utils/event-schemas";
 import { formatDate, getDaysRemaining } from "@/utils/format-date";
-import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
+import { getStatusLabel } from "@/utils/status-helpers";
 import {
 	useCreateEvent,
 	useDeleteEvent,
@@ -95,17 +96,13 @@ function EventsPage() {
 														: "Sem data"}
 												</span>
 											</div>
-										</div>
-										<Badge
-											className={getStatusColor(
-												(event.status as string) || "DRAFT",
-											)}
-										>
-											{getStatusLabel(
-												(event.status as string) || "DRAFT",
-												"event",
-											)}
-										</Badge>
+										</div>												<StatusBadge
+													status={(event.status as any) || "DRAFT"}
+													label={getStatusLabel(
+														(event.status as string) || "DRAFT",
+														"event",
+													)}
+												/>
 									</div>
 								</CardHeader>
 								<CardContent>

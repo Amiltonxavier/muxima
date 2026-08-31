@@ -1,4 +1,4 @@
-import { Badge } from "@muxima/ui/components/badge";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Card,
@@ -22,7 +22,7 @@ import { authClient } from "@/lib/auth-client";
 import { QueryState } from "@/shared/components/states";
 import { formatDate, getDaysRemaining } from "@/utils/format-date";
 import { orpc } from "@/utils/orpc";
-import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
+import { getStatusLabel } from "@/utils/status-helpers";
 import { useEvents } from "../events/-queries/event-queries";
 
 export const Route = createFileRoute("/_private/dashboard/")({
@@ -96,17 +96,13 @@ function DashboardPage() {
 												<Badge variant="outline" className="mt-1">
 													{event.type === "WEDDING" ? "Casamento" : "Noivado"}
 												</Badge>
-											</div>
-											<Badge
-												className={getStatusColor(
-													(event.status as string) || "DRAFT",
-												)}
-											>
-												{getStatusLabel(
-													(event.status as string) || "DRAFT",
-													"event",
-												)}
-											</Badge>
+											</div>													<StatusBadge
+														status={(event.status as any) || "DRAFT"}
+														label={getStatusLabel(
+																(event.status as string) || "DRAFT",
+																"event",
+															)}
+													/>
 										</div>
 									</CardHeader>
 									<CardContent>

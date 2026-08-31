@@ -37,9 +37,9 @@ import {
 	useDeleteDocument,
 	useDocuments,
 } from "@/shared/queries/document-queries";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
 	DOCUMENT_TYPE_LABELS,
-	getStatusColor,
 	getStatusLabel,
 } from "@/utils/status-helpers";
 
@@ -105,17 +105,13 @@ function DocumentsPage() {
 											(doc.type as string)}
 									</TableCell>
 									<TableCell>{(doc.reference as string) || "—"}</TableCell>
-									<TableCell>
-										<Badge
-											className={getStatusColor(
-												(doc.status as string) || "ACTIVE",
+									<TableCell>										<StatusBadge
+											status={(doc.status as any) || "ACTIVE"}
+											label={getStatusLabel(
+													(doc.status as string) || "ACTIVE",
+													"document",
 											)}
-										>
-											{getStatusLabel(
-												(doc.status as string) || "ACTIVE",
-												"document",
-											)}
-										</Badge>
+										/>
 									</TableCell>
 									<TableCell>
 										<Button

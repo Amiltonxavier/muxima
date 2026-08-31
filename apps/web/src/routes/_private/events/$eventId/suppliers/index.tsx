@@ -43,8 +43,8 @@ import {
 	useVendors,
 } from "@/shared/queries/vendor-queries";
 import { formatCurrency } from "@/utils/format-currency";
+import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
-	getStatusColor,
 	getStatusLabel,
 	VENDOR_CATEGORY_LABELS,
 	VENDOR_STATUS_LABELS,
@@ -135,16 +135,13 @@ function SuppliersPage() {
 											)}
 										</TableCell>
 										<TableCell>
-											<Badge
-												className={getStatusColor(
-													String(v.status || "PROSPECT"),
-												)}
-											>
-												{getStatusLabel(
+											<StatusBadge
+												status={(v.status as any) || "PROSPECT"}
+												label={getStatusLabel(
 													String(v.status || "PROSPECT"),
 													"vendor",
 												)}
-											</Badge>
+											/>
 										</TableCell>
 										<TableCell>
 											<div className="flex gap-1">

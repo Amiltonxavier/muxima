@@ -57,7 +57,7 @@ import {
 	useUpdateTask,
 } from "@/shared/queries/task-queries";
 import { formatDate } from "@/utils/format-date";
-import { getStatusColor, TASK_CATEGORY_LABELS, TASK_STATUS_LABELS } from "@/utils/status-helpers";
+import { TASK_CATEGORY_LABELS, TASK_STATUS_LABELS } from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
@@ -287,7 +287,7 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 									const colTasks = kanbanData.filter((t) => t.column === col.id);
 									return (
 										<ListGroup key={col.id} id={col.id}>
-											<ListHeader name={col.name} color={getStatusColor(col.id)} />
+											<ListHeader name={col.name} color={col.id === "TODO" ? "#a3a3a3" : col.id === "IN_PROGRESS" ? "#3b82f6" : "#10b981"} />
 											<ListItems>
 												{colTasks.length === 0 ? (
 													<p className="py-4 text-center text-muted-foreground text-xs">
