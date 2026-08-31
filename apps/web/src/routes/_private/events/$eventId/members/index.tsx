@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
 import { orpc } from "@/utils/orpc";
-import { toSelectItems } from "@/utils/status-helpers";
+import { MEMBER_ROLE_LABELS, toSelectItems } from "@/utils/status-helpers";
 
 export const Route = createFileRoute("/_private/events/$eventId/members/")({
 	component: MembersPage,
@@ -158,7 +158,7 @@ function MembersPage() {
 									</div>
 									<div className="mt-3 flex items-center gap-2">
 										<Select
-											items={toSelectItems(ROLE_LABELS)}
+											items={toSelectItems(MEMBER_ROLE_LABELS)}
 											value={memberRole}
 											onValueChange={(v) => {
 												if (v) {
@@ -174,7 +174,7 @@ function MembersPage() {
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
-												{toSelectItems(ROLE_LABELS).map((item) => (
+												{toSelectItems(MEMBER_ROLE_LABELS).map((item) => (
 													<SelectItem key={item.value} value={item.value}>
 														{item.label}
 													</SelectItem>
@@ -318,7 +318,7 @@ function AddMemberDialog({
 							<div className="space-y-2">
 								<Label>Papel</Label>
 								<Select
-									items={toSelectItems(ROLE_LABELS)}
+									items={toSelectItems(MEMBER_ROLE_LABELS)}
 									value={field.state.value}
 									onValueChange={(v) => field.handleChange(v as never)}
 								>
@@ -326,7 +326,7 @@ function AddMemberDialog({
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										{toSelectItems(ROLE_LABELS).map((item) => (
+										{toSelectItems(MEMBER_ROLE_LABELS).map((item) => (
 											<SelectItem key={item.value} value={item.value}>
 												{item.label}
 											</SelectItem>

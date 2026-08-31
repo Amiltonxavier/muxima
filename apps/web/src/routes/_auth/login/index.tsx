@@ -18,8 +18,8 @@ function LoginPage() {
 
 	const form = useForm({
 		defaultValues: {
-			email: "",
-			password: "",
+			email: "admin@muxima.ao",
+			password: "admin123",
 		},
 		onSubmit: async ({ value }) => {
 			const result = loginSchema.safeParse(value);

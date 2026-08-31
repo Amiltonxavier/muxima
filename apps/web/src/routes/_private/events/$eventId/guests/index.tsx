@@ -2,9 +2,6 @@ import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
 } from "@muxima/ui/components/card";
 import {
 	Dialog,
@@ -82,6 +79,7 @@ import {
 	getStatusLabel,
 	toSelectItems,
 } from "@/utils/status-helpers";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export const Route = createFileRoute("/_private/events/$eventId/guests/")({
 	component: GuestsPage,
@@ -191,83 +189,39 @@ function GuestsPage() {
 
 			{/* Stats Cards */}
 			{stats && (
-				<div className="grid gap-4 sm:grid-cols-6">
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Total
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl">{stats.totalGuests}</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Confirmados
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl text-green-600">
-								{stats.confirmed}
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Pendentes
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl text-amber-600">
-								{stats.pending}
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Recusados
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl text-red-600">
-								{stats.declined}
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Acompanhantes
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl text-blue-600">
-								{stats.totalCompanions}
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="text-muted-foreground text-xs">
-								Pessoas confirmadas
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-semibold text-2xl text-emerald-600">
-								{stats.totalConfirmedPeople}
-								{stats.capacity > 0 && (
-									<span className="font-normal text-muted-foreground text-xs">
-										{" "}
-										/ {stats.capacity}
-									</span>
-								)}
-							</div>
-						</CardContent>
-					</Card>
+				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					<StatsCard
+						title="Total"
+						value={stats.totalGuests}
+					/>
+
+					<StatsCard
+						title="Confirmados"
+						value={stats.confirmed}
+					/>
+
+					<StatsCard
+						title="Pendentes"
+						value={stats.pending}
+					/>
+
+					<StatsCard
+						title="Recusados"
+						value={stats.declined}
+					/>
+
+					<StatsCard
+						title="Acompanhantes"
+						value={stats.totalCompanions}
+					/>
+
+					<StatsCard
+						title="Pessoas confirmadas"
+						value={stats.totalConfirmedPeople}
+						description={
+							stats.capacity > 0 ? `/ ${stats.capacity}` : undefined
+						}
+					/>
 				</div>
 			)}
 
@@ -346,7 +300,7 @@ function GuestsPage() {
 								const tableName =
 									tableGuests.length > 0
 										? ((tableGuests[0]?.table as Record<string, unknown>)
-												?.name as string)
+											?.name as string)
 										: null;
 								const companions = (guest.companions ?? []) as Array<
 									Record<string, unknown>
@@ -857,21 +811,21 @@ function ViewInvitationDialog({
 											<div key={ig.id as string} className="rounded-md border p-3">
 												<p className="font-medium text-sm">{String(g?.name)}</p>
 												{((g?.email as string) || (g?.phone as string)) ? (
-																		<div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
-																			{g?.phone ? (
-																				<p className="flex items-center gap-2">
-																					<Phone className="h-3.5 w-3.5" />
-																					{String(g.phone)}
-																				</p>
-																			) : null}
-																			{g?.email ? (
-																				<p className="flex items-center gap-2">
-																					<Mail className="h-3.5 w-3.5" />
-																					{String(g.email)}
-																				</p>
-																			) : null}
-																		</div>
-																		) : null}
+													<div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
+														{g?.phone ? (
+															<p className="flex items-center gap-2">
+																<Phone className="h-3.5 w-3.5" />
+																{String(g.phone)}
+															</p>
+														) : null}
+														{g?.email ? (
+															<p className="flex items-center gap-2">
+																<Mail className="h-3.5 w-3.5" />
+																{String(g.email)}
+															</p>
+														) : null}
+													</div>
+												) : null}
 											</div>
 										);
 									})}
@@ -972,7 +926,7 @@ function ViewInvitationDialog({
 								<p className="font-medium text-sm">
 									{String(
 										(event.owner as Record<string, unknown>).name ||
-											(event.owner as Record<string, unknown>).email,
+										(event.owner as Record<string, unknown>).email,
 									)}
 								</p>
 								{(event.owner as Record<string, unknown>).email ? (
@@ -1473,11 +1427,11 @@ function GuestDialog({
 									value={companionInput}
 									onChange={(e) => setCompanionInput(e.target.value)}
 									onKeyDown={(e) => {
-									if (e.key === "Enter") {
-										e.preventDefault();
-										addLocalCompanion();
-									}
-								}}
+										if (e.key === "Enter") {
+											e.preventDefault();
+											addLocalCompanion();
+										}
+									}}
 									disabled={isLoading}
 								/>
 								<Button

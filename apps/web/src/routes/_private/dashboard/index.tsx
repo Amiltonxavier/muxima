@@ -35,85 +35,31 @@ function DashboardPage() {
 	const statsQuery = useQuery(orpc.dashboard.getGlobalStats.queryOptions());
 
 	const events = eventsQuery.data ?? [];
-	const stats = statsQuery.data as
-		| {
-				events: number;
-				guests: number;
-				invitations: number;
-				vendors: number;
-				budgets: number;
-				members: number;
-		  }
-		| undefined;
 
-	const statCards = [
-		{
-			label: "Eventos",
-			value: stats?.events ?? 0,
-			icon: <Calendar className="h-5 w-5 text-blue-600" />,
-			bg: "bg-blue-50",
-		},
-		{
-			label: "Convidados",
-			value: stats?.guests ?? 0,
-			icon: <Users className="h-5 w-5 text-pink-600" />,
-			bg: "bg-pink-50",
-		},
-		{
-			label: "Convites",
-			value: stats?.invitations ?? 0,
-			icon: <Globe className="h-5 w-5 text-purple-600" />,
-			bg: "bg-purple-50",
-		},
-		{
-			label: "Fornecedores",
-			value: stats?.vendors ?? 0,
-			icon: <CreditCard className="h-5 w-5 text-amber-600" />,
-			bg: "bg-amber-50",
-		},
-		{
-			label: "Orçamentos",
-			value: stats?.budgets ?? 0,
-			icon: <CreditCard className="h-5 w-5 text-emerald-600" />,
-			bg: "bg-emerald-50",
-		},
-		{
-			label: "Membros",
-			value: stats?.members ?? 0,
-			icon: <UsersIcon className="h-5 w-5 text-rose-600" />,
-			bg: "bg-rose-50",
-		},
-	];
+	function getGreeting() {
+		const hour = new Date().getHours();
+
+		if (hour < 12) return "Bom dia";
+		if (hour < 18) return "Boa tarde";
+
+		return "Boa noite";
+	}
+
+	const greeting = getGreeting();
+	const firstName = session?.user.name?.split(" ")[0] || "Utilizador";
+
 
 	return (
 		<div className="space-y-6">
 			<div>
 				<h1 className="font-semibold text-2xl">
-					Bom dia, {session?.user.name?.split(" ")[0] || "Utilizador"}
+					{greeting}, {firstName}
 				</h1>
 				<p className="text-muted-foreground text-sm">
 					Resumo geral da plataforma
 				</p>
 			</div>
 
-			{/* Global Stats Cards */}
-			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-				{statCards.map((card) => (
-					<Card key={card.label}>
-						<CardContent className="flex items-center gap-3 p-4">
-							<div
-								className={`flex h-10 w-10 items-center justify-center ${card.bg}`}
-							>
-								{card.icon}
-							</div>
-							<div>
-								<p className="text-muted-foreground text-xs">{card.label}</p>
-								<p className="font-semibold text-xl">{card.value}</p>
-							</div>
-						</CardContent>
-					</Card>
-				))}
-			</div>
 
 			{/* Events Section */}
 			<div>

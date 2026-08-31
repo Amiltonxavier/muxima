@@ -435,13 +435,13 @@ function ViewExpenseDialog({
 				</DialogHeader>
 				<div className="space-y-4">
 					<div className="grid grid-cols-2 gap-3">
-						<div className="rounded-md border p-3">
+						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Valor total</p>
 							<p className="font-semibold text-xl">
 								{formatCurrency(totalAmount)}
 							</p>
 						</div>
-						<div className="rounded-md border p-3">
+						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Estado</p>
 							<Badge
 								className={getStatusColor(String(expense.status ?? "PLANNED"))}
@@ -451,7 +451,7 @@ function ViewExpenseDialog({
 						</div>
 					</div>
 
-					<div className="rounded-md border p-3">
+					<div className="rounded border p-3">
 						<p className="mb-1 text-muted-foreground text-xs">
 							Progresso de pagamento
 						</p>
@@ -472,7 +472,7 @@ function ViewExpenseDialog({
 
 					<div className="grid grid-cols-2 gap-3">
 						{expense.dueDate ? (
-							<div className="rounded-md border p-3">
+							<div className="rounded border p-3">
 								<p className="text-muted-foreground text-xs">Data limite</p>
 								<p className="font-medium text-sm">
 									{formatDate(expense.dueDate as string)}
@@ -480,7 +480,7 @@ function ViewExpenseDialog({
 							</div>
 						) : null}
 						{category && (
-							<div className="rounded-md border p-3">
+							<div className="rounded border p-3">
 								<p className="text-muted-foreground text-xs">Categoria</p>
 								<p className="font-medium text-sm">{String(category.name)}</p>
 							</div>
@@ -488,7 +488,7 @@ function ViewExpenseDialog({
 					</div>
 
 					{vendor && (
-						<div className="rounded-md border p-3">
+						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Fornecedor</p>
 							<p className="font-medium text-sm">{String(vendor.name)}</p>
 							{vendor.phone ? (
@@ -500,7 +500,7 @@ function ViewExpenseDialog({
 					)}
 
 					{expense.notes ? (
-						<div className="rounded-md border p-3">
+						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Notas</p>
 							<p className="text-sm">{String(expense.notes)}</p>
 						</div>
@@ -515,7 +515,7 @@ function ViewExpenseDialog({
 								{payments.map((payment, i) => (
 									<div
 										key={i}
-										className="flex items-center justify-between rounded-md border p-2.5 text-sm"
+										className="flex items-center justify-between rounded border p-2.5 text-sm"
 									>
 										<div>
 											<p className="font-medium">

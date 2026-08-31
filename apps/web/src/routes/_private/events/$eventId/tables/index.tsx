@@ -46,6 +46,7 @@ import {
 	useTables,
 	useUpdateTable,
 } from "@/shared/queries/table-queries";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export const Route = createFileRoute("/_private/events/$eventId/tables/")({
 	component: TablesPage,
@@ -121,51 +122,26 @@ function TablesPage() {
 			</div>
 
 			{/* Metrics Cards */}
-			<div className="grid gap-4 sm:grid-cols-4">
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-muted-foreground text-xs">
-							Total de mesas
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl">{tables.length}</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-muted-foreground text-xs">
-							Lugares totais
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl">{totalCapacity}</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-muted-foreground text-xs">
-							Ocupados
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-blue-600">
-							{totalOccupied}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-muted-foreground text-xs">
-							Disponíveis
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-green-600">
-							{totalCapacity - totalOccupied}
-						</div>
-					</CardContent>
-				</Card>
+			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<StatsCard
+					title="Total de mesas"
+					value={tables.length}
+				/>
+
+				<StatsCard
+					title="Lugares totais"
+					value={totalCapacity}
+				/>
+
+				<StatsCard
+					title="Ocupados"
+					value={totalOccupied}
+				/>
+
+				<StatsCard
+					title="Disponíveis"
+					value={totalCapacity - totalOccupied}
+				/>
 			</div>
 
 			{/* Filters */}
@@ -349,12 +325,12 @@ function TablesPage() {
 							<strong>{deletingTable?.name as string}</strong>?
 							{((deletingTable?.tableGuests as Array<unknown>)?.length || 0) >
 								0 && (
-								<p className="mt-2 text-amber-600 text-sm">
-									⚠️ Esta mesa tem{" "}
-									{(deletingTable?.tableGuests as Array<unknown>)?.length}{" "}
-									convidados atribuídos que serão removidos.
-								</p>
-							)}
+									<p className="mt-2 text-amber-600 text-sm">
+										⚠️ Esta mesa tem{" "}
+										{(deletingTable?.tableGuests as Array<unknown>)?.length}{" "}
+										convidados atribuídos que serão removidos.
+									</p>
+								)}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
@@ -427,7 +403,7 @@ function ViewTableDialog({
 						</div>
 						<div className="rounded-md border p-3 text-center">
 							<p className="text-muted-foreground text-xs">Ocupados</p>
-							<p className="font-semibold text-2xl text-blue-600">{occupied}</p>
+							<p className="font-semibold text-2xl">{occupied}</p>
 						</div>
 					</div>
 
