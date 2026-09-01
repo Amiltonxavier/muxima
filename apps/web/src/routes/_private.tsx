@@ -1,15 +1,10 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Topbar } from "@/shared/components/topbar";
+import { authGuard } from "@/core/guards/auth.guard";
 
 export const Route = createFileRoute("/_private")({
-	beforeLoad: async () => {
-		const { data: session } = await authClient.getSession();
-		if (!session) {
-			throw redirect({ to: "/login" });
-		}
-	},
+	beforeLoad: authGuard,
 	component: PrivateLayout,
 });
 

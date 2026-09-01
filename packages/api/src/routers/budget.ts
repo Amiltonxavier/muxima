@@ -6,6 +6,7 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const budgetRouter = {
 	getByEventId: protectedProcedure
@@ -123,21 +124,56 @@ export const budgetRouter = {
 		}),
 
 	getExpenses: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["PLANNED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"])
+					.optional(),
+				type: z.enum(["EXPENSE", "INCOME"]).optional(),
+				budgetCategoryId: z.string().optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const expenses = await db.expense.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					vendor: true,
-					budgetCategory: true,
-					payments: true,
-					inventoryItem: true,
-				},
-				orderBy: { createdAt: "desc" },
-			});
 
-			return expenses;
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ description: { contains: input.search, mode: "insensitive" } },
+					{ notes: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+			if (input.type) where.type = input.type;
+			if (input.budgetCategoryId) where.budgetCategoryId = input.budgetCategoryId;
+
+			const [expenses, total] = await Promise.all([
+				db.expense.findMany({
+					where,
+					include: {
+						vendor: true,
+						budgetCategory: true,
+						payments: true,
+						inventoryItem: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.expense.count({ where }),
+			]);
+
+			return paginatedResponse(expenses, total, page, limit);
 		}),
 
 	createExpense: protectedProcedure

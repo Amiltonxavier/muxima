@@ -1,16 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@/utils/orpc";
+import { orpc } from "@/shared/utils/orpc";
+
+export type DocumentListParams = {
+	eventId: string;
+	page?: number;
+	limit?: number;
+	search?: string;
+	type?: "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
+	status?: "ACTIVE" | "ARCHIVED" | "DELETED";
+};
 
 export const documentKeys = {
 	all: ["documents"] as const,
-	list: (eventId: string) => [...documentKeys.all, "list", eventId] as const,
+	list: (params: DocumentListParams) =>
+		[...documentKeys.all, "list", params] as const,
 };
 
-export function useDocuments(eventId: string) {
+export function useDocuments(params: DocumentListParams) {
 	return useQuery({
-		...orpc.documents.list.queryOptions({ input: { eventId } }),
-		queryKey: documentKeys.list(eventId),
-		enabled: !!eventId,
+		...orpc.documents.list.queryOptions({ input: params }),
+		queryKey: documentKeys.list(params),
+		enabled: !!params.eventId,
 	});
 }
 
@@ -18,7 +28,7 @@ export function useCreateDocument() {
 	const queryClient = useQueryClient();
 	return useMutation(
 		orpc.documents.create.mutationOptions({
-			onSuccess: (_data) => {
+			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: documentKeys.all });
 			},
 		}),

@@ -6,7 +6,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2, Mail } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { forgotPasswordSchema } from "@/utils/auth-schemas";
+import { forgotPasswordSchema } from "@/shared/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/forgot-password/")({
 	component: ForgotPasswordPage,

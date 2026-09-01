@@ -7,7 +7,7 @@ import { CheckCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-import { resetPasswordSchema } from "@/utils/auth-schemas";
+import { resetPasswordSchema } from "@/shared/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/reset-password/")({
 	validateSearch: (search: Record<string, unknown>) => ({

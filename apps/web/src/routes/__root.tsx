@@ -11,7 +11,7 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
-import { link, type orpc } from "@/utils/orpc";
+import { link, type orpc } from "@/shared/utils/orpc";
 
 import "../index.css";
 

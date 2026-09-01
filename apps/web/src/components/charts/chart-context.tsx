@@ -102,7 +102,7 @@ export interface ChartHoverContextValue {
   /** Current drag/pinch selection range */
   selection?: ChartSelection | null;
   /** Clear the current selection */
-  clearSelection?: () => void;
+  clearSelection?: VoidFunction;
 
   // Bar chart hover (optional - only present in BarChart)
   /** Index of currently hovered bar */
@@ -171,7 +171,7 @@ export interface ChartContextValue extends ChartHoverContextValue {
   /** Increments when enter animation should replay. */
   revealEpoch?: number;
   /** Fired when a one-shot loading pulse (exit / enter) completes. */
-  notifyLoadingPulseComplete?: () => void;
+  notifyLoadingPulseComplete?: VoidFunction;
 
   // X accessor - how to get the x value from data points
   xAccessor: (d: Record<string, unknown>) => Date;

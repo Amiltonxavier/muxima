@@ -20,7 +20,7 @@ export interface ChartRevealClipProps {
   /** Reveal grows 0 → full; conceal shrinks full → 0 (ready → loading). */
   mode?: ChartRevealClipMode;
   /** Called when a conceal animation finishes. */
-  onComplete?: () => void;
+  onComplete?: VoidFunction;
 }
 
 /**

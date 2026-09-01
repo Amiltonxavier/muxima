@@ -5,24 +5,81 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const vendorsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				category: z
+					.enum([
+						"VENUE",
+						"DECORATION",
+						"MUSIC",
+						"PHOTOGRAPHY",
+						"VIDEO",
+						"CATERING",
+						"CAKE",
+						"DRINKS",
+						"TRANSPORT",
+						"BEAUTY",
+						"SECURITY",
+						"ENTERTAINMENT",
+						"OTHER",
+					])
+					.optional(),
+				status: z
+					.enum([
+						"PROSPECT",
+						"CONTACTED",
+						"NEGOTIATING",
+						"CONTRACTED",
+						"COMPLETED",
+						"CANCELLED",
+					])
+					.optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const vendors = await db.vendor.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					contracts: true,
-					expenses: true,
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
 
-			return vendors;
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ name: { contains: input.search, mode: "insensitive" } },
+					{ email: { contains: input.search, mode: "insensitive" } },
+					{ phone: { contains: input.search, mode: "insensitive" } },
+					{ description: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.category) where.category = input.category;
+			if (input.status) where.status = input.status;
+
+			const [vendors, total] = await Promise.all([
+				db.vendor.findMany({
+					where,
+					include: {
+						contracts: true,
+						expenses: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.vendor.count({ where }),
+			]);
+
+			return paginatedResponse(vendors, total, page, limit);
 		}),
 
 	getById: protectedProcedure

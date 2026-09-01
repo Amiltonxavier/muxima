@@ -2,20 +2,51 @@ import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { requireEventAccess } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const membersRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				role: z.enum(["OWNER", "PARTNER", "ADMIN", "EDITOR", "VIEWER"]).optional(),
+				status: z.enum(["ACTIVE", "PENDING", "REMOVED"]).optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const members = await db.eventMember.findMany({
-				where: { eventId: input.eventId },
-				include: { user: true },
-				orderBy: { createdAt: "desc" },
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return members;
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ user: { name: { contains: input.search, mode: "insensitive" } } },
+					{ user: { email: { contains: input.search, mode: "insensitive" } } },
+				];
+			}
+
+			if (input.role) where.role = input.role;
+			if (input.status) where.status = input.status;
+
+			const [members, total] = await Promise.all([
+				db.eventMember.findMany({
+					where,
+					include: { user: true },
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.eventMember.count({ where }),
+			]);
+
+			return paginatedResponse(members, total, page, limit);
 		}),
 
 	add: protectedProcedure

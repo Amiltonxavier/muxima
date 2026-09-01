@@ -1,18 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@/utils/orpc";
+import { orpc } from "@/shared/utils/orpc";
+
+export type EventListParams = {
+	page?: number;
+	limit?: number;
+	search?: string;
+	status?: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+	type?: "ENGAGEMENT" | "WEDDING";
+};
 
 export const eventKeys = {
 	all: ["events"] as const,
 	lists: () => [...eventKeys.all, "list"] as const,
-	list: (eventId: string) => [...eventKeys.lists(), eventId] as const,
+	list: (params: EventListParams) => [...eventKeys.lists(), params] as const,
 	details: () => [...eventKeys.all, "detail"] as const,
 	detail: (id: string) => [...eventKeys.details(), id] as const,
 };
 
-export function useEvents() {
+export function useEvents(params: EventListParams = {}) {
 	return useQuery({
-		...orpc.events.list.queryOptions({}),
-		queryKey: eventKeys.lists(),
+		...orpc.events.list.queryOptions({ input: params }),
+		queryKey: eventKeys.list(params),
 	});
 }
 

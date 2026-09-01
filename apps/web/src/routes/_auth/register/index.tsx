@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-import { registerSchema } from "@/utils/auth-schemas";
+import { registerSchema } from "@/shared/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/register/")({
 	component: RegisterPage,

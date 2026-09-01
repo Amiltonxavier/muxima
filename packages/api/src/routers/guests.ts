@@ -5,27 +5,61 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const guestsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["PENDING", "CONFIRMED", "DECLINED", "WAITING"])
+					.optional(),
+				type: z
+					.enum(["FAMILY", "FRIEND", "COLLEAGUE", "VIP", "OTHER"])
+					.optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const guests = await db.guest.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					companions: true,
-					tableGuests: {
-						include: { table: true },
-					},
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return guests;
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ name: { contains: input.search, mode: "insensitive" } },
+					{ email: { contains: input.search, mode: "insensitive" } },
+					{ phone: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+			if (input.type) where.type = input.type;
+
+			const [guests, total] = await Promise.all([
+				db.guest.findMany({
+					where,
+					include: {
+						companions: true,
+						tableGuests: {
+							include: { table: true },
+						},
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.guest.count({ where }),
+			]);
+
+			return paginatedResponse(guests, total, page, limit);
 		}),
 
 	getById: protectedProcedure
@@ -217,25 +251,47 @@ export const guestsRouter = {
 		}),
 
 	getTables: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const tables = await db.table.findMany({
-				where: { eventId: input.eventId, deletedAt: null },
-				include: {
-					tableGuests: {
-						include: {
-							guest: true,
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+				deletedAt: null,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ name: { contains: input.search, mode: "insensitive" } },
+					{ location: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			const [tables, total] = await Promise.all([
+				db.table.findMany({
+					where,
+					include: {
+						tableGuests: {
+							include: { guest: true },
 						},
 					},
-				},
-				orderBy: {
-					number: "asc",
-				},
-			});
+					orderBy: { number: "asc" },
+					skip,
+					take: limit,
+				}),
+				db.table.count({ where }),
+			]);
 
-			return tables;
+			return paginatedResponse(tables, total, page, limit);
 		}),
 
 	createTable: protectedProcedure
@@ -311,7 +367,6 @@ export const guestsRouter = {
 				await requireEventAccess(context.session.user.id, table.eventId);
 			}
 
-			// Soft delete: set deletedAt, remove all guest assignments
 			await db.tableGuest.deleteMany({
 				where: { tableId: input.id },
 			});
@@ -409,22 +464,22 @@ export const guestsRouter = {
 										name: true,
 										type: true,
 										status: true,
-									eventDate: true,
-									startTime: true,
-									endTime: true,
-									venueName: true,
-									address: true,
-									neighborhood: true,
-									municipality: true,
-									province: true,
-									owner: {
-										select: {
-											id: true,
-											name: true,
-											email: true,
+										eventDate: true,
+										startTime: true,
+										endTime: true,
+										venueName: true,
+										address: true,
+										neighborhood: true,
+										municipality: true,
+										province: true,
+										owner: {
+											select: {
+												id: true,
+												name: true,
+												email: true,
+											},
 										},
 									},
-								},
 								},
 								guests: {
 									include: {
@@ -459,23 +514,50 @@ export const guestsRouter = {
 		}),
 
 	getInvitationsByEvent: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["DRAFT", "SENT", "DELIVERED", "OPENED", "RESPONDED", "EXPIRED"])
+					.optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const invitations = await db.guestInvitation.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					guests: {
-						include: {
-							guest: true,
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ code: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+
+			const [invitations, total] = await Promise.all([
+				db.guestInvitation.findMany({
+					where,
+					include: {
+						guests: {
+							include: { guest: true },
 						},
 					},
-				},
-				orderBy: { createdAt: "desc" },
-			});
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.guestInvitation.count({ where }),
+			]);
 
-			return invitations;
+			return paginatedResponse(invitations, total, page, limit);
 		}),
 
 	updateCompanion: protectedProcedure

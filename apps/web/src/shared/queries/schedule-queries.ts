@@ -1,16 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@/utils/orpc";
+import { orpc } from "@/shared/utils/orpc";
+
+export type ScheduleListParams = {
+	eventId: string;
+	page?: number;
+	limit?: number;
+	search?: string;
+	status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+};
 
 export const scheduleKeys = {
 	all: ["schedules"] as const,
-	list: (eventId: string) => [...scheduleKeys.all, "list", eventId] as const,
+	list: (params: ScheduleListParams) =>
+		[...scheduleKeys.all, "list", params] as const,
 };
 
-export function useSchedules(eventId: string) {
+export function useSchedules(params: ScheduleListParams) {
 	return useQuery({
-		...orpc.tasks.getSchedules.queryOptions({ input: { eventId } }),
-		queryKey: scheduleKeys.list(eventId),
-		enabled: !!eventId,
+		...orpc.tasks.getSchedules.queryOptions({ input: params }),
+		queryKey: scheduleKeys.list(params),
+		enabled: !!params.eventId,
 	});
 }
 
@@ -18,7 +27,7 @@ export function useCreateSchedule() {
 	const queryClient = useQueryClient();
 	return useMutation(
 		orpc.tasks.createSchedule.mutationOptions({
-			onSuccess: (_data) => {
+			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
 			},
 		}),

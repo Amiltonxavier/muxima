@@ -38,15 +38,15 @@ interface ChartInteractionResult {
   tooltipData: TooltipData | null;
   setTooltipData: React.Dispatch<React.SetStateAction<TooltipData | null>>;
   selection: ChartSelection | null;
-  clearSelection: () => void;
+  clearSelection: VoidFunction;
   interactionHandlers: {
     onMouseMove?: (event: React.MouseEvent<SVGGElement>) => void;
-    onMouseLeave?: () => void;
+    onMouseLeave?: VoidFunction;
     onMouseDown?: (event: React.MouseEvent<SVGGElement>) => void;
-    onMouseUp?: () => void;
+    onMouseUp?: VoidFunction;
     onTouchStart?: (event: React.TouchEvent<SVGGElement>) => void;
     onTouchMove?: (event: React.TouchEvent<SVGGElement>) => void;
-    onTouchEnd?: () => void;
+    onTouchEnd?: VoidFunction;
   };
   interactionStyle: React.CSSProperties;
 }

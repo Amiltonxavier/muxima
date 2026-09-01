@@ -42,14 +42,14 @@ export interface LineLoadingPulseStrokeProps {
   /** Stroke opacity for the animated segment. Default: 0.5 */
   strokeOpacity?: number;
   strokeWidth?: number;
-  onCycleComplete?: () => void;
+  onCycleComplete?: VoidFunction;
 }
 
 function useGrowExitClip(
   innerWidth: number,
   mode: LineLoadingPulseMode,
   loopEpoch: number,
-  onComplete?: () => void
+  onComplete?: VoidFunction
 ) {
   const progress = useMotionValue(0);
   const paddedFullWidth = innerWidth + CLIP_PADDING * 2;

@@ -1,16 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@/utils/orpc";
+import { orpc } from "@/shared/utils/orpc";
+
+export type NotificationListParams = {
+	page?: number;
+	limit?: number;
+	search?: string;
+	unreadOnly?: boolean;
+};
 
 export const notificationKeys = {
 	all: ["notifications"] as const,
-	list: () => [...notificationKeys.all, "list"] as const,
+	list: (params: NotificationListParams) =>
+		[...notificationKeys.all, "list", params] as const,
 	unreadCount: () => [...notificationKeys.all, "unreadCount"] as const,
 };
 
-export function useNotifications() {
+export function useNotifications(params: NotificationListParams = {}) {
 	return useQuery({
-		...orpc.notifications.list.queryOptions({}),
-		queryKey: notificationKeys.list(),
+		...orpc.notifications.list.queryOptions({ input: params }),
+		queryKey: notificationKeys.list(params),
 	});
 }
 

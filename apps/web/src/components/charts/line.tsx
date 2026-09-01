@@ -86,7 +86,7 @@ export interface LineProps {
   /** Override pulse animation mode (loop / exit / enter). */
   loadingPulseMode?: LineLoadingPulseMode;
   /** Called when a loop-mode pulse cycle completes. */
-  onLoadingPulseCycleComplete?: () => void;
+  onLoadingPulseCycleComplete?: VoidFunction;
   /**
    * Loading animation while the chart is in loading status: the default
    * traveling `"pulse"`, or a diagonal `"sweep"` shimmer across the skeleton
@@ -159,7 +159,7 @@ function LineLoadingOverlays({
   strokeWidth,
 }: {
   curve: CurveFactory;
-  handleLoadingPulseComplete: () => void;
+  handleLoadingPulseComplete: VoidFunction;
   innerWidth: number;
   loadingStroke: string;
   loadingStrokeOpacity: number;

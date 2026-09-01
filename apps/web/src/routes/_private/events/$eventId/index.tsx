@@ -46,9 +46,9 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
-import { formatCurrency } from "@/utils/format-currency";
-import { formatDate } from "@/utils/format-date";
-import { orpc } from "@/utils/orpc";
+import { formatCurrency } from "@/shared/utils/format-currency";
+import { dateHelper } from "@/core/helpers/date-helper";
+import { orpc } from "@/shared/utils/orpc";
 import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import {
 	EVENT_STATUS_LABELS,
@@ -56,7 +56,7 @@ import {
 	getStatusLabel,
 	TASK_STATUS_LABELS,
 	VENDOR_CATEGORY_LABELS,
-} from "@/utils/status-helpers";
+} from "@/shared/utils/status-helpers";
 import {
 	useDeleteEvent,
 	useEvent,
@@ -197,7 +197,7 @@ function EventDetailPage() {
 							<p className="text-muted-foreground text-xs">Data</p>
 							<p className="font-medium text-sm">
 								{event.eventDate
-									? formatDate(String(event.eventDate))
+									? dateHelper.formatMedium(String(event.eventDate))
 									: "Não definida"}
 							</p>
 						</div>
@@ -326,7 +326,7 @@ function EventDetailPage() {
 								return (
 									<div
 										key={String(member.id)}
-										className="flex items-center gap-3 rounded-md border p-3"
+										className="flex items-center gap-3 border p-3"
 									>
 										<div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-medium text-xs">
 											{initials}
@@ -703,11 +703,11 @@ function EditEventDialog({
 
 // ── Quick Stats Section ──────────────────────────────────────────────
 function EventStats({ eventId }: { eventId: string }) {
-	const guestsQuery = useQuery(
-		orpc.guests.list.queryOptions({ input: { eventId } }),
+	const guestStatsQuery = useQuery(
+		orpc.guests.getGuestStats.queryOptions({ input: { eventId } }),
 	);
 	const tasksQuery = useQuery(
-		orpc.tasks.list.queryOptions({ input: { eventId } }),
+		orpc.tasks.list.queryOptions({ input: { eventId, limit: 200 } }),
 	);
 	const budgetQuery = useQuery(
 		orpc.budget.getByEventId.queryOptions({ input: { eventId } }),
@@ -716,16 +716,17 @@ function EventStats({ eventId }: { eventId: string }) {
 		orpc.vendors.list.queryOptions({ input: { eventId } }),
 	);
 	const schedulesQuery = useQuery(
-		orpc.tasks.getSchedules.queryOptions({ input: { eventId } }),
+		orpc.tasks.getSchedules.queryOptions({ input: { eventId, limit: 200 } }),
 	);
 
-	const guests = (guestsQuery.data ?? []) as Record<string, unknown>[];
-	const tasks = (tasksQuery.data ?? []) as Record<string, unknown>[];
+	const guestStats = guestStatsQuery.data;
+	const tasks = ((tasksQuery.data as { data?: Record<string, unknown>[] })?.data ?? []) as Record<string, unknown>[];
 	const budgetData = budgetQuery.data as Record<string, unknown> | null;
-	const vendors = (vendorsQuery.data ?? []) as Record<string, unknown>[];
-	const schedules = (schedulesQuery.data ?? []) as Record<string, unknown>[];
+	const vendors = ((vendorsQuery.data as { data?: Record<string, unknown>[] })?.data ?? []) as Record<string, unknown>[];
+	const schedules = ((schedulesQuery.data as { data?: Record<string, unknown>[] })?.data ?? []) as Record<string, unknown>[];
 
-	const confirmedGuests = guests.filter((g) => g.status === "CONFIRMED").length;
+	const totalGuests = guestStats?.totalGuests ?? 0;
+	const confirmedGuests = guestStats?.confirmed ?? 0;
 	const pendingTasks = tasks.filter((t) => t.status === "TODO").length;
 	const inProgressTasks = tasks.filter(
 		(t) => t.status === "IN_PROGRESS",
@@ -745,7 +746,7 @@ function EventStats({ eventId }: { eventId: string }) {
 							Convidados
 						</span>
 						<span className="font-normal text-muted-foreground text-xs">
-							{guests.length} total
+							{totalGuests} total
 						</span>
 					</CardTitle>
 				</CardHeader>
@@ -757,19 +758,19 @@ function EventStats({ eventId }: { eventId: string }) {
 					<div className="flex items-center justify-between text-sm">
 						<span className="text-muted-foreground">Pendentes</span>
 						<span className="font-medium">
-							{guests.length - confirmedGuests}
+							{totalGuests - confirmedGuests}
 						</span>
 					</div>
-					{guests.length > 0 && (
+					{totalGuests > 0 && (
 						<div className="pt-1">
 							<div className="mb-1 flex justify-between text-xs">
 								<span className="text-muted-foreground">Confirmação</span>
 								<span>
-									{Math.round((confirmedGuests / guests.length) * 100)}%
+									{Math.round((confirmedGuests / totalGuests) * 100)}%
 								</span>
 							</div>
 							<Progress
-								value={Math.round((confirmedGuests / guests.length) * 100)}
+								value={Math.round((confirmedGuests / totalGuests) * 100)}
 							/>
 						</div>
 					)}
@@ -955,7 +956,7 @@ function EventStats({ eventId }: { eventId: string }) {
 							{schedules.slice(0, 5).map((schedule) => (
 								<div
 									key={String(schedule.id)}
-									className="flex items-center justify-between rounded-md border p-2"
+									className="flex items-center justify-between border p-2"
 								>
 									<div>
 										<p className="font-medium text-sm">

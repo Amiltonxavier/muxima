@@ -1,18 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@/utils/orpc";
+import { orpc } from "@/shared/utils/orpc";
+
+export type GuestListParams = {
+	eventId: string;
+	page?: number;
+	limit?: number;
+	search?: string;
+	status?: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
+	type?: "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
+};
 
 export const guestKeys = {
 	all: ["guests"] as const,
-	list: (eventId: string) => [...guestKeys.all, "list", eventId] as const,
+	list: (params: GuestListParams) =>
+		[...guestKeys.all, "list", params.eventId, params] as const,
 	detail: (id: string) => [...guestKeys.all, "detail", id] as const,
-	tables: (eventId: string) => [...guestKeys.all, "tables", eventId] as const,
+	tables: (params: { eventId: string; page?: number; limit?: number; search?: string }) =>
+		[...guestKeys.all, "tables", params] as const,
 };
 
-export function useGuests(eventId: string) {
+export function useGuests(params: GuestListParams) {
 	return useQuery({
-		...orpc.guests.list.queryOptions({ input: { eventId } }),
-		queryKey: guestKeys.list(eventId),
-		enabled: !!eventId,
+		...orpc.guests.list.queryOptions({ input: params }),
+		queryKey: guestKeys.list(params),
+		enabled: !!params.eventId,
 	});
 }
 
@@ -31,7 +42,7 @@ export function useCreateGuest() {
 		orpc.guests.create.mutationOptions({
 			onSuccess: (data) => {
 				queryClient.invalidateQueries({
-					queryKey: guestKeys.list(data.eventId),
+					queryKey: guestKeys.all,
 				});
 			},
 		}),
@@ -62,11 +73,11 @@ export function useDeleteGuest() {
 	);
 }
 
-export function useTables(eventId: string) {
+export function useTables(params: { eventId: string; page?: number; limit?: number; search?: string }) {
 	return useQuery({
-		...orpc.guests.getTables.queryOptions({ input: { eventId } }),
-		queryKey: guestKeys.tables(eventId),
-		enabled: !!eventId,
+		...orpc.guests.getTables.queryOptions({ input: params }),
+		queryKey: guestKeys.tables(params),
+		enabled: !!params.eventId,
 	});
 }
 
@@ -75,10 +86,8 @@ export function useCreateTable() {
 
 	return useMutation(
 		orpc.guests.createTable.mutationOptions({
-			onSuccess: (data) => {
-				queryClient.invalidateQueries({
-					queryKey: guestKeys.tables(data.eventId),
-				});
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: guestKeys.all });
 			},
 		}),
 	);

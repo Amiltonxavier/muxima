@@ -4,7 +4,7 @@ import {
 	loginSchema,
 	registerSchema,
 } from "../auth-schemas";
-import { createEventSchema } from "../event-schemas";
+import { createEventSchema } from "../../../routes/_private/events/-schema/event-schemas";
 import { guestSchema } from "../guest-schemas";
 import { taskSchema } from "../task-schemas";
 

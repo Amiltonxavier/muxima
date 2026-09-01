@@ -5,7 +5,7 @@ import {
 	calculateGuestPercentage,
 } from "../calculate-guest-count";
 import { formatCurrency, formatCurrencyCompact } from "../format-currency";
-import { formatDate, formatDateShort } from "../format-date";
+import { dateHelper } from "@/core/helpers/date-helper";
 import { formatPhone, formatPhoneWithCountryCode } from "../format-phone";
 
 describe("formatCurrency", () => {
@@ -51,23 +51,23 @@ describe("formatCurrencyCompact", () => {
 	});
 });
 
-describe("formatDate", () => {
+describe("dateHelper.formatMedium", () => {
 	it("formats a Date object to Portuguese format", () => {
 		const date = new Date(2025, 5, 15); // June 15, 2025
-		const result = formatDate(date);
+		const result = dateHelper.formatMedium(date);
 		expect(result).toBe("15 jun 2025");
 	});
 
 	it("formats a date string", () => {
-		const result = formatDate("2025-01-01");
+		const result = dateHelper.formatMedium("2025-01-01");
 		expect(result).toBe("01 jan 2025");
 	});
 });
 
-describe("formatDateShort", () => {
+describe("dateHelper.formatShort", () => {
 	it("formats to dd/MM/yyyy", () => {
 		const date = new Date(2025, 0, 5); // January 5, 2025
-		const result = formatDateShort(date);
+		const result = dateHelper.formatShort(date);
 		expect(result).toBe("05/01/2025");
 	});
 });

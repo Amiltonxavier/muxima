@@ -1,0 +1,1 @@
+export type SelectedItem = Record<string, unknown>;

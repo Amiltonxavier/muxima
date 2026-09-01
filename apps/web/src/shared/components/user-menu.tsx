@@ -24,7 +24,7 @@ export default function UserMenu() {
 	if (!session) {
 		return (
 			<Link to="/login">
-				<Button variant="outline">Sign In</Button>
+				<Button variant="outline">Entrar</Button>
 			</Link>
 		);
 	}
@@ -36,9 +36,12 @@ export default function UserMenu() {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="bg-card">
 				<DropdownMenuGroup>
-					<DropdownMenuLabel>My Account</DropdownMenuLabel>
+					<DropdownMenuLabel>A minha conta</DropdownMenuLabel>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem>{session.user.email}</DropdownMenuItem>
+					<DropdownMenuItem render={<Link to="/profile" />}>
+						Perfil
+					</DropdownMenuItem>
 					<DropdownMenuItem
 						className="text-destructive"
 						onClick={() => {
@@ -53,7 +56,7 @@ export default function UserMenu() {
 							});
 						}}
 					>
-						Sign Out
+						Sair
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>

@@ -1,29 +1,13 @@
-import { StatusBadge } from "@muxima/ui/components/kibo-ui/status";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@muxima/ui/components/card";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-	Calendar,
-	CreditCard,
-	Gift,
-	Globe,
-	MapPin,
-	Plus,
-	Users,
-	UsersIcon,
-} from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { QueryState } from "@/shared/components/states";
-import { formatDate, getDaysRemaining } from "@/utils/format-date";
-import { orpc } from "@/utils/orpc";
-import { getStatusLabel } from "@/utils/status-helpers";
 import { useEvents } from "../events/-queries/event-queries";
+import { CreateEventDialog } from "../events/-components/create-event-dialog";
+import { EventCard } from "../events/-components/event-card";
+import { getGreeting } from "./-utils";
 
 export const Route = createFileRoute("/_private/dashboard/")({
 	component: DashboardPage,
@@ -31,140 +15,53 @@ export const Route = createFileRoute("/_private/dashboard/")({
 
 function DashboardPage() {
 	const { data: session } = authClient.useSession();
-	const eventsQuery = useEvents();
-	const statsQuery = useQuery(orpc.dashboard.getGlobalStats.queryOptions());
+	const [showCreateDialog, setShowCreateDialog] = useState(false);
+	const eventsQuery = useEvents({});
 
-	const events = eventsQuery.data ?? [];
-
-	function getGreeting() {
-		const hour = new Date().getHours();
-
-		if (hour < 12) return "Bom dia";
-		if (hour < 18) return "Boa tarde";
-
-		return "Boa noite";
-	}
-
+	const events = eventsQuery.data?.data ?? [];
 	const greeting = getGreeting();
 	const firstName = session?.user.name?.split(" ")[0] || "Utilizador";
 
-
 	return (
-		<div className="space-y-6">
-			<div>
-				<h1 className="font-semibold text-2xl">
-					{greeting}, {firstName}
-				</h1>
-				<p className="text-muted-foreground text-sm">
-					Resumo geral da plataforma
-				</p>
-			</div>
-
-
-			{/* Events Section */}
-			<div>
-				<div className="mb-4 flex items-center justify-between">
-					<h2 className="font-semibold text-lg">Os seus eventos</h2>
-					<Button render={<Link to="/events" />}>
-						<Plus className="mr-2 h-4 w-4" />
-						Ver todos
-					</Button>
+		<>
+			<div className="space-y-6">
+				<div>
+					<h1 className="font-semibold text-2xl">
+						{greeting}, {firstName}
+					</h1>
+					<p className="text-muted-foreground text-sm">
+						Resumo geral da plataforma
+					</p>
 				</div>
 
-				<QueryState
-					state={{
-						isLoading: eventsQuery.isLoading,
-						isError: eventsQuery.isError,
-						isEmpty: events.length === 0,
-						hasData: events.length > 0,
-					}}
-				>
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{events.map((event: Record<string, unknown>) => {
-							const daysRemaining = event.eventDate
-								? getDaysRemaining(event.eventDate as string)
-								: null;
-							return (
-								<Card
-									key={event.id as string}
-									className="transition-shadow hover:shadow-md"
-								>
-									<CardHeader>
-										<div className="flex items-start justify-between">
-											<div className="space-y-1">
-												<CardTitle>{event.name as string}</CardTitle>
-												<Badge variant="outline" className="mt-1">
-													{event.type === "WEDDING" ? "Casamento" : "Noivado"}
-												</Badge>
-											</div>													<StatusBadge
-														status={(event.status as any) || "DRAFT"}
-														label={getStatusLabel(
-																(event.status as string) || "DRAFT",
-																"event",
-															)}
-													/>
-										</div>
-									</CardHeader>
-									<CardContent>
-										<div className="space-y-3">
-											<div className="flex items-center gap-2 text-muted-foreground text-xs">
-												<Calendar className="h-3 w-3" />
-												<span>
-													{event.eventDate
-														? formatDate(event.eventDate as string)
-														: "Sem data"}
-												</span>
-											</div>
-											{Boolean(event.venueName) && (
-												<div className="flex items-center gap-2 text-muted-foreground text-xs">
-													<MapPin className="h-3 w-3" />
-													<span>{String(event.venueName || "")}</span>
-												</div>
-											)}
-											{daysRemaining !== null && (
-												<div className="text-muted-foreground text-xs">
-													{daysRemaining > 0
-														? `${daysRemaining} dias restantes`
-														: daysRemaining === 0
-															? "É hoje!"
-															: "Evento realizado"}
-												</div>
-											)}
-											<div className="pt-2">
-												<Button
-													className="w-full"
-													render={
-														<Link
-															to="/events/$eventId"
-															params={{ eventId: String(event.id) }}
-														/>
-													}
-												>
-													Gerir evento →
-												</Button>
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							);
-						})}
-					</div>
-				</QueryState>
-
-				{events.length === 0 && !eventsQuery.isLoading && (
-					<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
-						<Gift className="mb-4 h-12 w-12 text-muted-foreground" />
-						<h3 className="font-medium text-lg">Ainda não possui eventos</h3>
-						<p className="mb-4 text-muted-foreground text-sm">
-							Crie o seu primeiro evento para começar a planear
-						</p>
-						<Button render={<Link to="/events" />}>
+				<div>
+					<div className="mb-4 flex items-center justify-between">
+						<h2 className="font-semibold text-lg">Os seus eventos</h2>
+						<Button onClick={() => setShowCreateDialog(true)}>
 							<Plus className="mr-2 h-4 w-4" />
 							Criar evento
 						</Button>
 					</div>
-				)}
+
+					<QueryState
+						state={{
+							isLoading: eventsQuery.isLoading,
+							isError: eventsQuery.isError,
+							isEmpty: events.length === 0,
+							hasData: events.length > 0,
+						}}
+					>
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{events.map((event: Record<string, unknown>) => {
+								return (
+									<EventCard event={event} />
+								);
+							})}
+						</div>
+					</QueryState>
+				</div>
 			</div>
-		</div>
+			{showCreateDialog && <CreateEventDialog onOpenChange={() => setShowCreateDialog(false)} open={showCreateDialog} />}
+		</>
 	);
 }

@@ -114,7 +114,7 @@ function LoadingSweepMask({
   width: number;
   height: number;
   durationSeconds: number;
-  onSweepComplete: () => void;
+  onSweepComplete: VoidFunction;
 }) {
   const gradientStops = useMemo(() => generateEasedGradientStops(), []);
   const lastXRef = useRef(SWEEP_START_X);
@@ -190,7 +190,7 @@ export interface LineLoadingSweepProps {
    * to continue its reveal. Default: `"loop"`. */
   mode?: "loop" | "exit" | "enter";
   /** Fired when an exit/enter transition finishes, to advance the chart phase. */
-  onTransitionComplete?: () => void;
+  onTransitionComplete?: VoidFunction;
   stroke?: string;
   strokeOpacity?: number;
   strokeWidth?: number;

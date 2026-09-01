@@ -1,21 +1,48 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const notificationsRouter = {
-	list: protectedProcedure.handler(async ({ context }) => {
-		const notifications = await db.notification.findMany({
-			where: {
-				userId: context.session.user.id,
-			},
-			orderBy: {
-				createdAt: "desc",
-			},
-			take: 50,
-		});
+	list: protectedProcedure
+		.input(
+			z.object({
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				unreadOnly: z.boolean().optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const { page, limit, skip } = parsePagination(input);
 
-		return notifications;
-	}),
+			const where: Record<string, unknown> = {
+				userId: context.session.user.id,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ title: { contains: input.search, mode: "insensitive" } },
+					{ message: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.unreadOnly) {
+				where.readAt = null;
+			}
+
+			const [notifications, total] = await Promise.all([
+				db.notification.findMany({
+					where,
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.notification.count({ where }),
+			]);
+
+			return paginatedResponse(notifications, total, page, limit);
+		}),
 
 	getUnreadCount: protectedProcedure.handler(async ({ context }) => {
 		const count = await db.notification.count({

@@ -46,7 +46,7 @@ function tweenDomains({
   reducedMotion: boolean | null;
   animatedRef: { current: Record<string, YDomain> };
   setAnimatedByAxis: (domains: Record<string, YDomain>) => void;
-  onSettled?: () => void;
+  onSettled?: VoidFunction;
 }) {
   if (domainsEqual(animatedRef.current, destination)) {
     onSettled?.();
@@ -116,7 +116,7 @@ export interface UseAnimatedYDomainsOptions {
   chartPhase: ChartPhase;
   skeletonByAxis: Record<string, YDomain>;
   targetByAxis: Record<string, YDomain>;
-  onSettled?: () => void;
+  onSettled?: VoidFunction;
   /** When true, tweens y-domains on target changes while the chart is in the ready phase (e.g. brush zoom). */
   tweenOnTargetChange?: boolean;
 }

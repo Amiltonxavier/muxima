@@ -1,27 +1,59 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const eventsRouter = {
-	list: protectedProcedure.handler(async ({ context }) => {
-		const events = await db.event.findMany({
-			where: {
+	list: protectedProcedure
+		.input(
+			z.object({
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])
+					.optional(),
+				type: z.enum(["ENGAGEMENT", "WEDDING"]).optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
 				members: {
 					some: {
 						userId: context.session.user.id,
 					},
 				},
-			},
-			include: {
-				members: true,
-				budget: true,
-			},
-			orderBy: {
-				createdAt: "desc",
-			},
-		});
-		return events;
-	}),
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ name: { contains: input.search, mode: "insensitive" } },
+					{ description: { contains: input.search, mode: "insensitive" } },
+					{ venueName: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+			if (input.type) where.type = input.type;
+
+			const [events, total] = await Promise.all([
+				db.event.findMany({
+					where,
+					include: {
+						members: true,
+						budget: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.event.count({ where }),
+			]);
+
+			return paginatedResponse(events, total, page, limit);
+		}),
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
@@ -199,10 +231,10 @@ export const eventsRouter = {
 					municipality: input.municipality,
 					neighborhood: input.neighborhood,
 					reference: input.reference,
-				capacity: input.capacity,
-				limitGuestCapacity: input.limitGuestCapacity,
-				description: input.description,
-				status: input.status,
+					capacity: input.capacity,
+					limitGuestCapacity: input.limitGuestCapacity,
+					description: input.description,
+					status: input.status,
 				},
 			});
 

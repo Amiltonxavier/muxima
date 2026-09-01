@@ -5,23 +5,53 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const documentsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				type: z.enum(["CONTRACT", "RECEIPT", "QUOTE", "OTHER"]).optional(),
+				status: z.enum(["ACTIVE", "ARCHIVED", "DELETED"]).optional(),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const documents = await db.document.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					vendor: true,
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
 
-			return documents;
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ name: { contains: input.search, mode: "insensitive" } },
+					{ reference: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.type) where.type = input.type;
+			if (input.status) where.status = input.status;
+
+			const [documents, total] = await Promise.all([
+				db.document.findMany({
+					where,
+					include: {
+						vendor: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.document.count({ where }),
+			]);
+
+			return paginatedResponse(documents, total, page, limit);
 		}),
 
 	getById: protectedProcedure

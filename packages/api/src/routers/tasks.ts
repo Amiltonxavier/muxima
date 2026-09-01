@@ -5,19 +5,68 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { parsePagination, paginatedResponse } from "../shared/utils/helpers";
 
 export const tasksRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
-			const tasks = await db.task.findMany({
-				where: { eventId: input.eventId },
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["TODO", "IN_PROGRESS", "COMPLETED", "CANCELLED"])
+					.optional(),
+				category: z
+					.enum([
+						"FINANCE",
+						"VENUE",
+						"GUESTS",
+						"FOOD",
+						"DRINKS",
+						"DECORATION",
+						"CEREMONY",
+						"DOCUMENTS",
+						"CLOTHING",
+						"TRANSPORT",
+						"OTHER",
+					])
+					.optional(),
+				priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 
-			return tasks;
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ title: { contains: input.search, mode: "insensitive" } },
+					{ description: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+			if (input.category) where.category = input.category;
+			if (input.priority) where.priority = input.priority;
+
+			const [tasks, total] = await Promise.all([
+				db.task.findMany({
+					where,
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.task.count({ where }),
+			]);
+
+			return paginatedResponse(tasks, total, page, limit);
 		}),
 
 	getById: protectedProcedure
@@ -145,16 +194,47 @@ export const tasksRouter = {
 		}),
 
 	getSchedules: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
-		.handler(async ({ input }) => {
-			const schedules = await db.schedule.findMany({
-				where: { eventId: input.eventId },
-				orderBy: {
-					startAt: "asc",
-				},
-			});
+		.input(
+			z.object({
+				eventId: z.string(),
+				page: z.number().optional(),
+				limit: z.number().optional(),
+				search: z.string().optional(),
+				status: z
+					.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"])
+					.optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
 
-			return schedules;
+			const { page, limit, skip } = parsePagination(input);
+
+			const where: Record<string, unknown> = {
+				eventId: input.eventId,
+			};
+
+			if (input.search) {
+				where.OR = [
+					{ title: { contains: input.search, mode: "insensitive" } },
+					{ description: { contains: input.search, mode: "insensitive" } },
+					{ location: { contains: input.search, mode: "insensitive" } },
+				];
+			}
+
+			if (input.status) where.status = input.status;
+
+			const [schedules, total] = await Promise.all([
+				db.schedule.findMany({
+					where,
+					orderBy: { startAt: "asc" },
+					skip,
+					take: limit,
+				}),
+				db.schedule.count({ where }),
+			]);
+
+			return paginatedResponse(schedules, total, page, limit);
 		}),
 
 	createSchedule: protectedProcedure

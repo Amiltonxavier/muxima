@@ -16,6 +16,7 @@ import {
 	Settings,
 	ShoppingCart,
 	TableProperties,
+	User,
 	Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -140,6 +141,11 @@ const globalNavGroups: NavGroup[] = [
 				to: "/notifications",
 			},
 			{
+				label: "Perfil",
+				icon: <User className="h-4 w-4" />,
+				to: "/profile",
+			},
+			{
 				label: "Configurações",
 				icon: <Settings className="h-4 w-4" />,
 				to: "/settings",
@@ -148,7 +154,7 @@ const globalNavGroups: NavGroup[] = [
 	},
 ];
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarNav({ onNavigate }: { onNavigate?: VoidFunction }) {
 	const matchRoute = useMatchRoute();
 	const isEventContext = matchRoute({ to: "/events/$eventId", fuzzy: true });
 
