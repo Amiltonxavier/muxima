@@ -1,28 +1,60 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { vendorListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const vendorsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(vendorListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const vendors = await db.vendor.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					contracts: true,
-					expenses: true,
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return vendors;
+			const filterConditions: Prisma.VendorWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ email: { contains: input.search, mode: "insensitive" } },
+						{ phone: { contains: input.search, mode: "insensitive" } },
+						{ description: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.category) {
+				filterConditions.push({ category: input.category });
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			const where: Prisma.VendorWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [vendors, total] = await Promise.all([
+				db.vendor.findMany({
+					where,
+					include: { contracts: true, expenses: true },
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.vendor.count({ where }),
+			]);
+
+			return { data: vendors, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	getById: protectedProcedure

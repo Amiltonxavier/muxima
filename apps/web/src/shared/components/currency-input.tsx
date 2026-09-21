@@ -42,7 +42,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
 					className={`pr-16 ${className || ""}`}
 					{...props}
 				/>
-				<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+				<span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground text-sm">
 					{currency}
 				</span>
 			</div>

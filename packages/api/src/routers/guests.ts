@@ -1,31 +1,66 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import {
+	guestListInput,
+	paginationInput,
+	tableListInput,
+} from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const guestsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(guestListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
+			const { page, limit, skip } = parsePagination(input);
 
-			const guests = await db.guest.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					companions: true,
-					tableGuests: {
-						include: { table: true },
+			const filterConditions: Prisma.GuestWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ email: { contains: input.search, mode: "insensitive" } },
+						{ phone: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			if (input.type) {
+				filterConditions.push({ type: input.type });
+			}
+
+			const where: Prisma.GuestWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [guests, total] = await Promise.all([
+				db.guest.findMany({
+					where,
+					include: {
+						companions: true,
+						tableGuests: { include: { table: true } },
 					},
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.guest.count({ where }),
+			]);
 
-			return guests;
+			return { data: guests, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	getById: protectedProcedure
@@ -217,25 +252,43 @@ export const guestsRouter = {
 		}),
 
 	getTables: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(tableListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
+			const { page, limit, skip } = parsePagination(input);
 
-			const tables = await db.table.findMany({
-				where: { eventId: input.eventId, deletedAt: null },
-				include: {
-					tableGuests: {
-						include: {
-							guest: true,
-						},
+			const filterConditions: Prisma.TableWhereInput[] = [
+				{ eventId: input.eventId, deletedAt: null },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ location: { contains: input.search, mode: "insensitive" } },
+						{ notes: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			const where: Prisma.TableWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [tables, total] = await Promise.all([
+				db.table.findMany({
+					where,
+					include: {
+						tableGuests: { include: { guest: true } },
 					},
-				},
-				orderBy: {
-					number: "asc",
-				},
-			});
+					orderBy: { number: "asc" },
+					skip,
+					take: limit,
+				}),
+				db.table.count({ where }),
+			]);
 
-			return tables;
+			return { data: tables, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	createTable: protectedProcedure
@@ -409,22 +462,22 @@ export const guestsRouter = {
 										name: true,
 										type: true,
 										status: true,
-									eventDate: true,
-									startTime: true,
-									endTime: true,
-									venueName: true,
-									address: true,
-									neighborhood: true,
-									municipality: true,
-									province: true,
-									owner: {
-										select: {
-											id: true,
-											name: true,
-											email: true,
+										eventDate: true,
+										startTime: true,
+										endTime: true,
+										venueName: true,
+										address: true,
+										neighborhood: true,
+										municipality: true,
+										province: true,
+										owner: {
+											select: {
+												id: true,
+												name: true,
+												email: true,
+											},
 										},
 									},
-								},
 								},
 								guests: {
 									include: {
@@ -459,23 +512,26 @@ export const guestsRouter = {
 		}),
 
 	getInvitationsByEvent: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(paginationInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
+			const { page, limit, skip } = parsePagination(input);
+			const where = { eventId: input.eventId };
 
-			const invitations = await db.guestInvitation.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					guests: {
-						include: {
-							guest: true,
-						},
+			const [invitations, total] = await Promise.all([
+				db.guestInvitation.findMany({
+					where,
+					include: {
+						guests: { include: { guest: true } },
 					},
-				},
-				orderBy: { createdAt: "desc" },
-			});
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.guestInvitation.count({ where }),
+			]);
 
-			return invitations;
+			return { data: invitations, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	updateCompanion: protectedProcedure
@@ -538,8 +594,7 @@ export const guestsRouter = {
 			);
 			const confirmedCompanions = guests.reduce(
 				(sum, g) =>
-					sum +
-					g.companions.filter((c) => c.status === "CONFIRMED").length,
+					sum + g.companions.filter((c) => c.status === "CONFIRMED").length,
 				0,
 			);
 

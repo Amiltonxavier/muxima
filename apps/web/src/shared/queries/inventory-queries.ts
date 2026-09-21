@@ -1,16 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
+import type { PaginationParams } from "./task-queries";
+
+export interface InventoryFilters {
+	search?: string;
+	category?: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
+	vendorId?: string;
+}
 
 export const inventoryKeys = {
 	all: ["inventory"] as const,
-	list: (eventId: string) => [...inventoryKeys.all, "list", eventId] as const,
+	list: (eventId: string, params: Record<string, unknown>) =>
+		[...inventoryKeys.all, "list", eventId, params] as const,
 	detail: (id: string) => [...inventoryKeys.all, "detail", id] as const,
 };
 
-export function useInventoryItems(eventId: string) {
+export function useInventoryItems(
+	eventId: string,
+	pagination: PaginationParams & InventoryFilters = { page: 1, limit: 20 },
+) {
+	const page = pagination.page ?? 1;
+	const limit = pagination.limit ?? 20;
+	const { search, category, vendorId } = pagination;
+	const input = { eventId, page, limit, search, category, vendorId };
 	return useQuery({
-		...orpc.inventory.list.queryOptions({ input: { eventId } }),
-		queryKey: inventoryKeys.list(eventId),
+		...orpc.inventory.list.queryOptions({ input }),
+		queryKey: inventoryKeys.list(eventId, input),
 		enabled: !!eventId,
 	});
 }
@@ -30,7 +45,7 @@ export function useCreateInventoryItem() {
 		orpc.inventory.create.mutationOptions({
 			onSuccess: (data) => {
 				queryClient.invalidateQueries({
-					queryKey: inventoryKeys.list(data.eventId),
+					queryKey: [...inventoryKeys.all, "list", data.eventId],
 				});
 			},
 		}),

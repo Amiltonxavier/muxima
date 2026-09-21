@@ -1,27 +1,62 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { documentListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const documentsRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(documentListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const documents = await db.document.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					vendor: true,
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return documents;
+			const filterConditions: Prisma.DocumentWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ reference: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.type) {
+				filterConditions.push({ type: input.type });
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			if (input.vendorId) {
+				filterConditions.push({ vendorId: input.vendorId });
+			}
+
+			const where: Prisma.DocumentWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [documents, total] = await Promise.all([
+				db.document.findMany({
+					where,
+					include: { vendor: true },
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.document.count({ where }),
+			]);
+
+			return { data: documents, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	getById: protectedProcedure

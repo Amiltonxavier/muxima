@@ -10,6 +10,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Select,
 	SelectContent,
@@ -50,14 +51,18 @@ export const Route = createFileRoute("/_private/events/$eventId/documents/")({
 function DocumentsPage() {
 	const { eventId } = Route.useParams();
 
-	const docsQuery = useDocuments(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	const docsQuery = useDocuments(eventId, { page, limit });
 	const createDoc = useCreateDocument();
 	const deleteDoc = useDeleteDocument();
 
 	const [showCreate, setShowCreate] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const docs = docsQuery.data ?? [];
+	const docs = docsQuery.data?.data ?? [];
+	const meta = docsQuery.data?.meta;
 
 	return (
 		<div className="space-y-6">
@@ -95,26 +100,16 @@ function DocumentsPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{docs.map((doc: Record<string, unknown>) => (
-								<TableRow key={doc.id as string}>
-									<TableCell className="font-medium">
-										{doc.name as string}
-									</TableCell>
+							{docs.map((doc) => (
+								<TableRow key={doc.id}>
+									<TableCell className="font-medium">{doc.name}</TableCell>
 									<TableCell>
-										{DOCUMENT_TYPE_LABELS[doc.type as string] ||
-											(doc.type as string)}
+										{DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
 									</TableCell>
-									<TableCell>{(doc.reference as string) || "—"}</TableCell>
+									<TableCell>{doc.reference || "—"}</TableCell>
 									<TableCell>
-										<Badge
-											className={getStatusColor(
-												(doc.status as string) || "ACTIVE",
-											)}
-										>
-											{getStatusLabel(
-												(doc.status as string) || "ACTIVE",
-												"document",
-											)}
+										<Badge className={getStatusColor(doc.status || "ACTIVE")}>
+											{getStatusLabel(doc.status || "ACTIVE", "document")}
 										</Badge>
 									</TableCell>
 									<TableCell>
@@ -122,7 +117,7 @@ function DocumentsPage() {
 											variant="ghost"
 											size="icon-sm"
 											className="text-destructive"
-											onClick={() => setDeleteId(doc.id as string)}
+											onClick={() => setDeleteId(doc.id)}
 										>
 											<Trash2 className="h-3.5 w-3.5" />
 										</Button>
@@ -134,17 +129,32 @@ function DocumentsPage() {
 				</Card>
 			</QueryState>
 
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={docsQuery.isLoading}
+				/>
+			)}
+
 			<DocumentDialog
 				open={showCreate}
 				onOpenChange={setShowCreate}
 				onSubmit={(values) => {
-					createDoc.mutate({ ...values, eventId } as never, {
-						onSuccess: () => {
-							toast.success("Documento adicionado");
-							setShowCreate(false);
+					createDoc.mutate(
+						{ ...values, eventId },
+						{
+							onSuccess: () => {
+								toast.success("Documento adicionado");
+								setShowCreate(false);
+							},
+							onError: (e) => toast.error(e.message),
 						},
-						onError: (e) => toast.error(e.message),
-					});
+					);
 				}}
 				isLoading={createDoc.isPending}
 			/>
@@ -192,11 +202,19 @@ function DocumentDialog({
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
-	onSubmit: (v: Record<string, unknown>) => void;
+	onSubmit: (v: {
+		name: string;
+		type: "OTHER" | "CONTRACT" | "RECEIPT" | "QUOTE";
+		reference: string;
+	}) => void;
 	isLoading: boolean;
 }) {
 	const form = useForm({
-		defaultValues: { name: "", type: "OTHER" as string, reference: "" },
+		defaultValues: {
+			name: "",
+			type: "OTHER" as "OTHER" | "CONTRACT" | "RECEIPT" | "QUOTE",
+			reference: "",
+		},
 		onSubmit: async ({ value }) => {
 			onSubmit(value);
 		},

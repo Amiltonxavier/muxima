@@ -1,17 +1,6 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-} from "@muxima/ui/components/card";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@muxima/ui/components/table";
+import { Card, CardContent } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -21,6 +10,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Select,
 	SelectContent,
@@ -28,6 +18,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@muxima/ui/components/select";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@muxima/ui/components/table";
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
@@ -58,16 +56,28 @@ export const Route = createFileRoute("/_private/events/$eventId/suppliers/")({
 function SuppliersPage() {
 	const { eventId } = Route.useParams();
 
-	const vendorsQuery = useVendors(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	const vendorsQuery = useVendors(eventId, { page, limit });
 	const createVendor = useCreateVendor();
 	const updateVendor = useUpdateVendor();
 	const deleteVendor = useDeleteVendor();
 
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+	const [editing, setEditing] = useState<{
+		id?: string;
+		name?: string;
+		category?: string;
+		phone?: string;
+		email?: string;
+		status?: string;
+		notes?: string;
+	} | null>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const vendors = vendorsQuery.data ?? [];
+	const vendors = vendorsQuery.data?.data ?? [];
+	const meta = vendorsQuery.data?.meta;
 
 	return (
 		<div className="space-y-6">
@@ -106,30 +116,36 @@ function SuppliersPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{vendors.map((v: Record<string, unknown>) => {
-								const expenses = (v.expenses as Array<Record<string, unknown>>) ?? [];
+							{vendors.map((v) => {
+								const expenses = (v.expenses ?? []) as Array<{
+									totalAmount?: number;
+								}>;
 								const totalExpenses = expenses.reduce(
-									(sum: number, e) => sum + Number(e.totalAmount || 0),
+									(sum, e) => sum + Number(e.totalAmount || 0),
 									0,
 								);
 								return (
-									<TableRow key={v.id as string}>
-										<TableCell className="font-medium">
-											{v.name as string}
-										</TableCell>
+									<TableRow key={v.id}>
+										<TableCell className="font-medium">{v.name}</TableCell>
 										<TableCell>
 											{VENDOR_CATEGORY_LABELS[v.category as string] ||
-												String(v.category)}
+												v.category}
 										</TableCell>
 										<TableCell>
 											<div className="text-sm">
-												{Boolean(v.phone) && <p>{String(v.phone)}</p>}
-												{Boolean(v.email) && <p className="text-muted-foreground text-xs">{String(v.email)}</p>}
+												{v.phone && <p>{v.phone}</p>}
+												{v.email && (
+													<p className="text-muted-foreground text-xs">
+														{v.email}
+													</p>
+												)}
 											</div>
 										</TableCell>
 										<TableCell>
 											{totalExpenses > 0 ? (
-												<span className="font-medium text-sm">{expenses.length} ({formatCurrency(totalExpenses)})</span>
+												<span className="font-medium text-sm">
+													{expenses.length} ({formatCurrency(totalExpenses)})
+												</span>
 											) : (
 												<span className="text-muted-foreground text-sm">—</span>
 											)}
@@ -137,21 +153,30 @@ function SuppliersPage() {
 										<TableCell>
 											<Badge
 												className={getStatusColor(
-													String(v.status || "PROSPECT"),
+													(v.status || "PROSPECT") as string,
 												)}
 											>
 												{getStatusLabel(
-													String(v.status || "PROSPECT"),
+													(v.status || "PROSPECT") as string,
 													"vendor",
 												)}
 											</Badge>
 										</TableCell>
 										<TableCell>
 											<div className="flex gap-1">
-												<Button variant="ghost" size="icon-sm" onClick={() => setEditing(v)}>
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													onClick={() => setEditing(v as any)}
+												>
 													<Pencil className="h-3.5 w-3.5" />
 												</Button>
-												<Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeleteId(v.id as string)}>
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													className="text-destructive"
+													onClick={() => setDeleteId(v.id)}
+												>
 													<Trash2 className="h-3.5 w-3.5" />
 												</Button>
 											</div>
@@ -163,6 +188,18 @@ function SuppliersPage() {
 					</Table>
 				</Card>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={vendorsQuery.isLoading}
+				/>
+			)}
 
 			<VendorDialog
 				open={showCreateDialog}
@@ -187,16 +224,16 @@ function SuppliersPage() {
 					open={!!editing}
 					onOpenChange={() => setEditing(null)}
 					initialValues={{
-						name: editing.name as string,
-						category: editing.category as string,
-						phone: (editing.phone as string) || "",
-						email: (editing.email as string) || "",
-						status: (editing.status as string) || "PROSPECT",
-						notes: (editing.notes as string) || "",
+						name: editing.name || "",
+						category: editing.category || "",
+						phone: editing.phone || "",
+						email: editing.email || "",
+						status: editing.status || "PROSPECT",
+						notes: editing.notes || "",
 					}}
 					onSubmit={(values) => {
 						updateVendor.mutate(
-							{ id: editing.id as string, ...values },
+							{ id: editing.id!, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Fornecedor atualizado");
@@ -269,10 +306,29 @@ function VendorDialog({
 	const form = useForm({
 		defaultValues: {
 			name: initialValues?.name || "",
-			category: (initialValues?.category || "OTHER") as any,
+			category: (initialValues?.category || "OTHER") as
+				| "VENUE"
+				| "DECORATION"
+				| "MUSIC"
+				| "PHOTOGRAPHY"
+				| "VIDEO"
+				| "CATERING"
+				| "CAKE"
+				| "DRINKS"
+				| "TRANSPORT"
+				| "BEAUTY"
+				| "SECURITY"
+				| "ENTERTAINMENT"
+				| "OTHER",
 			phone: initialValues?.phone || "",
 			email: initialValues?.email || "",
-			status: (initialValues?.status || "PROSPECT") as any,
+			status: (initialValues?.status || "PROSPECT") as
+				| "PROSPECT"
+				| "CONTACTED"
+				| "NEGOTIATING"
+				| "CONTRACTED"
+				| "COMPLETED"
+				| "CANCELLED",
 			notes: initialValues?.notes || "",
 		},
 		onSubmit: async ({ value }) => {
@@ -323,7 +379,24 @@ function VendorDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as
+													| "VENUE"
+													| "DECORATION"
+													| "MUSIC"
+													| "PHOTOGRAPHY"
+													| "VIDEO"
+													| "CATERING"
+													| "CAKE"
+													| "DRINKS"
+													| "TRANSPORT"
+													| "BEAUTY"
+													| "SECURITY"
+													| "ENTERTAINMENT"
+													| "OTHER",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -348,7 +421,17 @@ function VendorDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as
+													| "PROSPECT"
+													| "CONTACTED"
+													| "NEGOTIATING"
+													| "CONTRACTED"
+													| "COMPLETED"
+													| "CANCELLED",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

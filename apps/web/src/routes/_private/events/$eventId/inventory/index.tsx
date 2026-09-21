@@ -15,6 +15,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import { Progress } from "@muxima/ui/components/progress";
 import {
 	Select,
@@ -49,14 +50,18 @@ export const Route = createFileRoute("/_private/events/$eventId/inventory/")({
 function InventoryPage() {
 	const { eventId } = Route.useParams();
 
-	const itemsQuery = useInventoryItems(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	const itemsQuery = useInventoryItems(eventId, { page, limit });
 	const createItem = useCreateInventoryItem();
 	const deleteItem = useDeleteInventoryItem();
 
 	const [showCreate, setShowCreate] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const items = itemsQuery.data ?? [];
+	const items = itemsQuery.data?.data ?? [];
+	const meta = itemsQuery.data?.meta;
 
 	return (
 		<div className="space-y-6">
@@ -81,19 +86,19 @@ function InventoryPage() {
 				}}
 			>
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{items.map((item: Record<string, unknown>) => {
+					{items.map((item) => {
 						const planned = Number(item.plannedQuantity) || 0;
 						const current = Number(item.currentQuantity) || 0;
 						const percent =
 							planned > 0 ? Math.round((current / planned) * 100) : 0;
 						return (
-							<Card key={item.id as string}>
+							<Card key={item.id}>
 								<CardHeader>
 									<div className="flex items-start justify-between">
-										<CardTitle>{item.name as string}</CardTitle>
+										<CardTitle>{item.name}</CardTitle>
 										<Badge variant="secondary">
-											{INVENTORY_CATEGORY_LABELS[item.category as string] ||
-												(item.category as string)}
+											{INVENTORY_CATEGORY_LABELS[item.category] ||
+												item.category}
 										</Badge>
 									</div>
 								</CardHeader>
@@ -102,8 +107,7 @@ function InventoryPage() {
 										<div className="flex justify-between text-sm">
 											<span className="text-muted-foreground">
 												Planeado: {planned}{" "}
-												{INVENTORY_UNIT_LABELS[item.unit as string] ||
-													(item.unit as string)}
+												{INVENTORY_UNIT_LABELS[item.unit] || item.unit}
 											</span>
 											<span>Atual: {current}</span>
 										</div>
@@ -113,7 +117,7 @@ function InventoryPage() {
 												variant="ghost"
 												size="icon-sm"
 												className="text-destructive"
-												onClick={() => setDeleteId(item.id as string)}
+												onClick={() => setDeleteId(item.id)}
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</Button>
@@ -125,6 +129,18 @@ function InventoryPage() {
 					})}
 				</div>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={itemsQuery.isLoading}
+				/>
+			)}
 
 			<InventoryDialog
 				open={showCreate}
@@ -193,10 +209,18 @@ function InventoryDialog({
 	const form = useForm({
 		defaultValues: {
 			name: "",
-			category: "DRINK" as any,
+			category: "DRINK" as "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER",
 			plannedQuantity: 0,
 			currentQuantity: 0,
-			unit: "UNIT" as any,
+			unit: "UNIT" as
+				| "UNIT"
+				| "BOX"
+				| "CASE"
+				| "BOTTLE"
+				| "KG"
+				| "LITER"
+				| "PACKAGE"
+				| "OTHER",
 			unitPrice: 0,
 			notes: "",
 		},
@@ -246,7 +270,11 @@ function InventoryDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -273,7 +301,19 @@ function InventoryDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as
+													| "UNIT"
+													| "BOX"
+													| "CASE"
+													| "BOTTLE"
+													| "KG"
+													| "LITER"
+													| "PACKAGE"
+													| "OTHER",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

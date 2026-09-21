@@ -17,7 +17,6 @@ import {
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { Progress } from "@muxima/ui/components/progress";
-import { ProgressDonut } from "@/shared/components/charts";
 import {
 	Select,
 	SelectContent,
@@ -46,6 +45,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
+import { ProgressDonut } from "@/shared/components/charts";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
 import { orpc } from "@/utils/orpc";
@@ -114,8 +114,8 @@ function EventDetailPage() {
 		);
 	}
 
-	const event = eventQuery.data as Record<string, unknown>;
-	const members = (event.members as Record<string, unknown>[]) ?? [];
+	const event = eventQuery.data;
+	const members = event?.members ?? [];
 
 	return (
 		<div className="space-y-6">
@@ -124,16 +124,24 @@ function EventDetailPage() {
 				<div className="space-y-1">
 					<BackButton to="/events" label="Eventos" />
 					<div className="flex items-center gap-3">
-						<h1 className="font-semibold text-2xl">{String(event.name)}</h1>{" "}
+						<h1 className="font-semibold text-2xl">{event.name}</h1>{" "}
 						<Select
 							items={Object.entries(EVENT_STATUS_LABELS).map(
 								([value, label]) => ({ value, label }),
 							)}
-							value={String(event.status || "DRAFT")}
+							value={event.status || "DRAFT"}
 							onValueChange={(newStatus) => {
 								if (!newStatus) return;
 								updateEvent.mutate(
-									{ id: eventId, status: newStatus as any },
+									{
+										id: eventId,
+										status: newStatus as
+											| "DRAFT"
+											| "PLANNING"
+											| "CONFIRMED"
+											| "COMPLETED"
+											| "CANCELLED",
+									},
 									{
 										onSuccess: () => {
 											toast.success("Estado atualizado com sucesso");
@@ -146,7 +154,7 @@ function EventDetailPage() {
 							}}
 						>
 							<SelectTrigger
-								className={`h-auto w-auto cursor-pointer border-0 bg-transparent p-0 px-2.5 py-1.5 shadow-none ring-0 hover:bg-black/5 ${getStatusColor(String(event.status || "DRAFT"))}`}
+								className={`h-auto w-auto cursor-pointer border-0 bg-transparent p-0 px-2.5 py-1.5 shadow-none ring-0 hover:bg-black/5 ${getStatusColor((event.status || "DRAFT") as string)}`}
 							>
 								<SelectValue />
 							</SelectTrigger>
@@ -161,7 +169,7 @@ function EventDetailPage() {
 					</div>
 					{event.description ? (
 						<p className="max-w-2xl text-muted-foreground text-sm">
-							{String(event.description)}
+							{event.description}
 						</p>
 					) : null}
 				</div>
@@ -212,9 +220,9 @@ function EventDetailPage() {
 							<p className="text-muted-foreground text-xs">Horário</p>
 							<p className="font-medium text-sm">
 								{event.startTime && event.endTime
-									? `${String(event.startTime)} — ${String(event.endTime)}`
+									? `${event.startTime} — ${event.endTime}`
 									: event.startTime
-										? String(event.startTime)
+										? event.startTime
 										: "Não definido"}
 							</p>
 						</div>
@@ -229,7 +237,7 @@ function EventDetailPage() {
 						<div>
 							<p className="text-muted-foreground text-xs">Local</p>
 							<p className="font-medium text-sm">
-								{event.venueName ? String(event.venueName) : "Não definido"}
+								{event.venueName ? event.venueName : "Não definido"}
 							</p>
 						</div>
 					</CardContent>
@@ -244,7 +252,7 @@ function EventDetailPage() {
 							<p className="text-muted-foreground text-xs">Capacidade</p>
 							<p className="font-medium text-sm">
 								{event.capacity
-									? `${String(event.capacity)} convidados`
+									? `${event.capacity} convidados`
 									: "Não definida"}
 							</p>
 						</div>
@@ -270,12 +278,11 @@ function EventDetailPage() {
 								event.province,
 							]
 								.filter(Boolean)
-								.map(String)
 								.join(", ")}
 						</p>
 						{!!event.reference && (
 							<p className="mt-1 text-muted-foreground text-xs">
-								Referência: {String(event.reference)}
+								Referência: {event.reference}
 							</p>
 						)}
 					</CardContent>
@@ -297,7 +304,7 @@ function EventDetailPage() {
 					<div>
 						<p className="text-muted-foreground text-xs">Tipo de evento</p>
 						<p className="font-medium text-sm">
-							{String(event.type) === "WEDDING" ? "Casamento" : "Noivado"}
+							{event.type === "WEDDING" ? "Casamento" : "Noivado"}
 						</p>
 					</div>
 				</CardContent>
@@ -315,7 +322,7 @@ function EventDetailPage() {
 					<CardContent>
 						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 							{members.map((member) => {
-								const user = member.user as Record<string, unknown> | undefined;
+								const user = member.user;
 								const userName = user?.name ? String(user.name) : "?";
 								const initials = userName
 									.split(" ")
@@ -324,7 +331,7 @@ function EventDetailPage() {
 									.slice(0, 2);
 								return (
 									<div
-										key={String(member.id)}
+										key={member.id}
 										className="flex items-center gap-3 rounded-md border p-3"
 									>
 										<div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-medium text-xs">
@@ -335,7 +342,7 @@ function EventDetailPage() {
 												{user?.name ? String(user.name) : "Utilizador"}
 											</p>
 											<p className="text-muted-foreground text-xs">
-												{getStatusLabel(String(member.role), "role")}
+												{getStatusLabel(member.role, "role")}
 											</p>
 										</div>
 										<Badge
@@ -361,16 +368,18 @@ function EventDetailPage() {
 				onOpenChange={setShowEditDialog}
 				event={event}
 				onSubmit={(values) => {
-					const payload: Record<string, unknown> = { id: eventId, ...values };
-					updateEvent.mutate(payload as any, {
-						onSuccess: () => {
-							toast.success("Evento atualizado com sucesso");
-							setShowEditDialog(false);
+					updateEvent.mutate(
+						{ id: eventId, ...values },
+						{
+							onSuccess: () => {
+								toast.success("Evento atualizado com sucesso");
+								setShowEditDialog(false);
+							},
+							onError: (err: Error) => {
+								toast.error(err.message || "Erro ao atualizar evento");
+							},
 						},
-						onError: (err: Error) => {
-							toast.error(err.message || "Erro ao atualizar evento");
-						},
-					});
+					);
 				}}
 				isLoading={updateEvent.isPending}
 			/>
@@ -381,9 +390,9 @@ function EventDetailPage() {
 					<DialogHeader>
 						<DialogTitle>Eliminar evento</DialogTitle>
 						<DialogDescription>
-							Tem a certeza que deseja eliminar o evento "{String(event.name)}"?
-							Toda a informação associada será permanentemente removida. Esta
-							ação não pode ser desfeita.
+							Tem a certeza que deseja eliminar o evento "{event.name}"? Toda a
+							informação associada será permanentemente removida. Esta ação não
+							pode ser desfeita.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
@@ -430,7 +439,21 @@ function EditEventDialog({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	event: Record<string, unknown>;
+	event: {
+		name?: string | null;
+		status?: string | null;
+		eventDate?: string | Date | null;
+		startTime?: string | null;
+		endTime?: string | null;
+		venueName?: string | null;
+		address?: string | null;
+		province?: string | null;
+		municipality?: string | null;
+		neighborhood?: string | null;
+		reference?: string | null;
+		capacity?: number | null;
+		description?: string | null;
+	};
 	onSubmit: (values: {
 		name?: string;
 		status?: string;
@@ -450,21 +473,21 @@ function EditEventDialog({
 }) {
 	const form = useForm({
 		defaultValues: {
-			name: String(event.name || ""),
-			status: String(event.status || "DRAFT"),
+			name: event.name || "",
+			status: event.status || "DRAFT",
 			eventDate: event.eventDate
 				? new Date(String(event.eventDate)).toISOString().split("T")[0]
 				: "",
-			startTime: String(event.startTime || ""),
-			endTime: String(event.endTime || ""),
-			venueName: String(event.venueName || ""),
-			address: String(event.address || ""),
-			province: String(event.province || ""),
-			municipality: String(event.municipality || ""),
-			neighborhood: String(event.neighborhood || ""),
-			reference: String(event.reference || ""),
-			capacity: (event.capacity as number) || 0,
-			description: String(event.description || ""),
+			startTime: event.startTime || "",
+			endTime: event.endTime || "",
+			venueName: event.venueName || "",
+			address: event.address || "",
+			province: event.province || "",
+			municipality: event.municipality || "",
+			neighborhood: event.neighborhood || "",
+			reference: event.reference || "",
+			capacity: event.capacity || 0,
+			description: event.description || "",
 		},
 		onSubmit: async ({ value }) => {
 			onSubmit(value);
@@ -477,7 +500,7 @@ function EditEventDialog({
 				<DialogHeader>
 					<DialogTitle>Editar evento</DialogTitle>
 					<DialogDescription>
-						Altere os dados do evento "{String(event.name)}"
+						Altere os dados do evento "{event.name}"
 					</DialogDescription>
 				</DialogHeader>
 				<form
@@ -703,26 +726,28 @@ function EditEventDialog({
 // ── Quick Stats Section ──────────────────────────────────────────────
 function EventStats({ eventId }: { eventId: string }) {
 	const guestsQuery = useQuery(
-		orpc.guests.list.queryOptions({ input: { eventId } }),
+		orpc.guests.list.queryOptions({ input: { eventId, page: 1, limit: 200 } }),
 	);
 	const tasksQuery = useQuery(
-		orpc.tasks.list.queryOptions({ input: { eventId } }),
+		orpc.tasks.list.queryOptions({ input: { eventId, page: 1, limit: 200 } }),
 	);
 	const budgetQuery = useQuery(
 		orpc.budget.getByEventId.queryOptions({ input: { eventId } }),
 	);
 	const vendorsQuery = useQuery(
-		orpc.vendors.list.queryOptions({ input: { eventId } }),
+		orpc.vendors.list.queryOptions({ input: { eventId, page: 1, limit: 200 } }),
 	);
 	const schedulesQuery = useQuery(
-		orpc.tasks.getSchedules.queryOptions({ input: { eventId } }),
+		orpc.tasks.getSchedules.queryOptions({
+			input: { eventId, page: 1, limit: 200 },
+		}),
 	);
 
-	const guests = (guestsQuery.data ?? []) as Record<string, unknown>[];
-	const tasks = (tasksQuery.data ?? []) as Record<string, unknown>[];
-	const budgetData = budgetQuery.data as Record<string, unknown> | null;
-	const vendors = (vendorsQuery.data ?? []) as Record<string, unknown>[];
-	const schedules = (schedulesQuery.data ?? []) as Record<string, unknown>[];
+	const guests = guestsQuery.data?.data ?? [];
+	const tasks = tasksQuery.data?.data ?? [];
+	const budgetData = budgetQuery.data;
+	const vendors = vendorsQuery.data?.data ?? [];
+	const schedules = schedulesQuery.data?.data ?? [];
 
 	const confirmedGuests = guests.filter((g) => g.status === "CONFIRMED").length;
 	const pendingTasks = tasks.filter((t) => t.status === "TODO").length;
@@ -887,19 +912,17 @@ function EventStats({ eventId }: { eventId: string }) {
 						<>
 							{vendors.slice(0, 4).map((vendor) => (
 								<div
-									key={String(vendor.id)}
+									key={vendor.id}
 									className="flex items-center justify-between text-sm"
 								>
-									<span className="truncate">{String(vendor.name)}</span>
+									<span className="truncate">{vendor.name}</span>
 									<Badge
 										className={getStatusColor(
-											String(vendor.status || "PROSPECT"),
+											(vendor.status || "PROSPECT") as string,
 										)}
 									>
-										{String(
-											VENDOR_CATEGORY_LABELS[String(vendor.category)] ??
-												vendor.category,
-										)}
+										{VENDOR_CATEGORY_LABELS[vendor.category as string] ??
+											vendor.category}
 									</Badge>
 								</div>
 							))}
@@ -961,29 +984,23 @@ function EventStats({ eventId }: { eventId: string }) {
 						<div className="space-y-2">
 							{schedules.slice(0, 5).map((schedule) => (
 								<div
-									key={String(schedule.id)}
+									key={schedule.id}
 									className="flex items-center justify-between rounded-md border p-2"
 								>
 									<div>
-										<p className="font-medium text-sm">
-											{String(schedule.title)}
-										</p>
+										<p className="font-medium text-sm">{schedule.title}</p>
 										<p className="text-muted-foreground text-xs">
-											{schedule.location ? String(schedule.location) : ""}
-											{schedule.responsible
-												? ` · ${String(schedule.responsible)}`
-												: ""}
+											{schedule.location || ""}
+											{schedule.responsible ? ` · ${schedule.responsible}` : ""}
 										</p>
 									</div>
 									<Badge
 										className={getStatusColor(
-											String(schedule.status || "PENDING"),
+											(schedule.status || "PENDING") as string,
 										)}
 									>
-										{String(
-											TASK_STATUS_LABELS[String(schedule.status)] ??
-												schedule.status,
-										)}
+										{TASK_STATUS_LABELS[schedule.status as string] ??
+											schedule.status}
 									</Badge>
 								</div>
 							))}
@@ -1020,10 +1037,22 @@ function EventCharts({ eventId }: { eventId: string }) {
 	);
 
 	const guestData = guestChartQuery.data as
-		| { capacity: number; invited: number; confirmed: number; remaining: number; percentage: number }
+		| {
+				capacity: number;
+				invited: number;
+				confirmed: number;
+				remaining: number;
+				percentage: number;
+		  }
 		| undefined;
 	const budgetData = budgetChartQuery.data as
-		| { totalBudget: number; reserve: number; planned: number; spent: number; available: number }
+		| {
+				totalBudget: number;
+				reserve: number;
+				planned: number;
+				spent: number;
+				available: number;
+		  }
 		| undefined;
 
 	if (!guestData && !budgetData) return null;
@@ -1060,11 +1089,15 @@ function EventCharts({ eventId }: { eventId: string }) {
 							</div>
 							<div className="rounded-md border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Confirmados</p>
-								<p className="font-semibold text-lg text-green-600">{guestData.confirmed}</p>
+								<p className="font-semibold text-green-600 text-lg">
+									{guestData.confirmed}
+								</p>
 							</div>
 							<div className="rounded-md border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Disponíveis</p>
-								<p className="font-semibold text-lg text-blue-600">{guestData.remaining}</p>
+								<p className="font-semibold text-blue-600 text-lg">
+									{guestData.remaining}
+								</p>
 							</div>
 						</div>
 					</CardContent>
@@ -1090,26 +1123,38 @@ function EventCharts({ eventId }: { eventId: string }) {
 										color="#f59e0b"
 										size={140}
 										centerLabel="gasto"
-								/>
+									/>
 								</div>
 								<div className="grid grid-cols-2 gap-3">
 									<div className="rounded-md border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Total</p>
-										<p className="font-semibold text-lg">{formatCurrency(budgetData.totalBudget)}</p>
+										<p className="font-semibold text-lg">
+											{formatCurrency(budgetData.totalBudget)}
+										</p>
 									</div>
 									<div className="rounded-md border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Gasto</p>
-										<p className="font-semibold text-lg text-amber-600">{formatCurrency(budgetData.spent)}</p>
+										<p className="font-semibold text-amber-600 text-lg">
+											{formatCurrency(budgetData.spent)}
+										</p>
 									</div>
 									{budgetData.planned > 0 && (
 										<div className="rounded-md border p-3 text-center">
 											<p className="text-muted-foreground text-xs">Planeado</p>
-											<p className="font-semibold text-lg text-blue-600">{formatCurrency(budgetData.planned)}</p>
+											<p className="font-semibold text-blue-600 text-lg">
+												{formatCurrency(budgetData.planned)}
+											</p>
 										</div>
 									)}
 									<div className="rounded-md border p-3 text-center">
 										<p className="text-muted-foreground text-xs">Disponível</p>
-										<p className={`font-semibold text-lg ${budgetData.available < 0 ? "text-red-600" : "text-green-600"}`}>{formatCurrency(budgetData.available > 0 ? budgetData.available : 0)}</p>
+										<p
+											className={`font-semibold text-lg ${budgetData.available < 0 ? "text-red-600" : "text-green-600"}`}
+										>
+											{formatCurrency(
+												budgetData.available > 0 ? budgetData.available : 0,
+											)}
+										</p>
 									</div>
 								</div>
 							</>

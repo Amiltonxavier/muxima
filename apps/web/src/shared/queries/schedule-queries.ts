@@ -1,15 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
+import type { PaginationParams, ScheduleFilters } from "./task-queries";
 
 export const scheduleKeys = {
 	all: ["schedules"] as const,
-	list: (eventId: string) => [...scheduleKeys.all, "list", eventId] as const,
+	list: (eventId: string, params: Record<string, unknown>) =>
+		[...scheduleKeys.all, "list", eventId, params] as const,
 };
 
-export function useSchedules(eventId: string) {
+export function useSchedules(
+	eventId: string,
+	pagination: PaginationParams & ScheduleFilters = { page: 1, limit: 20 },
+) {
+	const page = pagination.page ?? 1;
+	const limit = pagination.limit ?? 20;
+	const { search, status } = pagination;
+	const input = { eventId, page, limit, search, status };
 	return useQuery({
-		...orpc.tasks.getSchedules.queryOptions({ input: { eventId } }),
-		queryKey: scheduleKeys.list(eventId),
+		...orpc.tasks.getSchedules.queryOptions({ input }),
+		queryKey: scheduleKeys.list(eventId, input),
 		enabled: !!eventId,
 	});
 }

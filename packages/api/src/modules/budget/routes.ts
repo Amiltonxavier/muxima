@@ -1,9 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { successResponse } from "../../shared/http/response";
+import { listResponse, successResponse } from "../../shared/http/response";
+import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
+import {
+	VALID_EXPENSE_STATUSES,
+	VALID_EXPENSE_TYPES,
+	validateEnum,
+} from "../../shared/utils/validate-enum";
 import {
 	createCategorySchema,
 	createExpenseSchema,
 	createPaymentSchema,
+	updateCategorySchema,
 	upsertBudgetSchema,
 } from "./schemas";
 import { BudgetService } from "./service";
@@ -39,8 +46,23 @@ export async function budgetRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { eventId } = request.params as { eventId: string };
-		const expenses = await BudgetService.getExpenses(eventId);
-		return successResponse(expenses);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+			status: validateEnum(query.status, VALID_EXPENSE_STATUSES),
+			type: validateEnum(query.type, VALID_EXPENSE_TYPES),
+			vendorId: query.vendorId || undefined,
+		};
+		const result = await BudgetService.getExpenses(
+			eventId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	app.post("/api/v1/events/:eventId/expenses", async (request, reply) => {
@@ -89,7 +111,7 @@ export async function budgetRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { id } = request.params as { id: string };
-		const data = request.body as Record<string, unknown>;
+		const data = updateCategorySchema.parse(request.body);
 		const category = await BudgetService.updateCategory(id, data);
 		return successResponse(category);
 	});

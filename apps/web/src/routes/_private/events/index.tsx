@@ -16,7 +16,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
-import { CurrencyInput } from "@/shared/components/currency-input";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Select,
 	SelectContent,
@@ -27,13 +27,18 @@ import {
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Calendar, Gift, MapPin, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Gift, MapPin, Plus, Search, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { CurrencyInput } from "@/shared/components/currency-input";
 import { QueryState } from "@/shared/components/states";
 import { createEventSchema } from "@/utils/event-schemas";
 import { formatDate, getDaysRemaining } from "@/utils/format-date";
-import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
+import {
+	EVENT_STATUS_LABELS,
+	getStatusColor,
+	getStatusLabel,
+} from "@/utils/status-helpers";
 import {
 	useCreateEvent,
 	useDeleteEvent,
@@ -45,13 +50,32 @@ export const Route = createFileRoute("/_private/events/")({
 });
 
 function EventsPage() {
-	const eventsQuery = useEvents();
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+	const [search, setSearch] = useState("");
+	const [filterStatus, setFilterStatus] = useState<
+		"ALL" | "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
+	>("ALL");
+	const [filterType, setFilterType] = useState<
+		"ALL" | "ENGAGEMENT" | "WEDDING"
+	>("ALL");
+
+	const resetPage = useCallback(() => setPage(1), []);
+
+	const eventsQuery = useEvents({
+		page,
+		limit,
+		search: search || undefined,
+		status: filterStatus !== "ALL" ? filterStatus : undefined,
+		type: filterType !== "ALL" ? filterType : undefined,
+	});
 	const createEvent = useCreateEvent();
 	const deleteEvent = useDeleteEvent();
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const events = eventsQuery.data ?? [];
+	const events = eventsQuery.data?.data ?? [];
+	const meta = eventsQuery.data?.meta;
 
 	return (
 		<div className="space-y-6">
@@ -68,11 +92,62 @@ function EventsPage() {
 				</Button>
 			</div>
 
+			{/* Filters */}
+			<div className="flex flex-wrap items-center gap-3">
+				<div className="relative min-w-[200px] max-w-sm flex-1">
+					<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						placeholder="Pesquisar eventos..."
+						value={search}
+						onChange={(e) => {
+							setSearch(e.target.value);
+							resetPage();
+						}}
+						className="pl-9"
+					/>
+				</div>
+				<Select
+					value={filterStatus}
+					onValueChange={(v) => {
+						if (v) setFilterStatus(v as typeof filterStatus);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Estado" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todos os estados</SelectItem>
+						{Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
+							<SelectItem key={value} value={value}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select
+					value={filterType}
+					onValueChange={(v) => {
+						if (v) setFilterType(v as typeof filterType);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Tipo" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todos os tipos</SelectItem>
+						<SelectItem value="WEDDING">Casamento</SelectItem>
+						<SelectItem value="ENGAGEMENT">Noivado</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
+
 			<QueryState
 				state={{
 					isLoading: eventsQuery.isLoading,
 					isError: eventsQuery.isError,
-					isEmpty: events.length === 0,
+					isEmpty: false,
 					hasData: events.length > 0,
 				}}
 			>
@@ -158,6 +233,18 @@ function EventsPage() {
 					})}
 				</div>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={eventsQuery.isLoading}
+				/>
+			)}
 
 			{events.length === 0 && !eventsQuery.isLoading && (
 				<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
@@ -375,19 +462,20 @@ function CreateEventDialog({
 								/>
 							</div>
 						)}
-					</form.Field>						<form.Field name="budgetAmount">
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>Orçamento (Kz)</Label>
-									<CurrencyInput
-										id={field.name}
-										value={field.state.value || 0}
-										onChange={(v) => field.handleChange(v)}
-										disabled={isLoading}
-									/>
-								</div>
-							)}
-						</form.Field>
+					</form.Field>
+					<form.Field name="budgetAmount">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Orçamento (Kz)</Label>
+								<CurrencyInput
+									id={field.name}
+									value={field.state.value || 0}
+									onChange={(v) => field.handleChange(v)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
 
 					<form.Field name="description">
 						{(field) => (

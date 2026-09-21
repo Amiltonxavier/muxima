@@ -1,5 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
-import { BudgetRepository } from "./repository";
+import { BudgetRepository, type ExpenseFilterParams } from "./repository";
 
 export const BudgetService = {
 	async getByEventId(eventId: string, _userId: string) {
@@ -25,7 +25,14 @@ export const BudgetService = {
 		return BudgetRepository.createCategory({ eventId, ...data });
 	},
 
-	async updateCategory(id: string, data: Record<string, unknown>) {
+	async updateCategory(
+		id: string,
+		data: Partial<{
+			name: string;
+			description: string;
+			plannedAmount: number;
+		}>,
+	) {
 		return BudgetRepository.updateCategory(id, data);
 	},
 
@@ -33,8 +40,16 @@ export const BudgetService = {
 		return BudgetRepository.deleteCategory(id);
 	},
 
-	async getExpenses(eventId: string) {
-		return BudgetRepository.findExpensesByEventId(eventId);
+	async getExpenses(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: ExpenseFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			BudgetRepository.findExpensesByEventId(eventId, pagination, filters),
+			BudgetRepository.countExpensesByEventId(eventId, filters),
+		]);
+		return { data, total };
 	},
 
 	async createExpense(
@@ -106,7 +121,14 @@ export const BudgetService = {
 		} else if (newTotalPaid > 0) {
 			status = "PARTIALLY_PAID";
 		}
-		await BudgetRepository.updateExpense(expenseId, { status });
+		await BudgetRepository.updateExpense(expenseId, {
+			status: status as
+				| "PLANNED"
+				| "PARTIALLY_PAID"
+				| "PAID"
+				| "OVERDUE"
+				| "CANCELLED",
+		});
 
 		return payment;
 	},

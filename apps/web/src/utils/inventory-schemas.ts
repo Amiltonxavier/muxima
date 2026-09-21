@@ -5,7 +5,7 @@ export const inventoryItemSchema = z.object({
 	category: z.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"], {
 		message: "Categoria é obrigatória",
 	}),
-	plannedQuantity: z.number().min(0, "Quantidade não pode ser negativa"),
+	plannedQuantity: z.number().positive("Quantidade deve ser maior que zero"),
 	currentQuantity: z
 		.number()
 		.min(0, "Quantidade não pode ser negativa")

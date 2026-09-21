@@ -1,9 +1,17 @@
 import { NotFoundError } from "../../shared/errors/app-error";
-import { InventoryRepository } from "./repository";
+import { type InventoryFilterParams, InventoryRepository } from "./repository";
 
 export const InventoryService = {
-	async findByEventId(eventId: string) {
-		return InventoryRepository.findByEventId(eventId);
+	async findByEventId(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: InventoryFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			InventoryRepository.findByEventId(eventId, pagination, filters),
+			InventoryRepository.countByEventId(eventId, filters),
+		]);
+		return { data, total };
 	},
 
 	async findById(id: string) {
@@ -16,10 +24,18 @@ export const InventoryService = {
 		eventId: string,
 		data: {
 			name: string;
-			category: string;
+			category: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
 			plannedQuantity: number;
 			currentQuantity?: number;
-			unit: string;
+			unit:
+				| "UNIT"
+				| "BOX"
+				| "CASE"
+				| "BOTTLE"
+				| "KG"
+				| "LITER"
+				| "PACKAGE"
+				| "OTHER";
 			unitPrice?: number;
 			vendorId?: string;
 			notes?: string;
@@ -28,7 +44,27 @@ export const InventoryService = {
 		return InventoryRepository.create({ eventId, ...data });
 	},
 
-	async update(id: string, data: Record<string, unknown>) {
+	async update(
+		id: string,
+		data: Partial<{
+			name: string;
+			category: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
+			plannedQuantity: number;
+			currentQuantity: number;
+			unit:
+				| "UNIT"
+				| "BOX"
+				| "CASE"
+				| "BOTTLE"
+				| "KG"
+				| "LITER"
+				| "PACKAGE"
+				| "OTHER";
+			unitPrice: number;
+			vendorId: string;
+			notes: string;
+		}>,
+	) {
 		const item = await InventoryRepository.findById(id);
 		if (!item) throw new NotFoundError("Item não encontrado");
 		return InventoryRepository.update(id, data);
@@ -43,7 +79,17 @@ export const InventoryService = {
 	async addMovement(
 		inventoryItemId: string,
 		userId: string,
-		data: { type: string; quantity: number; reason?: string },
+		data: {
+			type:
+				| "PURCHASE"
+				| "ADD"
+				| "CONSUMPTION"
+				| "ADJUSTMENT"
+				| "LOSS"
+				| "RETURN";
+			quantity: number;
+			reason?: string;
+		},
 	) {
 		const item = await InventoryRepository.findById(inventoryItemId);
 		if (!item) throw new NotFoundError("Item não encontrado");
@@ -63,11 +109,7 @@ export const InventoryService = {
 			data.type === "RETURN"
 		) {
 			newQty += data.quantity;
-		} else if (
-			data.type === "CONSUMPTION" ||
-			data.type === "LOSS" ||
-			data.type === "REMOVE"
-		) {
+		} else if (data.type === "CONSUMPTION" || data.type === "LOSS") {
 			newQty -= data.quantity;
 		} else if (data.type === "ADJUSTMENT") {
 			newQty = data.quantity;

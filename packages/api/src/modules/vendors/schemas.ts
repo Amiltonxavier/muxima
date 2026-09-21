@@ -18,7 +18,7 @@ export const createVendorSchema = z.object({
 		"OTHER",
 	]),
 	phone: z.string().optional(),
-	email: z.string().email().optional(),
+	email: z.string().email().optional().or(z.literal("")),
 	address: z.string().optional(),
 	description: z.string().optional(),
 	notes: z.string().optional(),

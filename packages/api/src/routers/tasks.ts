@@ -1,23 +1,60 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { scheduleListInput, taskListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const tasksRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(taskListInput))
 		.handler(async ({ input }) => {
-			const tasks = await db.task.findMany({
-				where: { eventId: input.eventId },
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return tasks;
+			const filterConditions: Prisma.TaskWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ title: { contains: input.search, mode: "insensitive" } },
+						{ description: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			if (input.category) {
+				filterConditions.push({ category: input.category });
+			}
+
+			if (input.priority) {
+				filterConditions.push({ priority: input.priority });
+			}
+
+			const where: Prisma.TaskWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [tasks, total] = await Promise.all([
+				db.task.findMany({
+					where,
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.task.count({ where }),
+			]);
+
+			return { data: tasks, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	getById: protectedProcedure
@@ -145,16 +182,44 @@ export const tasksRouter = {
 		}),
 
 	getSchedules: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(scheduleListInput))
 		.handler(async ({ input }) => {
-			const schedules = await db.schedule.findMany({
-				where: { eventId: input.eventId },
-				orderBy: {
-					startAt: "asc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return schedules;
+			const filterConditions: Prisma.ScheduleWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ title: { contains: input.search, mode: "insensitive" } },
+						{ description: { contains: input.search, mode: "insensitive" } },
+						{ location: { contains: input.search, mode: "insensitive" } },
+						{ responsible: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			const where: Prisma.ScheduleWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [schedules, total] = await Promise.all([
+				db.schedule.findMany({
+					where,
+					orderBy: { startAt: "asc" },
+					skip,
+					take: limit,
+				}),
+				db.schedule.count({ where }),
+			]);
+
+			return { data: schedules, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	createSchedule: protectedProcedure

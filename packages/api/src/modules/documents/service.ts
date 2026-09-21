@@ -1,9 +1,17 @@
 import { NotFoundError } from "../../shared/errors/app-error";
-import { DocumentRepository } from "./repository";
+import { type DocumentFilterParams, DocumentRepository } from "./repository";
 
 export const DocumentService = {
-	async findByEventId(eventId: string) {
-		return DocumentRepository.findByEventId(eventId);
+	async findByEventId(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: DocumentFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			DocumentRepository.findByEventId(eventId, pagination, filters),
+			DocumentRepository.countByEventId(eventId, filters),
+		]);
+		return { data, total };
 	},
 
 	async findById(id: string) {
@@ -17,7 +25,7 @@ export const DocumentService = {
 		userId: string,
 		data: {
 			name: string;
-			type: string;
+			type: "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
 			reference?: string;
 			vendorId?: string;
 			expenseId?: string;
@@ -27,7 +35,18 @@ export const DocumentService = {
 		return DocumentRepository.create({ eventId, ...data, createdBy: userId });
 	},
 
-	async update(id: string, data: Record<string, unknown>) {
+	async update(
+		id: string,
+		data: Partial<{
+			name: string;
+			type: "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
+			reference: string;
+			vendorId: string;
+			expenseId: string;
+			paymentId: string;
+			status: "ACTIVE" | "ARCHIVED" | "DELETED";
+		}>,
+	) {
 		const doc = await DocumentRepository.findById(id);
 		if (!doc) throw new NotFoundError("Documento não encontrado");
 		return DocumentRepository.update(id, data);

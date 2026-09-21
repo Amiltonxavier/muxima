@@ -1,10 +1,22 @@
 import db from "@muxima/db";
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
-import { GuestRepository } from "./repository";
+import {
+	type GuestFilterParams,
+	GuestRepository,
+	type TableFilterParams,
+} from "./repository";
 
 export const GuestService = {
-	async findByEventId(eventId: string) {
-		return GuestRepository.findByEventId(eventId);
+	async findByEventId(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: GuestFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			GuestRepository.findByEventId(eventId, pagination, filters),
+			GuestRepository.countByEventId(eventId, filters),
+		]);
+		return { data, total };
 	},
 
 	async findById(id: string) {
@@ -20,7 +32,7 @@ export const GuestService = {
 			phone?: string;
 			email?: string;
 			group?: string;
-			type: string;
+			type: "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
 			companionsLimit?: number;
 			notes?: string;
 		},
@@ -28,7 +40,19 @@ export const GuestService = {
 		return GuestRepository.create({ eventId, ...data });
 	},
 
-	async update(id: string, data: Record<string, unknown>) {
+	async update(
+		id: string,
+		data: Partial<{
+			name: string;
+			phone: string;
+			email: string;
+			group: string;
+			type: "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
+			status: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
+			companionsLimit: number;
+			notes: string;
+		}>,
+	) {
 		const guest = await GuestRepository.findById(id);
 		if (!guest) throw new NotFoundError("Convidado não encontrado");
 		return GuestRepository.update(id, data);
@@ -53,8 +77,16 @@ export const GuestService = {
 		return GuestRepository.removeCompanion(companionId);
 	},
 
-	async getTables(eventId: string) {
-		return GuestRepository.getTablesByEvent(eventId);
+	async getTables(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: TableFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			GuestRepository.getTablesByEvent(eventId, pagination, filters),
+			GuestRepository.countTablesByEvent(eventId, filters),
+		]);
+		return { data, total };
 	},
 
 	async createTable(

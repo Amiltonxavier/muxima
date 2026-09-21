@@ -66,6 +66,20 @@ export const link = new RPCLink({
 		return fetch(url, {
 			...options,
 			credentials: "include",
+		}).then(async (response) => {
+			if (response.status === 401) {
+				if (typeof window !== "undefined") {
+					const currentPath = window.location.pathname;
+					if (
+						!currentPath.startsWith("/login") &&
+						!currentPath.startsWith("/register")
+					) {
+						toast.error("Sessão expirada. Por favor, inicie sessão novamente.");
+						window.location.href = "/login";
+					}
+				}
+			}
+			return response;
 		});
 	},
 });

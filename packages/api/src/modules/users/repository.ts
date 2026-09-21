@@ -5,7 +5,14 @@ export const UserRepository = {
 		return db.user.findUnique({ where: { id } });
 	},
 
-	update(id: string, data: Record<string, unknown>) {
+	update(
+		id: string,
+		data: Partial<{
+			name: string;
+			email: string;
+			phone: string;
+		}>,
+	) {
 		return db.user.update({ where: { id }, data });
 	},
 

@@ -38,8 +38,8 @@ function ProfilePage() {
 
 	useEffect(() => {
 		if (profile) {
-			form.setFieldValue("name", (profile as any).name || "");
-			form.setFieldValue("email", (profile as any).email || "");
+			form.setFieldValue("name", profile.name || "");
+			form.setFieldValue("email", profile.email || "");
 		}
 	}, [profile, form.setFieldValue]);
 

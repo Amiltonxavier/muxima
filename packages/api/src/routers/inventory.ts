@@ -1,33 +1,64 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { inventoryListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const inventoryRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(inventoryListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const items = await db.inventoryItem.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					vendor: true,
-					movements: {
-						orderBy: {
-							createdAt: "desc",
-						},
-						take: 5,
-					},
-				},
-				orderBy: {
-					createdAt: "desc",
-				},
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return items;
+			const filterConditions: Prisma.InventoryItemWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ notes: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.category) {
+				filterConditions.push({ category: input.category });
+			}
+
+			if (input.vendorId) {
+				filterConditions.push({ vendorId: input.vendorId });
+			}
+
+			const where: Prisma.InventoryItemWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [items, total] = await Promise.all([
+				db.inventoryItem.findMany({
+					where,
+					include: {
+						vendor: true,
+						movements: {
+							orderBy: { createdAt: "desc" },
+							take: 5,
+						},
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.inventoryItem.count({ where }),
+			]);
+
+			return { data: items, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	getById: protectedProcedure

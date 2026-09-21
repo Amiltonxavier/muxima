@@ -132,10 +132,13 @@ describe("createEventSchema", () => {
 	});
 
 	it("accepts event with optional fields", () => {
+		const futureDate = new Date();
+		futureDate.setFullYear(futureDate.getFullYear() + 1);
+		const dateStr = futureDate.toISOString().split("T")[0];
 		const result = createEventSchema.safeParse({
 			type: "ENGAGEMENT",
 			name: "Noivado",
-			eventDate: "2025-12-25",
+			eventDate: dateStr,
 			venueName: "Hotel Tropical",
 			capacity: 200,
 			budgetAmount: 5000000,

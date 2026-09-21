@@ -1,8 +1,7 @@
+import type { Table as TableEntity } from "@muxima/api/shared/types/entities";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-} from "@muxima/ui/components/card";
+import { Card } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -13,6 +12,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Select,
 	SelectContent,
@@ -50,22 +50,23 @@ import {
 	Users,
 	X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
 	useAddCompanion,
 	useCreateGuest,
 	useCreateInvitation,
 	useDeleteGuest,
-	useGuests,
 	useGuestStats,
+	useGuests,
 	useInvitation,
 	useRemoveCompanion,
+	useRespondToInvitation,
 	useUpdateCompanion,
 	useUpdateGuest,
-	useRespondToInvitation,
 } from "@/shared/queries/guest-queries";
 import { useTables } from "@/shared/queries/table-queries";
 import { formatDate } from "@/utils/format-date";
@@ -74,12 +75,11 @@ import {
 	COMPANION_STATUS_LABELS,
 	GUEST_STATUS_LABELS,
 	GUEST_TYPE_LABELS,
-	INVITATION_STATUS_LABELS,
 	getStatusColor,
 	getStatusLabel,
+	INVITATION_STATUS_LABELS,
 	toSelectItems,
 } from "@/utils/status-helpers";
-import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export const Route = createFileRoute("/_private/events/$eventId/guests/")({
 	component: GuestsPage,
@@ -88,7 +88,26 @@ export const Route = createFileRoute("/_private/events/$eventId/guests/")({
 function GuestsPage() {
 	const { eventId } = Route.useParams();
 
-	const guestsQuery = useGuests(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	// Filters
+	const [searchQuery, setSearchQuery] = useState("");
+	const [filterStatus, setFilterStatus] = useState<
+		"ALL" | "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING"
+	>("ALL");
+	const [filterType, setFilterType] = useState<
+		"ALL" | "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER"
+	>("ALL");
+	const resetPage = useCallback(() => setPage(1), []);
+
+	const guestsQuery = useGuests(eventId, {
+		page,
+		limit,
+		search: searchQuery || undefined,
+		status: filterStatus !== "ALL" ? filterStatus : undefined,
+		type: filterType !== "ALL" ? filterType : undefined,
+	});
 	const statsQuery = useGuestStats(eventId);
 	const tablesQuery = useTables(eventId);
 	const createGuest = useCreateGuest();
@@ -96,56 +115,23 @@ function GuestsPage() {
 	const deleteGuest = useDeleteGuest();
 
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editingGuest, setEditingGuest] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
+	const [editingGuest, setEditingGuest] = useState<any>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
-
-	// Filters
-	const [searchQuery, setSearchQuery] = useState("");
-	const [filterStatus, setFilterStatus] = useState<string>("ALL");
-	const [filterType, setFilterType] = useState<string>("ALL");
 
 	// Invitation state
 	const [viewingInvitationGuestId, setViewingInvitationGuestId] = useState<
 		string | null
 	>(null);
-	const [sharingGuest, setSharingGuest] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
+	const [sharingGuest, setSharingGuest] = useState<any>(null);
 
 	// Companion state
-	const [managingCompanionGuest, setManagingCompanionGuest] = useState<
-		Record<string, unknown> | null
-	>(null);
+	const [managingCompanionGuest, setManagingCompanionGuest] =
+		useState<any>(null);
 
-	const guests = guestsQuery.data ?? [];
-	const tables = tablesQuery.data ?? [];
+	const guests = guestsQuery.data?.data ?? [];
+	const meta = guestsQuery.data?.meta;
+	const tables = tablesQuery.data?.data ?? [];
 	const stats = statsQuery.data;
-
-	const filteredGuests = useMemo(() => {
-		return guests.filter((guest: Record<string, unknown>) => {
-			const matchesSearch =
-				searchQuery === "" ||
-				((guest.name as string) || "")
-					.toLowerCase()
-					.includes(searchQuery.toLowerCase()) ||
-				((guest.email as string) || "")
-					.toLowerCase()
-					.includes(searchQuery.toLowerCase()) ||
-				((guest.phone as string) || "")
-					.toLowerCase()
-					.includes(searchQuery.toLowerCase());
-
-			const matchesStatus =
-				filterStatus === "ALL" || guest.status === filterStatus;
-			const matchesType = filterType === "ALL" || guest.type === filterType;
-
-			return matchesSearch && matchesStatus && matchesType;
-		});
-	}, [guests, searchQuery, filterStatus, filterType]);
 
 	return (
 		<div className="space-y-6">
@@ -156,8 +142,8 @@ function GuestsPage() {
 					<p className="text-muted-foreground text-sm">
 						{stats ? (
 							<>
-								{stats.totalGuests} convidados ·{" "}
-								{stats.totalConfirmedPeople} pessoas confirmadas
+								{stats.totalGuests} convidados · {stats.totalConfirmedPeople}{" "}
+								pessoas confirmadas
 							</>
 						) : (
 							`${guests.length} convidados`
@@ -190,55 +176,45 @@ function GuestsPage() {
 			{/* Stats Cards */}
 			{stats && (
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					<StatsCard
-						title="Total"
-						value={stats.totalGuests}
-					/>
+					<StatsCard title="Total" value={stats.totalGuests} />
 
-					<StatsCard
-						title="Confirmados"
-						value={stats.confirmed}
-					/>
+					<StatsCard title="Confirmados" value={stats.confirmed} />
 
-					<StatsCard
-						title="Pendentes"
-						value={stats.pending}
-					/>
+					<StatsCard title="Pendentes" value={stats.pending} />
 
-					<StatsCard
-						title="Recusados"
-						value={stats.declined}
-					/>
+					<StatsCard title="Recusados" value={stats.declined} />
 
-					<StatsCard
-						title="Acompanhantes"
-						value={stats.totalCompanions}
-					/>
+					<StatsCard title="Acompanhantes" value={stats.totalCompanions} />
 
 					<StatsCard
 						title="Pessoas confirmadas"
 						value={stats.totalConfirmedPeople}
-						description={
-							stats.capacity > 0 ? `/ ${stats.capacity}` : undefined
-						}
+						description={stats.capacity > 0 ? `/ ${stats.capacity}` : undefined}
 					/>
 				</div>
 			)}
 
 			{/* Filters */}
 			<div className="flex flex-wrap items-center gap-3">
+				{" "}
 				<div className="relative min-w-[200px] max-w-sm flex-1">
 					<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 					<Input
 						placeholder="Pesquisar por nome, email ou telefone..."
 						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
+						onChange={(e) => {
+							setSearchQuery(e.target.value);
+							resetPage();
+						}}
 						className="pl-9"
 					/>
 				</div>
 				<Select
 					value={filterStatus}
-					onValueChange={(v) => setFilterStatus(v as string)}
+					onValueChange={(v) => {
+						if (v) setFilterStatus(v as typeof filterStatus);
+						resetPage();
+					}}
 				>
 					<SelectTrigger className="w-[160px]">
 						<SelectValue placeholder="Estado" />
@@ -254,7 +230,10 @@ function GuestsPage() {
 				</Select>
 				<Select
 					value={filterType}
-					onValueChange={(v) => setFilterType(v as string)}
+					onValueChange={(v) => {
+						if (v) setFilterType(v as typeof filterType);
+						resetPage();
+					}}
 				>
 					<SelectTrigger className="w-[160px]">
 						<SelectValue placeholder="Tipo" />
@@ -274,7 +253,7 @@ function GuestsPage() {
 				state={{
 					isLoading: guestsQuery.isLoading,
 					isError: guestsQuery.isError,
-					isEmpty: filteredGuests.length === 0 && guests.length > 0,
+					isEmpty: guests.length === 0,
 					hasData: guests.length > 0,
 				}}
 			>
@@ -293,43 +272,34 @@ function GuestsPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{filteredGuests.map((guest: Record<string, unknown>) => {
-								const tableGuests = (guest.tableGuests ?? []) as Array<
-									Record<string, unknown>
-								>;
+							{guests.map((guest) => {
+								const tableGuests = guest.tableGuests ?? [];
 								const tableName =
-									tableGuests.length > 0
-										? ((tableGuests[0]?.table as Record<string, unknown>)
-											?.name as string)
-										: null;
-								const companions = (guest.companions ?? []) as Array<
-									Record<string, unknown>
-								>;
+									tableGuests.length > 0 ? tableGuests[0]?.table?.name : null;
+								const companions = guest.companions ?? [];
 
 								return (
-									<TableRow key={guest.id as string}>
-										<TableCell className="font-medium">
-											{guest.name as string}
-										</TableCell>
+									<TableRow key={guest.id}>
+										<TableCell className="font-medium">{guest.name}</TableCell>
 										<TableCell>
 											<div className="flex flex-col gap-0.5 text-muted-foreground text-xs">
 												{guest.phone ? (
 													<span className="flex items-center gap-1">
 														<Phone className="h-3 w-3" />
-														{String(guest.phone)}
+														{guest.phone}
 													</span>
 												) : null}
 												{guest.email ? (
 													<span className="flex items-center gap-1">
 														<Mail className="h-3 w-3" />
-														{String(guest.email)}
+														{guest.email}
 													</span>
 												) : null}
 											</div>
 										</TableCell>
-										<TableCell>{(guest.group as string) || "—"}</TableCell>
+										<TableCell>{guest.group || "—"}</TableCell>
 										<TableCell>
-											{GUEST_TYPE_LABELS[(guest.type as string) || "FAMILY"] ||
+											{GUEST_TYPE_LABELS[guest.type || "FAMILY"] ||
 												String(guest.type || "FAMILY")}
 										</TableCell>
 										<TableCell>
@@ -365,14 +335,9 @@ function GuestsPage() {
 										</TableCell>
 										<TableCell>
 											<Badge
-												className={getStatusColor(
-													(guest.status as string) || "PENDING",
-												)}
+												className={getStatusColor(guest.status || "PENDING")}
 											>
-												{getStatusLabel(
-													(guest.status as string) || "PENDING",
-													"guest",
-												)}
+												{getStatusLabel(guest.status || "PENDING", "guest")}
 											</Badge>
 										</TableCell>
 										<TableCell>
@@ -381,9 +346,7 @@ function GuestsPage() {
 													variant="ghost"
 													size="icon-sm"
 													title="Ver convite"
-													onClick={() =>
-														setViewingInvitationGuestId(guest.id as string)
-													}
+													onClick={() => setViewingInvitationGuestId(guest.id)}
 												>
 													<Eye className="h-3.5 w-3.5" />
 												</Button>
@@ -408,7 +371,7 @@ function GuestsPage() {
 													size="icon-sm"
 													className="text-destructive"
 													title="Eliminar"
-													onClick={() => setDeleteId(guest.id as string)}
+													onClick={() => setDeleteId(guest.id)}
 												>
 													<Trash2 className="h-3.5 w-3.5" />
 												</Button>
@@ -421,6 +384,18 @@ function GuestsPage() {
 					</Table>
 				</Card>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={guestsQuery.isLoading}
+				/>
+			)}
 
 			{/* Create Dialog */}
 			<GuestDialog
@@ -449,23 +424,18 @@ function GuestsPage() {
 					onOpenChange={() => setEditingGuest(null)}
 					tables={tables}
 					initialValues={{
-						name: (editingGuest.name as string) || "",
-						phone: (editingGuest.phone as string) || "",
-						email: (editingGuest.email as string) || "",
-						group: (editingGuest.group as string) || "",
-						type: (editingGuest.type as string) || "FAMILY",
-						notes: (editingGuest.notes as string) || "",
-						status: (editingGuest.status as string) || "PENDING",
-						tableId:
-							((
-								(
-									editingGuest.tableGuests as Array<Record<string, unknown>>
-								)?.[0]?.table as Record<string, unknown>
-							)?.id as string) || "",
+						name: editingGuest.name || "",
+						phone: editingGuest.phone || "",
+						email: editingGuest.email || "",
+						group: editingGuest.group || "",
+						type: editingGuest.type || "FAMILY",
+						notes: editingGuest.notes || "",
+						status: editingGuest.status || "PENDING",
+						tableId: editingGuest.tableGuests?.[0]?.table?.id || "",
 					}}
 					onSubmit={(values) => {
 						updateGuest.mutate(
-							{ id: editingGuest.id as string, ...values },
+							{ id: editingGuest.id, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Convidado atualizado");
@@ -552,7 +522,7 @@ function CompanionManagerDialog({
 	guest,
 	onClose,
 }: {
-	guest: Record<string, unknown>;
+	guest: any;
 	onClose: () => void;
 }) {
 	const addCompanion = useAddCompanion();
@@ -560,7 +530,7 @@ function CompanionManagerDialog({
 	const removeCompanion = useRemoveCompanion();
 	const [newName, setNewName] = useState("");
 
-	const companions = (guest.companions ?? []) as Array<Record<string, unknown>>;
+	const companions = guest.companions ?? [];
 
 	const handleAdd = () => {
 		const result = guestCompanionSchema.safeParse({ name: newName });
@@ -569,7 +539,7 @@ function CompanionManagerDialog({
 			return;
 		}
 		addCompanion.mutate(
-			{ guestId: guest.id as string, name: newName },
+			{ guestId: guest.id, name: newName },
 			{
 				onSuccess: () => {
 					toast.success("Acompanhante adicionado");
@@ -582,7 +552,10 @@ function CompanionManagerDialog({
 
 	const handleStatusChange = (companionId: string, status: string) => {
 		updateCompanion.mutate(
-			{ id: companionId, status: status as "PENDING" | "CONFIRMED" | "DECLINED" },
+			{
+				id: companionId,
+				status: status as "PENDING" | "CONFIRMED" | "DECLINED",
+			},
 			{
 				onSuccess: () => toast.success("Estado atualizado"),
 				onError: (e) => toast.error(e.message),
@@ -609,7 +582,7 @@ function CompanionManagerDialog({
 						Acompanhantes
 					</DialogTitle>
 					<DialogDescription>
-						Gerir acompanhantes de <strong>{guest.name as string}</strong>
+						Gerir acompanhantes de <strong>{guest.name}</strong>
 					</DialogDescription>
 				</DialogHeader>
 
@@ -644,17 +617,17 @@ function CompanionManagerDialog({
 						</p>
 					) : (
 						<div className="space-y-2">
-							{companions.map((companion) => (
+							{companions.map((companion: any) => (
 								<div
-									key={companion.id as string}
+									key={companion.id}
 									className="flex items-center justify-between rounded-md border p-3"
 								>
 									<div className="flex items-center gap-3">
-										<span className="text-sm">{companion.name as string}</span>
+										<span className="text-sm">{companion.name}</span>
 										<Select
-											value={(companion.status as string) || "PENDING"}
+											value={companion.status || "PENDING"}
 											onValueChange={(v) =>
-												handleStatusChange(companion.id as string, v as string)
+												handleStatusChange(companion.id, v as string)
 											}
 										>
 											<SelectTrigger className="h-7 w-[120px] text-xs">
@@ -673,7 +646,7 @@ function CompanionManagerDialog({
 										variant="ghost"
 										size="icon-sm"
 										className="h-7 text-destructive"
-										onClick={() => handleRemove(companion.id as string)}
+										onClick={() => handleRemove(companion.id)}
 										disabled={removeCompanion.isPending}
 									>
 										<Trash2 className="h-3.5 w-3.5" />
@@ -709,21 +682,19 @@ function ViewInvitationDialog({
 	const invitationQuery = useInvitation(guestId);
 	const createInvitation = useCreateInvitation();
 	const respondToInvitation = useRespondToInvitation();
-	// biome-ignore lint/suspicious/noExplicitAny: oRPC return type
-	const invitation = invitationQuery.data as any;
+	const invitation = invitationQuery.data;
 
 	const event = invitation?.event;
-	const allGuests = (invitation?.guests ?? []) as Array<Record<string, unknown>>;
+	const allGuests = invitation?.guests ?? [];
 
 	// Get table from the first guest
-	const firstGuest = allGuests.length > 0 ? allGuests[0]?.guest as Record<string, unknown> | undefined : undefined;
-	const tableGuests = (firstGuest?.tableGuests ?? []) as Array<Record<string, unknown>>;
-	const table = tableGuests.length > 0 ? (tableGuests[0]?.table as Record<string, unknown>) : null;
+	const firstGuest = allGuests.length > 0 ? allGuests[0]?.guest : undefined;
+	const tableGuests = firstGuest?.tableGuests ?? [];
+	const table = tableGuests.length > 0 ? tableGuests[0]?.table : null;
 
 	const handleCreate = () => {
-		const guestIds = allGuests.length > 0
-			? allGuests.map((ig: Record<string, unknown>) => (ig.guest as Record<string, unknown>)?.id as string)
-			: [guestId];
+		const guestIds =
+			allGuests.length > 0 ? allGuests.map((ig) => ig.guest?.id) : [guestId];
 		createInvitation.mutate(
 			{ guestIds, eventId },
 			{
@@ -747,9 +718,7 @@ function ViewInvitationDialog({
 			{
 				onSuccess: () => {
 					toast.success(
-						response === "CONFIRM"
-							? "Convite confirmado"
-							: "Convite recusado",
+						response === "CONFIRM" ? "Convite confirmado" : "Convite recusado",
 					);
 					invitationQuery.refetch();
 				},
@@ -805,12 +774,12 @@ function ViewInvitationDialog({
 							</div>
 							{allGuests.length > 0 ? (
 								<div className="space-y-2">
-									{allGuests.map((ig: Record<string, unknown>) => {
-										const g = ig.guest as Record<string, unknown>;
+									{allGuests.map((ig) => {
+										const g = ig.guest;
 										return (
-											<div key={ig.id as string} className="rounded-md border p-3">
+											<div key={ig.id} className="rounded-md border p-3">
 												<p className="font-medium text-sm">{String(g?.name)}</p>
-												{((g?.email as string) || (g?.phone as string)) ? (
+												{g?.email || g?.phone ? (
 													<div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
 														{g?.phone ? (
 															<p className="flex items-center gap-2">
@@ -924,15 +893,12 @@ function ViewInvitationDialog({
 									<h3 className="font-semibold text-sm">Anfitrião</h3>
 								</div>
 								<p className="font-medium text-sm">
-									{String(
-										(event.owner as Record<string, unknown>).name ||
-										(event.owner as Record<string, unknown>).email,
-									)}
+									{String(event.owner.name || event.owner.email)}
 								</p>
-								{(event.owner as Record<string, unknown>).email ? (
+								{event.owner.email ? (
 									<p className="mt-1 flex items-center gap-2 text-muted-foreground text-xs">
 										<Mail className="h-3.5 w-3.5" />
-										{String((event.owner as Record<string, unknown>).email)}
+										{String(event.owner.email)}
 									</p>
 								) : null}
 							</section>
@@ -1069,21 +1035,21 @@ function ShareInvitationDialog({
 	eventId,
 	onClose,
 }: {
-	guest: Record<string, unknown>;
+	guest: any;
 	eventId: string;
 	onClose: () => void;
 }) {
 	const createInvitation = useCreateInvitation();
-	const invitationQuery = useInvitation(guest.id as string);
+	const invitationQuery = useInvitation(guest.id);
 	const invitation = invitationQuery.data;
 
 	const invitationLink = invitation
-		? `${window.location.origin}/invite/${(invitation as Record<string, unknown>).code}`
+		? `${window.location.origin}/invite/${invitation.code}`
 		: null;
 
 	const handleShareWhatsApp = () => {
 		if (invitationLink) {
-			const text = `Olá ${(guest.name as string) || ""}! 🎉\nEstás convidado(a) para o nosso evento!\n\nConfirma a tua presença: ${invitationLink}`;
+			const text = `Olá ${guest.name || ""}! 🎉\nEstás convidado(a) para o nosso evento!\n\nConfirma a tua presença: ${invitationLink}`;
 			window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
 		}
 	};
@@ -1097,7 +1063,7 @@ function ShareInvitationDialog({
 
 	const handleCreateAndShare = () => {
 		createInvitation.mutate(
-			{ guestIds: [guest.id as string], eventId },
+			{ guestIds: [guest.id], eventId },
 			{
 				onSuccess: () => {
 					toast.success("Convite criado!");
@@ -1113,7 +1079,7 @@ function ShareInvitationDialog({
 				<DialogHeader>
 					<DialogTitle>Partilhar Convite</DialogTitle>
 					<DialogDescription>
-						Envie o convite para <strong>{guest.name as string}</strong>
+						Envie o convite para <strong>{guest.name}</strong>
 					</DialogDescription>
 				</DialogHeader>
 				{invitationQuery.isLoading ? (
@@ -1194,7 +1160,7 @@ function GuestDialog({
 		status?: string;
 		tableId?: string;
 	};
-	tables: Array<Record<string, unknown>>;
+	tables: Array<TableEntity>;
 	onSubmit: (values: {
 		name: string;
 		phone?: string;
@@ -1330,7 +1296,16 @@ function GuestDialog({
 									<Select
 										items={toSelectItems(GUEST_TYPE_LABELS)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER")}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as
+													| "FAMILY"
+													| "FRIEND"
+													| "COLLEAGUE"
+													| "VIP"
+													| "OTHER",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -1376,8 +1351,8 @@ function GuestDialog({
 									<SelectContent>
 										<SelectItem value="">Sem mesa</SelectItem>
 										{tables.map((t) => (
-											<SelectItem key={t.id as string} value={t.id as string}>
-												{String(t.name)}
+											<SelectItem key={t.id} value={t.id}>
+												{t.name}
 												{t.number ? ` (#${String(t.number)})` : ""} —{" "}
 												{String(t.capacity)} lugares
 											</SelectItem>
@@ -1396,7 +1371,11 @@ function GuestDialog({
 									<Select
 										items={toSelectItems(GUEST_STATUS_LABELS)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING")}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

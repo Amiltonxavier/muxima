@@ -1,5 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { successResponse } from "../../shared/http/response";
+import { listResponse, successResponse } from "../../shared/http/response";
+import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
+import {
+	VALID_NOTIFICATION_TYPES,
+	validateEnum,
+} from "../../shared/utils/validate-enum";
 import { NotificationService } from "./service";
 
 export async function notificationRoutes(app: FastifyInstance) {
@@ -9,8 +14,22 @@ export async function notificationRoutes(app: FastifyInstance) {
 			return reply
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-		const notifications = await NotificationService.findByUserId(userId);
-		return successResponse(notifications);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+			type: validateEnum(query.type, VALID_NOTIFICATION_TYPES),
+			read: query.read !== undefined ? query.read === "true" : undefined,
+		};
+		const result = await NotificationService.findByUserId(
+			userId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	app.get("/api/v1/notifications/unread-count", async (request, reply) => {
@@ -30,7 +49,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { id } = request.params as { id: string };
-		const notification = await NotificationService.markAsRead(id);
+		const notification = await NotificationService.markAsRead(id, userId);
 		return successResponse(notification);
 	});
 
@@ -51,7 +70,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { id } = request.params as { id: string };
-		await NotificationService.delete(id);
+		await NotificationService.delete(id, userId);
 		return reply.status(204).send();
 	});
 

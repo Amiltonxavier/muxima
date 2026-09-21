@@ -8,16 +8,7 @@ import {
 } from "@muxima/ui/components/card";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-	Calendar,
-	CreditCard,
-	Gift,
-	Globe,
-	MapPin,
-	Plus,
-	Users,
-	UsersIcon,
-} from "lucide-react";
+import { Calendar, Gift, MapPin, Plus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { QueryState } from "@/shared/components/states";
 import { formatDate, getDaysRemaining } from "@/utils/format-date";
@@ -25,16 +16,16 @@ import { orpc } from "@/utils/orpc";
 import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
 import { useEvents } from "../events/-queries/event-queries";
 
-export const Route = createFileRoute("/_private/dashboard/")({
+export const Route = createFileRoute("/_private/_dashboard/")({
 	component: DashboardPage,
 });
 
 function DashboardPage() {
 	const { data: session } = authClient.useSession();
-	const eventsQuery = useEvents();
+	const eventsQuery = useEvents({ page: 1, limit: 6 });
 	const statsQuery = useQuery(orpc.dashboard.getGlobalStats.queryOptions());
 
-	const events = eventsQuery.data ?? [];
+	const events = eventsQuery.data?.data ?? [];
 
 	function getGreeting() {
 		const hour = new Date().getHours();
@@ -48,7 +39,6 @@ function DashboardPage() {
 	const greeting = getGreeting();
 	const firstName = session?.user.name?.split(" ")[0] || "Utilizador";
 
-
 	return (
 		<div className="space-y-6">
 			<div>
@@ -59,7 +49,6 @@ function DashboardPage() {
 					Resumo geral da plataforma
 				</p>
 			</div>
-
 
 			{/* Events Section */}
 			<div>
@@ -75,7 +64,7 @@ function DashboardPage() {
 					state={{
 						isLoading: eventsQuery.isLoading,
 						isError: eventsQuery.isError,
-						isEmpty: events.length === 0,
+						isEmpty: false,
 						hasData: events.length > 0,
 					}}
 				>

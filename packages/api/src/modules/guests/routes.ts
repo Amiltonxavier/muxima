@@ -1,5 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { successResponse } from "../../shared/http/response";
+import {
+	getEventIdForResource,
+	requireEventAccess,
+} from "../../shared/auth/event-access";
+import { listResponse, successResponse } from "../../shared/http/response";
+import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
+import {
+	VALID_GUEST_STATUSES,
+	VALID_GUEST_TYPES,
+	validateEnum,
+} from "../../shared/utils/validate-enum";
 import {
 	assignTableSchema,
 	createGuestSchema,
@@ -16,8 +26,22 @@ export async function guestRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { eventId } = request.params as { eventId: string };
-		const guests = await GuestService.findByEventId(eventId);
-		return successResponse(guests);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+			status: validateEnum(query.status, VALID_GUEST_STATUSES),
+			type: validateEnum(query.type, VALID_GUEST_TYPES),
+		};
+		const result = await GuestService.findByEventId(
+			eventId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	app.post("/api/v1/events/:eventId/guests", async (request, reply) => {
@@ -39,6 +63,14 @@ export async function guestRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { id } = request.params as { id: string };
+		const eventId = await getEventIdForResource("guest", id);
+		if (!eventId)
+			return reply
+				.status(404)
+				.send({
+					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+				});
+		await requireEventAccess(userId, eventId);
 		const data = updateGuestSchema.parse(request.body);
 		const guest = await GuestService.update(id, data);
 		return successResponse(guest);
@@ -51,6 +83,14 @@ export async function guestRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { id } = request.params as { id: string };
+		const eventId = await getEventIdForResource("guest", id);
+		if (!eventId)
+			return reply
+				.status(404)
+				.send({
+					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+				});
+		await requireEventAccess(userId, eventId);
 		await GuestService.delete(id);
 		return reply.status(204).send();
 	});
@@ -62,8 +102,20 @@ export async function guestRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { eventId } = request.params as { eventId: string };
-		const tables = await GuestService.getTables(eventId);
-		return successResponse(tables);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+		};
+		const result = await GuestService.getTables(
+			eventId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	app.post("/api/v1/events/:eventId/tables", async (request, reply) => {
@@ -86,6 +138,14 @@ export async function guestRoutes(app: FastifyInstance) {
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { tableId } = request.params as { tableId: string };
 		const { guestId } = assignTableSchema.parse(request.body);
+		const eventId = await getEventIdForResource("guest", guestId);
+		if (!eventId)
+			return reply
+				.status(404)
+				.send({
+					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+				});
+		await requireEventAccess(userId, eventId);
 		await GuestService.assignToTable(tableId, guestId);
 		return reply.status(201).send(successResponse({ success: true }));
 	});
@@ -102,6 +162,14 @@ export async function guestRoutes(app: FastifyInstance) {
 				tableId: string;
 				guestId: string;
 			};
+			const eventId = await getEventIdForResource("guest", guestId);
+			if (!eventId)
+				return reply
+					.status(404)
+					.send({
+						error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+					});
+			await requireEventAccess(userId, eventId);
 			await GuestService.removeFromTable(tableId, guestId);
 			return reply.status(204).send();
 		},

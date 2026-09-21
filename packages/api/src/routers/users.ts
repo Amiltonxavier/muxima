@@ -11,6 +11,7 @@ export const usersRouter = {
 				name: true,
 				email: true,
 				image: true,
+				phone: true,
 				emailVerified: true,
 				createdAt: true,
 			},
@@ -33,6 +34,7 @@ export const usersRouter = {
 				data: {
 					name: input.name,
 					email: input.email,
+					phone: input.phone,
 				},
 			});
 
@@ -97,7 +99,18 @@ export const usersRouter = {
 
 	removeMember: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const member = await db.eventMember.findUnique({
+				where: { id: input.id },
+				select: { eventId: true, role: true },
+			});
+			if (!member) throw new Error("Membro não encontrado");
+			const { requireEventAccess } = await import(
+				"../shared/auth/event-access"
+			);
+			await requireEventAccess(context.session.user.id, member.eventId);
+			if (member.role === "OWNER")
+				throw new Error("Não é possível remover o proprietário");
 			await db.eventMember.delete({
 				where: { id: input.id },
 			});
@@ -112,14 +125,25 @@ export const usersRouter = {
 				role: z.enum(["PARTNER", "ADMIN", "EDITOR", "VIEWER"]),
 			}),
 		)
-		.handler(async ({ input }) => {
-			const member = await db.eventMember.update({
+		.handler(async ({ context, input }) => {
+			const member = await db.eventMember.findUnique({
+				where: { id: input.id },
+				select: { eventId: true },
+			});
+			if (!member) throw new Error("Membro não encontrado");
+			const { requireEventAccess } = await import(
+				"../shared/auth/event-access"
+			);
+			await requireEventAccess(context.session.user.id, member.eventId, [
+				"OWNER",
+			]);
+			const updatedMember = await db.eventMember.update({
 				where: { id: input.id },
 				data: {
 					role: input.role,
 				},
 			});
 
-			return member;
+			return updatedMember;
 		}),
 };

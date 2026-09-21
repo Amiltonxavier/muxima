@@ -1,7 +1,17 @@
 import { Button } from "@muxima/ui/components/button";
 import { Card, CardContent } from "@muxima/ui/components/card";
+import { Input } from "@muxima/ui/components/input";
+import { Pagination } from "@muxima/ui/components/pagination";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@muxima/ui/components/select";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, Check, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, Check, CheckCheck, Search, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
 import { QueryState } from "@/shared/components/states";
 import { formatRelativeTime } from "@/utils/format-date";
 import {
@@ -16,12 +26,28 @@ export const Route = createFileRoute("/_private/notifications/")({
 });
 
 function NotificationsPage() {
-	const notificationsQuery = useNotifications();
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+	const [search, setSearch] = useState("");
+	const [filterType, setFilterType] = useState<
+		"ALL" | "FINANCE" | "TASKS" | "GUESTS" | "INVENTORY" | "EVENT"
+	>("ALL");
+	const [filterRead, setFilterRead] = useState<string>("ALL");
+	const resetPage = useCallback(() => setPage(1), []);
+
+	const notificationsQuery = useNotifications({
+		page,
+		limit,
+		search: search || undefined,
+		type: filterType !== "ALL" ? filterType : undefined,
+		read: filterRead !== "ALL" ? filterRead === "READ" : undefined,
+	});
 	const markAsRead = useMarkNotificationAsRead();
 	const markAllAsRead = useMarkAllNotificationsAsRead();
 	const deleteNotification = useDeleteNotification();
 
-	const notifications = notificationsQuery.data ?? [];
+	const notifications = notificationsQuery.data?.data ?? [];
+	const meta = notificationsQuery.data?.meta;
 
 	return (
 		<div className="space-y-6">
@@ -38,6 +64,57 @@ function NotificationsPage() {
 						Marcar todas como lidas
 					</Button>
 				)}
+			</div>
+
+			{/* Filters */}
+			<div className="flex flex-wrap items-center gap-3">
+				<div className="relative min-w-[200px] max-w-sm flex-1">
+					<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						placeholder="Pesquisar notificações..."
+						value={search}
+						onChange={(e) => {
+							setSearch(e.target.value);
+							resetPage();
+						}}
+						className="pl-9"
+					/>
+				</div>
+				<Select
+					value={filterType}
+					onValueChange={(v) => {
+						if (v) setFilterType(v as typeof filterType);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Tipo" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todos os tipos</SelectItem>
+						<SelectItem value="FINANCE">Financeiro</SelectItem>
+						<SelectItem value="TASKS">Tarefas</SelectItem>
+						<SelectItem value="GUESTS">Convidados</SelectItem>
+						<SelectItem value="INVENTORY">Inventário</SelectItem>
+						<SelectItem value="EVENT">Evento</SelectItem>
+					</SelectContent>
+				</Select>
+				<Select
+					value={filterRead}
+					onValueChange={(v) => {
+						if (v) setFilterRead(v);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Estado" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todas</SelectItem>
+						<SelectItem value="UNREAD">Não lidas</SelectItem>
+						<SelectItem value="READ">Lidas</SelectItem>
+					</SelectContent>
+				</Select>
 			</div>
 
 			<QueryState
@@ -105,6 +182,18 @@ function NotificationsPage() {
 					})}
 				</div>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={notificationsQuery.isLoading}
+				/>
+			)}
 		</div>
 	);
 }

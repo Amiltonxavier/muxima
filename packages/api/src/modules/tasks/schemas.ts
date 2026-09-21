@@ -53,3 +53,15 @@ export const createScheduleSchema = z.object({
 	location: z.string().optional(),
 	responsible: z.string().optional(),
 });
+
+export const updateScheduleSchema = z.object({
+	title: z.string().min(1).optional(),
+	description: z.string().optional(),
+	startAt: z.string().optional(),
+	endAt: z.string().optional(),
+	location: z.string().optional(),
+	responsible: z.string().optional(),
+	status: z
+		.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"])
+		.optional(),
+});

@@ -1,11 +1,59 @@
 import db from "@muxima/db";
+import type {
+	InventoryCategory,
+	MovementType,
+	Prisma,
+} from "@muxima/db/prisma";
+
+export type InventoryFilterParams = {
+	search?: string;
+	category?: InventoryCategory;
+	vendorId?: string;
+};
+
+function buildInventoryWhere(
+	eventId: string,
+	filters?: InventoryFilterParams,
+): Prisma.InventoryItemWhereInput {
+	const conditions: Prisma.InventoryItemWhereInput[] = [{ eventId }];
+
+	if (filters?.search) {
+		conditions.push({
+			OR: [
+				{ name: { contains: filters.search, mode: "insensitive" } },
+				{ notes: { contains: filters.search, mode: "insensitive" } },
+			],
+		});
+	}
+	if (filters?.category) {
+		conditions.push({ category: filters.category });
+	}
+	if (filters?.vendorId) {
+		conditions.push({ vendorId: filters.vendorId });
+	}
+
+	return { AND: conditions };
+}
 
 export const InventoryRepository = {
-	findByEventId(eventId: string) {
+	findByEventId(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: InventoryFilterParams,
+	) {
+		const skip = (pagination.page - 1) * pagination.limit;
 		return db.inventoryItem.findMany({
-			where: { eventId },
+			where: buildInventoryWhere(eventId, filters),
 			include: { vendor: true, movements: true },
 			orderBy: { createdAt: "desc" },
+			skip,
+			take: pagination.limit,
+		});
+	},
+
+	countByEventId(eventId: string, filters?: InventoryFilterParams) {
+		return db.inventoryItem.count({
+			where: buildInventoryWhere(eventId, filters),
 		});
 	},
 
@@ -19,19 +67,46 @@ export const InventoryRepository = {
 	create(data: {
 		eventId: string;
 		name: string;
-		category: string;
+		category: InventoryCategory;
 		plannedQuantity: number;
 		currentQuantity?: number;
-		unit: string;
+		unit:
+			| "UNIT"
+			| "BOX"
+			| "CASE"
+			| "BOTTLE"
+			| "KG"
+			| "LITER"
+			| "PACKAGE"
+			| "OTHER";
 		unitPrice?: number;
 		vendorId?: string;
 		notes?: string;
 	}) {
-		// biome-ignore lint/suspicious/noExplicitAny: Prisma enum types differ from string params
-		return db.inventoryItem.create({ data: data as any });
+		return db.inventoryItem.create({ data });
 	},
 
-	update(id: string, data: Record<string, unknown>) {
+	update(
+		id: string,
+		data: Partial<{
+			name: string;
+			category: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
+			plannedQuantity: number;
+			currentQuantity: number;
+			unit:
+				| "UNIT"
+				| "BOX"
+				| "CASE"
+				| "BOTTLE"
+				| "KG"
+				| "LITER"
+				| "PACKAGE"
+				| "OTHER";
+			unitPrice: number;
+			vendorId: string;
+			notes: string;
+		}>,
+	) {
 		return db.inventoryItem.update({ where: { id }, data });
 	},
 
@@ -41,12 +116,11 @@ export const InventoryRepository = {
 
 	addMovement(data: {
 		inventoryItemId: string;
-		type: string;
+		type: MovementType;
 		quantity: number;
 		reason?: string;
 		createdBy: string;
 	}) {
-		// biome-ignore lint/suspicious/noExplicitAny: Prisma enum types differ from string params
-		return db.inventoryMovement.create({ data: data as any });
+		return db.inventoryMovement.create({ data });
 	},
 };

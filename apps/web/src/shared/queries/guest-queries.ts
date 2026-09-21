@@ -1,17 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
+import type { PaginationParams } from "./task-queries";
+
+export interface GuestFilters {
+	search?: string;
+	status?: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
+	type?: "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
+}
 
 export const guestKeys = {
 	all: ["guests"] as const,
-	list: (eventId: string) => [...guestKeys.all, "list", eventId] as const,
+	list: (eventId: string, params: Record<string, unknown>) =>
+		[...guestKeys.all, "list", eventId, params] as const,
 	detail: (id: string) => [...guestKeys.all, "detail", id] as const,
-	tables: (eventId: string) => [...guestKeys.all, "tables", eventId] as const,
+	tables: (eventId: string, params: Record<string, unknown>) =>
+		[...guestKeys.all, "tables", eventId, params] as const,
 };
 
-export function useGuests(eventId: string) {
+export function useGuests(
+	eventId: string,
+	pagination: PaginationParams & GuestFilters = { page: 1, limit: 20 },
+) {
+	const page = pagination.page ?? 1;
+	const limit = pagination.limit ?? 20;
+	const { search, status, type } = pagination;
+	const input = { eventId, page, limit, search, status, type };
 	return useQuery({
-		...orpc.guests.list.queryOptions({ input: { eventId } }),
-		queryKey: guestKeys.list(eventId),
+		...orpc.guests.list.queryOptions({ input }),
+		queryKey: guestKeys.list(eventId, input),
 		enabled: !!eventId,
 	});
 }
@@ -31,7 +47,7 @@ export function useCreateGuest() {
 		orpc.guests.create.mutationOptions({
 			onSuccess: (data) => {
 				queryClient.invalidateQueries({
-					queryKey: guestKeys.list(data.eventId),
+					queryKey: [...guestKeys.all, "list", data.eventId],
 				});
 			},
 		}),
@@ -62,22 +78,28 @@ export function useDeleteGuest() {
 	);
 }
 
-export function useTables(eventId: string) {
+export function useTables(
+	eventId: string,
+	pagination: PaginationParams & { search?: string } = { page: 1, limit: 20 },
+) {
+	const page = pagination.page ?? 1;
+	const limit = pagination.limit ?? 20;
+	const { search } = pagination;
+	const input = { eventId, page, limit, search };
 	return useQuery({
-		...orpc.guests.getTables.queryOptions({ input: { eventId } }),
-		queryKey: guestKeys.tables(eventId),
+		...orpc.guests.getTables.queryOptions({ input }),
+		queryKey: guestKeys.tables(eventId, input),
 		enabled: !!eventId,
 	});
 }
 
 export function useCreateTable() {
 	const queryClient = useQueryClient();
-
 	return useMutation(
 		orpc.guests.createTable.mutationOptions({
 			onSuccess: (data) => {
 				queryClient.invalidateQueries({
-					queryKey: guestKeys.tables(data.eventId),
+					queryKey: [...guestKeys.all, "tables", data.eventId],
 				});
 			},
 		}),

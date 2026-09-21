@@ -12,6 +12,12 @@ export const createCategorySchema = z.object({
 	plannedAmount: z.number().min(0).default(0),
 });
 
+export const updateCategorySchema = z.object({
+	name: z.string().min(1).optional(),
+	description: z.string().optional(),
+	plannedAmount: z.number().min(0).optional(),
+});
+
 export const createExpenseSchema = z.object({
 	description: z.string().min(1),
 	totalAmount: z.number().positive(),

@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { successResponse } from "../../shared/http/response";
+import { listResponse, successResponse } from "../../shared/http/response";
+import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
+import {
+	VALID_MEMBER_ROLES,
+	VALID_MEMBER_STATUSES,
+	validateEnum,
+} from "../../shared/utils/validate-enum";
 import { addMemberSchema, updateMemberRoleSchema } from "./schemas";
 import { MemberService } from "./service";
 
@@ -12,8 +18,23 @@ export async function memberRoutes(app: FastifyInstance) {
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 
 		const { eventId } = request.params as { eventId: string };
-		const members = await MemberService.getMembers(eventId, userId);
-		return successResponse(members);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+			role: validateEnum(query.role, VALID_MEMBER_ROLES),
+			status: validateEnum(query.status, VALID_MEMBER_STATUSES),
+		};
+		const result = await MemberService.getMembers(
+			eventId,
+			userId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	app.post("/api/v1/events/:eventId/members", async (request, reply) => {
@@ -23,7 +44,7 @@ export async function memberRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 
-		const body = request.body as Record<string, unknown>;
+		const body = request.body as { email?: string; role?: string };
 		const params = request.params as { eventId: string };
 		const data = addMemberSchema.parse({ ...body, eventId: params.eventId });
 		const member = await MemberService.addMember(

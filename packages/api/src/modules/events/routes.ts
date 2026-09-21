@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { successResponse } from "../../shared/http/response";
+import { listResponse, successResponse } from "../../shared/http/response";
+import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
+import {
+	VALID_EVENT_STATUSES,
+	VALID_EVENT_TYPES,
+	validateEnum,
+} from "../../shared/utils/validate-enum";
 import { createEventSchema, eventIdSchema, updateEventSchema } from "./schemas";
 import { EventService } from "./service";
 
@@ -12,8 +18,22 @@ export async function eventRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 
-		const events = await EventService.findByUserId(userId);
-		return successResponse(events);
+		const query = request.query as Record<string, string>;
+		const { page, limit } = parsePagination(query);
+		const filters = {
+			search: query.search || undefined,
+			status: validateEnum(query.status, VALID_EVENT_STATUSES),
+			type: validateEnum(query.type, VALID_EVENT_TYPES),
+		};
+		const result = await EventService.findByUserId(
+			userId,
+			{ page, limit },
+			filters,
+		);
+		return listResponse(
+			result.data,
+			getPaginationMeta(result.total, page, limit),
+		);
 	});
 
 	// Get event by ID

@@ -16,7 +16,8 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
-import { CurrencyInput } from "@/shared/components/currency-input";
+import { Pagination } from "@muxima/ui/components/pagination";
+import { Progress } from "@muxima/ui/components/progress";
 import {
 	Select,
 	SelectContent,
@@ -24,7 +25,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@muxima/ui/components/select";
-import { Progress } from "@muxima/ui/components/progress";
 import {
 	Table,
 	TableBody,
@@ -40,6 +40,7 @@ import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
+import { CurrencyInput } from "@/shared/components/currency-input";
 import { QueryState } from "@/shared/components/states";
 import {
 	useBudget,
@@ -67,37 +68,61 @@ export const Route = createFileRoute("/_private/events/$eventId/budget/")({
 function BudgetPage() {
 	const { eventId } = Route.useParams();
 
+	const [expensePage, setExpensePage] = useState(1);
+	const [expenseLimit, setExpenseLimit] = useState(20);
+
 	const budgetQuery = useBudget(eventId);
-	const expensesQuery = useExpenses(eventId);
-	const vendorsQuery = useVendors(eventId);
+	const expensesQuery = useExpenses(eventId, {
+		page: expensePage,
+		limit: expenseLimit,
+	});
+	const vendorsQuery = useVendors(eventId, { page: 1, limit: 100 });
 	const createExpense = useCreateExpense();
 	const updateExpense = useUpdateExpense();
 	const deleteExpense = useDeleteExpense();
 	const upsertBudget = useUpsertBudget();
 
-	const vendors = (vendorsQuery.data ?? []) as Array<Record<string, unknown>>;
+	const vendors = vendorsQuery.data?.data ?? [];
 
 	const [showCreateExpenseDialog, setShowCreateExpenseDialog] = useState(false);
 	const [showEditBudgetDialog, setShowEditBudgetDialog] = useState(false);
-	const [editingExpense, setEditingExpense] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
-	const [viewingExpense, setViewingExpense] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
+	const [editingExpense, setEditingExpense] = useState<{
+		id?: string;
+		description?: string;
+		vendorId?: string;
+		totalAmount?: number;
+		dueDate?: string;
+		notes?: string;
+		status?: string;
+		vendor?: { name?: string };
+	} | null>(null);
+	const [viewingExpense, setViewingExpense] = useState<{
+		id?: string;
+		description?: string;
+		vendorId?: string;
+		totalAmount?: number;
+		dueDate?: string;
+		notes?: string;
+		status?: string;
+		vendor?: { name?: string; phone?: string };
+		payments?: Array<{
+			amount?: number;
+			paymentDate?: string;
+			method?: string;
+		}>;
+		budgetCategory?: { name?: string };
+	} | null>(null);
 	const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
 		null,
 	);
 
-	const budget = budgetQuery.data as Record<string, unknown> | undefined;
-	const expenses = expensesQuery.data ?? [];
+	const budget = budgetQuery.data;
+	const expenses = expensesQuery.data?.data ?? [];
+	const expensesMeta = expensesQuery.data?.meta;
 	const plannedAmount = Number(budget?.plannedAmount ?? 0);
 	const reserveAmount = Number(budget?.reserveAmount ?? 0);
 	const totalExpenses = expenses.reduce(
-		(sum: number, e: Record<string, unknown>) =>
-			sum + Number(e.totalAmount || 0),
+		(sum, e) => sum + Number(e.totalAmount || 0),
 		0,
 	);
 	const remaining = plannedAmount - totalExpenses;
@@ -112,7 +137,7 @@ function BudgetPage() {
 					<h1 className="font-semibold text-2xl">Orçamento</h1>
 					{budget && (
 						<p className="text-muted-foreground text-sm">
-							{budget.notes ? String(budget.notes) : "Orçamento definido"}
+							{budget.notes ? budget.notes : "Orçamento definido"}
 						</p>
 					)}
 				</div>
@@ -189,46 +214,37 @@ function BudgetPage() {
 				}}
 			>
 				<Card>
-					<Table>					<TableHeader>
-						<TableRow>
-							<TableHead>Descrição</TableHead>
-							<TableHead>Fornecedor</TableHead>
-							<TableHead>Valor</TableHead>
-							<TableHead>Estado</TableHead>
-							<TableHead>Data</TableHead>
-							<TableHead className="w-24" />
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-							{expenses.map((expense: Record<string, unknown>) => (
-								<TableRow key={expense.id as string}>
+					<Table>
+						{" "}
+						<TableHeader>
+							<TableRow>
+								<TableHead>Descrição</TableHead>
+								<TableHead>Fornecedor</TableHead>
+								<TableHead>Valor</TableHead>
+								<TableHead>Estado</TableHead>
+								<TableHead>Data</TableHead>
+								<TableHead className="w-24" />
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{expenses.map((expense) => (
+								<TableRow key={expense.id}>
 									<TableCell className="font-medium">
-										{expense.description as string}
+										{expense.description}
 									</TableCell>
-									<TableCell>
-										{expense.vendor
-											? String((expense.vendor as Record<string, unknown>).name)
-											: "—"}
-									</TableCell>
+									<TableCell>{expense.vendor?.name || "—"}</TableCell>
 									<TableCell>
 										{formatCurrency(Number(expense.totalAmount))}
 									</TableCell>
 									<TableCell>
 										<Badge
-											className={getStatusColor(
-												(expense.status as string) || "PLANNED",
-											)}
+											className={getStatusColor(expense.status || "PLANNED")}
 										>
-											{getStatusLabel(
-												(expense.status as string) || "PLANNED",
-												"expense",
-											)}
+											{getStatusLabel(expense.status || "PLANNED", "expense")}
 										</Badge>
 									</TableCell>
 									<TableCell>
-										{expense.dueDate
-											? formatDate(expense.dueDate as string)
-											: "—"}
+										{expense.dueDate ? formatDate(expense.dueDate) : "—"}
 									</TableCell>
 									<TableCell>
 										<div className="flex gap-1">
@@ -253,9 +269,7 @@ function BudgetPage() {
 												size="icon-sm"
 												className="text-destructive"
 												title="Eliminar"
-												onClick={() =>
-													setDeletingExpenseId(expense.id as string)
-												}
+												onClick={() => setDeletingExpenseId(expense.id)}
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</Button>
@@ -268,6 +282,18 @@ function BudgetPage() {
 				</Card>
 			</QueryState>
 
+			{expensesMeta && (
+				<Pagination
+					meta={expensesMeta}
+					onPageChange={setExpensePage}
+					onLimitChange={(l) => {
+						setExpenseLimit(l);
+						setExpensePage(1);
+					}}
+					disabled={expensesQuery.isLoading}
+				/>
+			)}
+
 			{/* Edit Budget Dialog */}
 			<BudgetDialog
 				open={showEditBudgetDialog}
@@ -277,7 +303,7 @@ function BudgetPage() {
 						? {
 								plannedAmount: Number(budget.plannedAmount ?? 0),
 								reserveAmount: Number(budget.reserveAmount ?? 0),
-								notes: String(budget.notes ?? ""),
+								notes: budget.notes ?? "",
 							}
 						: undefined
 				}
@@ -323,20 +349,18 @@ function BudgetPage() {
 					onOpenChange={() => setEditingExpense(null)}
 					vendors={vendors}
 					initialValues={{
-						description: String(editingExpense.description ?? ""),
-						vendorId: (editingExpense.vendorId as string) || null,
+						description: editingExpense.description ?? "",
+						vendorId: editingExpense.vendorId || null,
 						totalAmount: Number(editingExpense.totalAmount ?? 0),
 						dueDate: editingExpense.dueDate
-							? new Date(editingExpense.dueDate as string)
-									.toISOString()
-									.split("T")[0]
+							? new Date(editingExpense.dueDate).toISOString().split("T")[0]
 							: "",
-						notes: String(editingExpense.notes ?? ""),
-						status: String(editingExpense.status ?? "PLANNED"),
+						notes: editingExpense.notes ?? "",
+						status: editingExpense.status ?? "PLANNED",
 					}}
 					onSubmit={(values) => {
 						updateExpense.mutate(
-							{ id: editingExpense.id as string, ...values },
+							{ id: editingExpense.id!, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Despesa atualizada");
@@ -412,25 +436,38 @@ function ViewExpenseDialog({
 	expense,
 	onClose,
 }: {
-	expense: Record<string, unknown>;
+	expense: {
+		id?: string;
+		description?: string;
+		totalAmount?: number;
+		status?: string;
+		dueDate?: string;
+		notes?: string;
+		vendor?: { name?: string; phone?: string };
+		budgetCategory?: { name?: string };
+		payments?: Array<{
+			amount?: number;
+			paymentDate?: string;
+			method?: string;
+		}>;
+	};
 	onClose: () => void;
 }) {
-	const totalPaid = (
-		(expense.payments as Array<Record<string, unknown>>) ?? []
-	).reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+	const totalPaid = (expense.payments ?? []).reduce(
+		(sum, p) => sum + Number(p.amount ?? 0),
+		0,
+	);
 	const totalAmount = Number(expense.totalAmount ?? 0);
 	const remaining = totalAmount - totalPaid;
-	const vendor = expense.vendor as Record<string, unknown> | undefined;
-	const category = expense.budgetCategory as
-		| Record<string, unknown>
-		| undefined;
-	const payments = (expense.payments as Array<Record<string, unknown>>) ?? [];
+	const vendor = expense.vendor;
+	const category = expense.budgetCategory;
+	const payments = expense.payments ?? [];
 
 	return (
 		<Dialog open onOpenChange={() => onClose()}>
 			<DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
 				<DialogHeader>
-					<DialogTitle>{String(expense.description)}</DialogTitle>
+					<DialogTitle>{expense.description}</DialogTitle>
 					<DialogDescription>Detalhes da despesa</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-4">
@@ -443,10 +480,8 @@ function ViewExpenseDialog({
 						</div>
 						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Estado</p>
-							<Badge
-								className={getStatusColor(String(expense.status ?? "PLANNED"))}
-							>
-								{getStatusLabel(String(expense.status ?? "PLANNED"), "expense")}
+							<Badge className={getStatusColor(expense.status ?? "PLANNED")}>
+								{getStatusLabel(expense.status ?? "PLANNED", "expense")}
 							</Badge>
 						</div>
 					</div>
@@ -475,14 +510,14 @@ function ViewExpenseDialog({
 							<div className="rounded border p-3">
 								<p className="text-muted-foreground text-xs">Data limite</p>
 								<p className="font-medium text-sm">
-									{formatDate(expense.dueDate as string)}
+									{formatDate(expense.dueDate)}
 								</p>
 							</div>
 						) : null}
 						{category && (
 							<div className="rounded border p-3">
 								<p className="text-muted-foreground text-xs">Categoria</p>
-								<p className="font-medium text-sm">{String(category.name)}</p>
+								<p className="font-medium text-sm">{category.name}</p>
 							</div>
 						)}
 					</div>
@@ -490,10 +525,10 @@ function ViewExpenseDialog({
 					{vendor && (
 						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Fornecedor</p>
-							<p className="font-medium text-sm">{String(vendor.name)}</p>
+							<p className="font-medium text-sm">{vendor.name}</p>
 							{vendor.phone ? (
 								<p className="text-muted-foreground text-xs">
-									📞 {String(vendor.phone)}
+									📞 {vendor.phone}
 								</p>
 							) : null}
 						</div>
@@ -502,7 +537,7 @@ function ViewExpenseDialog({
 					{expense.notes ? (
 						<div className="rounded border p-3">
 							<p className="text-muted-foreground text-xs">Notas</p>
-							<p className="text-sm">{String(expense.notes)}</p>
+							<p className="text-sm">{expense.notes}</p>
 						</div>
 					) : null}
 
@@ -523,13 +558,13 @@ function ViewExpenseDialog({
 											</p>
 											<p className="text-muted-foreground text-xs">
 												{payment.paymentDate
-													? formatDate(String(payment.paymentDate))
+													? formatDate(payment.paymentDate)
 													: "—"}{" "}
-												· {String(payment.method)}
+												· {payment.method}
 											</p>
 										</div>
 										<Badge variant="outline" className="text-xs">
-											{String(payment.method)}
+											{payment.method}
 										</Badge>
 									</div>
 								))}
@@ -689,7 +724,7 @@ function ExpenseDialog({
 	};
 	onSubmit: (values: any) => void;
 	isLoading: boolean;
-	vendors?: Array<Record<string, unknown>>;
+	vendors?: Array<{ id?: string; name?: string }>;
 }) {
 	const isEditing = !!initialValues;
 
@@ -754,7 +789,8 @@ function ExpenseDialog({
 							<div className="space-y-2">
 								<Label>Fornecedor</Label>
 								<Select
-									value={field.state.value ?? ""}										onValueChange={(v) => field.handleChange(v ?? "")}
+									value={field.state.value ?? ""}
+									onValueChange={(v) => field.handleChange(v ?? "")}
 									disabled={isLoading}
 								>
 									<SelectTrigger>
@@ -763,11 +799,8 @@ function ExpenseDialog({
 									<SelectContent>
 										<SelectItem value="">Sem fornecedor</SelectItem>
 										{vendors.map((v) => (
-											<SelectItem
-												key={v.id as string}
-												value={v.id as string}
-											>
-												{v.name as string}
+											<SelectItem key={v.id} value={v.id}>
+												{v.name}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -809,7 +842,16 @@ function ExpenseDialog({
 									<Label>Estado</Label>
 									<select
 										value={field.state.value}
-										onChange={(e) => field.handleChange(e.target.value as any)}
+										onChange={(e) =>
+											field.handleChange(
+												e.target.value as
+													| "PLANNED"
+													| "PARTIALLY_PAID"
+													| "PAID"
+													| "OVERDUE"
+													| "CANCELLED",
+											)
+										}
 										disabled={isLoading}
 										className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
 									>

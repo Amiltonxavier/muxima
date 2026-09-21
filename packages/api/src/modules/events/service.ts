@@ -1,5 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
-import { EventRepository } from "./repository";
+import { type EventFilterParams, EventRepository } from "./repository";
 
 export const EventService = {
 	async create(
@@ -40,11 +40,38 @@ export const EventService = {
 		return event;
 	},
 
-	async findByUserId(userId: string) {
-		return EventRepository.findByUserId(userId);
+	async findByUserId(
+		userId: string,
+		pagination: { page: number; limit: number },
+		filters?: EventFilterParams,
+	) {
+		const [data, total] = await Promise.all([
+			EventRepository.findByUserId(userId, pagination, filters),
+			EventRepository.countByUserId(userId, filters),
+		]);
+		return { data, total };
 	},
 
-	async update(id: string, userId: string, data: Record<string, unknown>) {
+	async update(
+		id: string,
+		userId: string,
+		data: Partial<{
+			name: string;
+			eventDate: string;
+			startTime: string;
+			endTime: string;
+			venueName: string;
+			address: string;
+			province: string;
+			municipality: string;
+			neighborhood: string;
+			reference: string;
+			capacity: number;
+			limitGuestCapacity: boolean;
+			description: string;
+			status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+		}>,
+	) {
 		const event = await EventRepository.findById(id);
 		if (!event) throw new NotFoundError("Evento não encontrado");
 
@@ -53,7 +80,10 @@ export const EventService = {
 			throw new ForbiddenError("Não tem permissão para editar este evento");
 		}
 
-		return EventRepository.update(id, data);
+		return EventRepository.update(id, {
+			...data,
+			eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
+		});
 	},
 
 	async delete(id: string, userId: string) {

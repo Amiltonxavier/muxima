@@ -16,6 +16,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Table,
 	TableBody,
@@ -27,26 +28,18 @@ import {
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-	Eye,
-	MapPin,
-	Pencil,
-	Plus,
-	Search,
-	Trash2,
-	Users,
-} from "lucide-react";
+import { Eye, MapPin, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
 	useCreateTable,
 	useDeleteTable,
 	useTables,
 	useUpdateTable,
 } from "@/shared/queries/table-queries";
-import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export const Route = createFileRoute("/_private/events/$eventId/tables/")({
 	component: TablesPage,
@@ -55,38 +48,54 @@ export const Route = createFileRoute("/_private/events/$eventId/tables/")({
 function TablesPage() {
 	const { eventId } = Route.useParams();
 
-	const tablesQuery = useTables(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	const tablesQuery = useTables(eventId, { page, limit });
 	const createTable = useCreateTable();
 	const updateTable = useUpdateTable();
 	const deleteTable = useDeleteTable();
 
 	const [showCreate, setShowCreate] = useState(false);
-	const [editingTable, setEditingTable] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
-	const [viewingTable, setViewingTable] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
-	const [deletingTable, setDeletingTable] = useState<Record<
-		string,
-		unknown
-	> | null>(null);
+	const [editingTable, setEditingTable] = useState<{
+		id?: string;
+		name?: string;
+		number?: number;
+		capacity?: number;
+		location?: string;
+		notes?: string;
+		tableGuests?: Array<unknown>;
+	} | null>(null);
+	const [viewingTable, setViewingTable] = useState<{
+		id?: string;
+		name?: string;
+		number?: number;
+		capacity?: number;
+		location?: string;
+		notes?: string;
+		tableGuests?: Array<{
+			id?: string;
+			guest?: { name?: string; status?: string };
+		}>;
+	} | null>(null);
+	const [deletingTable, setDeletingTable] = useState<{
+		id?: string;
+		name?: string;
+		tableGuests?: Array<unknown>;
+	} | null>(null);
 
 	// Filters
 	const [searchQuery, setSearchQuery] = useState("");
 
-	const tables = tablesQuery.data ?? [];
+	const tables = tablesQuery.data?.data ?? [];
+	const meta = tablesQuery.data?.meta;
 
 	const filteredTables = useMemo(() => {
-		return tables.filter((table: Record<string, unknown>) => {
+		return tables.filter((table) => {
 			const matchesSearch =
 				searchQuery === "" ||
-				((table.name as string) || "")
-					.toLowerCase()
-					.includes(searchQuery.toLowerCase()) ||
-				((table.location as string) || "")
+				(table.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+				(table.location || "")
 					.toLowerCase()
 					.includes(searchQuery.toLowerCase());
 			return matchesSearch;
@@ -99,8 +108,7 @@ function TablesPage() {
 		0,
 	);
 	const totalOccupied = tables.reduce(
-		(sum, t) =>
-			sum + ((t.tableGuests as Array<unknown>)?.length || 0),
+		(sum, t) => sum + ((t.tableGuests as Array<unknown>)?.length || 0),
 		0,
 	);
 
@@ -123,25 +131,13 @@ function TablesPage() {
 
 			{/* Metrics Cards */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				<StatsCard
-					title="Total de mesas"
-					value={tables.length}
-				/>
+				<StatsCard title="Total de mesas" value={tables.length} />
 
-				<StatsCard
-					title="Lugares totais"
-					value={totalCapacity}
-				/>
+				<StatsCard title="Lugares totais" value={totalCapacity} />
 
-				<StatsCard
-					title="Ocupados"
-					value={totalOccupied}
-				/>
+				<StatsCard title="Ocupados" value={totalOccupied} />
 
-				<StatsCard
-					title="Disponíveis"
-					value={totalCapacity - totalOccupied}
-				/>
+				<StatsCard title="Disponíveis" value={totalCapacity - totalOccupied} />
 			</div>
 
 			{/* Filters */}
@@ -180,26 +176,23 @@ function TablesPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{filteredTables.map((table: Record<string, unknown>) => {
-								const guests =
-									(table.tableGuests as Array<Record<string, unknown>>) || [];
-								const capacity = (table.capacity as number) || 0;
+							{filteredTables.map((table) => {
+								const guests = table.tableGuests || [];
+								const capacity = table.capacity || 0;
 								const occupied = guests.length;
 								const available = capacity - occupied;
 
 								return (
-									<TableRow key={table.id as string}>
+									<TableRow key={table.id}>
 										<TableCell className="font-mono text-muted-foreground text-sm">
 											{table.number ? `#${table.number}` : "—"}
 										</TableCell>
-										<TableCell className="font-medium">
-											{table.name as string}
-										</TableCell>
+										<TableCell className="font-medium">{table.name}</TableCell>
 										<TableCell>
 											{table.location ? (
 												<span className="flex items-center gap-1 text-sm">
 													<MapPin className="h-3 w-3 text-muted-foreground" />
-													{String(table.location)}
+													{table.location}
 												</span>
 											) : (
 												<span className="text-muted-foreground text-xs">—</span>
@@ -207,7 +200,9 @@ function TablesPage() {
 										</TableCell>
 										<TableCell>{capacity}</TableCell>
 										<TableCell>
-											<Badge className="bg-blue-50 text-blue-700">{occupied}</Badge>
+											<Badge className="bg-blue-50 text-blue-700">
+												{occupied}
+											</Badge>
 										</TableCell>
 										<TableCell>
 											<Badge
@@ -221,7 +216,7 @@ function TablesPage() {
 											</Badge>
 										</TableCell>
 										<TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">
-											{(table.notes as string) || "—"}
+											{table.notes || "—"}
 										</TableCell>
 										<TableCell>
 											<div className="flex gap-1">
@@ -260,18 +255,33 @@ function TablesPage() {
 				</Card>
 			</QueryState>
 
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={tablesQuery.isLoading}
+				/>
+			)}
+
 			{/* Create Dialog */}
 			<TableDialog
 				open={showCreate}
 				onOpenChange={setShowCreate}
 				onSubmit={(values) => {
-					createTable.mutate({ ...values, eventId } as never, {
-						onSuccess: () => {
-							toast.success("Mesa criada");
-							setShowCreate(false);
+					createTable.mutate(
+						{ ...values, eventId },
+						{
+							onSuccess: () => {
+								toast.success("Mesa criada");
+								setShowCreate(false);
+							},
+							onError: (e) => toast.error(e.message),
 						},
-						onError: (e) => toast.error(e.message),
-					});
+					);
 				}}
 				isLoading={createTable.isPending}
 			/>
@@ -282,15 +292,15 @@ function TablesPage() {
 					open={!!editingTable}
 					onOpenChange={() => setEditingTable(null)}
 					initialValues={{
-						name: (editingTable.name as string) || "",
-						number: (editingTable.number as number) || 0,
-						capacity: (editingTable.capacity as number) || 8,
-						location: (editingTable.location as string) || "",
-						notes: (editingTable.notes as string) || "",
+						name: editingTable.name || "",
+						number: editingTable.number || 0,
+						capacity: editingTable.capacity || 8,
+						location: editingTable.location || "",
+						notes: editingTable.notes || "",
 					}}
 					onSubmit={(values) => {
 						updateTable.mutate(
-							{ id: editingTable.id as string, ...values } as never,
+							{ id: editingTable.id!, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Mesa atualizada");
@@ -322,22 +332,17 @@ function TablesPage() {
 						<DialogTitle>Eliminar mesa</DialogTitle>
 						<DialogDescription>
 							Tem a certeza que deseja eliminar a mesa{" "}
-							<strong>{deletingTable?.name as string}</strong>?
-							{((deletingTable?.tableGuests as Array<unknown>)?.length || 0) >
-								0 && (
-									<p className="mt-2 text-amber-600 text-sm">
-										⚠️ Esta mesa tem{" "}
-										{(deletingTable?.tableGuests as Array<unknown>)?.length}{" "}
-										convidados atribuídos que serão removidos.
-									</p>
-								)}
+							<strong>{deletingTable?.name}</strong>?
+							{(deletingTable?.tableGuests?.length || 0) > 0 && (
+								<p className="mt-2 text-amber-600 text-sm">
+									⚠️ Esta mesa tem {deletingTable?.tableGuests?.length}{" "}
+									convidados atribuídos que serão removidos.
+								</p>
+							)}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setDeletingTable(null)}
-						>
+						<Button variant="outline" onClick={() => setDeletingTable(null)}>
 							Cancelar
 						</Button>
 						<Button
@@ -345,7 +350,7 @@ function TablesPage() {
 							onClick={() => {
 								if (deletingTable) {
 									deleteTable.mutate(
-										{ id: deletingTable.id as string },
+										{ id: deletingTable.id! },
 										{
 											onSuccess: () => {
 												toast.success("Mesa eliminada");
@@ -374,12 +379,22 @@ function ViewTableDialog({
 	table,
 	onClose,
 }: {
-	table: Record<string, unknown>;
+	table: {
+		id?: string;
+		name?: string;
+		number?: number;
+		capacity?: number;
+		location?: string;
+		notes?: string;
+		tableGuests?: Array<{
+			id?: string;
+			guest?: { name?: string; status?: string };
+		}>;
+	};
 	onClose: () => void;
 }) {
-	const guests =
-		(table.tableGuests as Array<Record<string, unknown>>) || [];
-	const capacity = (table.capacity as number) || 0;
+	const guests = table.tableGuests || [];
+	const capacity = table.capacity || 0;
 	const occupied = guests.length;
 
 	return (
@@ -387,9 +402,9 @@ function ViewTableDialog({
 			<DialogContent className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						{table.name as string}
+						{table.name}
 						{table.number ? (
-							<Badge variant="secondary">#{String(table.number)}</Badge>
+							<Badge variant="secondary">#{table.number}</Badge>
 						) : null}
 					</DialogTitle>
 					<DialogDescription>Detalhes da mesa</DialogDescription>
@@ -418,9 +433,11 @@ function ViewTableDialog({
 
 					{/* Capacity bar */}
 					<div className="space-y-1">
-						<div className="flex justify-between text-xs text-muted-foreground">
+						<div className="flex justify-between text-muted-foreground text-xs">
 							<span>Ocupação</span>
-							<span>{capacity > 0 ? Math.round((occupied / capacity) * 100) : 0}%</span>
+							<span>
+								{capacity > 0 ? Math.round((occupied / capacity) * 100) : 0}%
+							</span>
 						</div>
 						<div className="h-2 w-full overflow-hidden rounded-full bg-muted">
 							<div
@@ -433,16 +450,16 @@ function ViewTableDialog({
 					</div>
 
 					{table.location ? (
-						<div className="flex items-center gap-2 text-sm text-muted-foreground">
+						<div className="flex items-center gap-2 text-muted-foreground text-sm">
 							<MapPin className="h-4 w-4" />
-							<span>{String(table.location)}</span>
+							<span>{table.location}</span>
 						</div>
 					) : null}
 
 					{table.notes ? (
 						<div className="rounded-md bg-muted/50 p-3 text-sm">
 							<p className="text-muted-foreground text-xs">Notas</p>
-							<p className="mt-1">{String(table.notes)}</p>
+							<p className="mt-1">{table.notes}</p>
 						</div>
 					) : null}
 
@@ -450,9 +467,7 @@ function ViewTableDialog({
 					<div>
 						<div className="mb-2 flex items-center gap-2">
 							<Users className="h-4 w-4 text-muted-foreground" />
-							<p className="font-medium text-sm">
-								Convidados ({occupied})
-							</p>
+							<p className="font-medium text-sm">Convidados ({occupied})</p>
 						</div>
 						{guests.length === 0 ? (
 							<p className="py-4 text-center text-muted-foreground text-sm">
@@ -460,18 +475,18 @@ function ViewTableDialog({
 							</p>
 						) : (
 							<div className="space-y-1">
-								{guests.map((tg: Record<string, unknown>) => {
-									const guest = tg.guest as Record<string, unknown>;
+								{guests.map((tg) => {
+									const guest = tg.guest;
 									return (
 										<div
-											key={tg.id as string}
+											key={tg.id}
 											className="flex items-center justify-between rounded-md border px-3 py-2"
 										>
 											<span className="text-sm">
-												{String(guest?.name || "Convidado")}
+												{guest?.name || "Convidado"}
 											</span>
 											<Badge variant="outline" className="text-xs">
-												{String(guest?.status || "PENDING")}
+												{guest?.status || "PENDING"}
 											</Badge>
 										</div>
 									);
@@ -510,7 +525,13 @@ function TableDialog({
 		location: string;
 		notes: string;
 	};
-	onSubmit: (v: Record<string, unknown>) => void;
+	onSubmit: (v: {
+		name: string;
+		number: number;
+		capacity: number;
+		location: string;
+		notes: string;
+	}) => void;
 	isLoading: boolean;
 }) {
 	const isEditing = !!initialValues;
@@ -532,9 +553,7 @@ function TableDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>
-						{isEditing ? "Editar mesa" : "Criar mesa"}
-					</DialogTitle>
+					<DialogTitle>{isEditing ? "Editar mesa" : "Criar mesa"}</DialogTitle>
 				</DialogHeader>
 				<form
 					onSubmit={(e) => {

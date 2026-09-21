@@ -8,9 +8,8 @@ import {
 	DialogTitle,
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
-import { Label } from "@muxima/ui/components/label";
-import { Textarea } from "@muxima/ui/components/textarea";
 import {
+	type GanttFeature,
 	GanttFeatureItem,
 	GanttFeatureList,
 	GanttFeatureListGroup,
@@ -21,11 +20,13 @@ import {
 	GanttSidebar,
 	GanttSidebarGroup,
 	GanttSidebarItem,
-	GanttToday,
-	GanttTimeline,
-	type GanttFeature,
 	type GanttStatus,
+	GanttTimeline,
+	GanttToday,
 } from "@muxima/ui/components/kibo-ui/gantt";
+import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
+import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
@@ -62,23 +63,27 @@ const STATUS_LABELS: Record<string, string> = {
 function SchedulePage() {
 	const { eventId } = Route.useParams();
 
-	const schedulesQuery = useSchedules(eventId);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+
+	const schedulesQuery = useSchedules(eventId, { page, limit });
 	const createSchedule = useCreateSchedule();
 	const deleteSchedule = useDeleteSchedule();
 
 	const [showCreate, setShowCreate] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const schedules = schedulesQuery.data ?? [];
+	const schedules = schedulesQuery.data?.data ?? [];
+	const meta = schedulesQuery.data?.meta;
 
 	// Convert schedules to Gantt features
 	const ganttFeatures: GanttFeature[] = useMemo(() => {
 		return schedules
-			.filter((s: Record<string, unknown>) => {
+			.filter((s) => {
 				const start = s.startAt ? new Date(s.startAt as string) : null;
 				return start && !Number.isNaN(start.getTime());
 			})
-			.map((s: Record<string, unknown>) => {
+			.map((s) => {
 				const startAt = new Date(s.startAt as string);
 				const endAt = s.endAt
 					? new Date(s.endAt as string)
@@ -89,7 +94,8 @@ function SchedulePage() {
 					name: (s.title as string) || "Sem título",
 					startAt,
 					endAt,
-					status: STATUS_MAP[(s.status as string) || "PENDING"] || STATUS_MAP.PENDING,
+					status:
+						STATUS_MAP[(s.status as string) || "PENDING"] || STATUS_MAP.PENDING,
 					lane: (s.responsible as string) || undefined,
 				};
 			});
@@ -110,19 +116,15 @@ function SchedulePage() {
 	const markers = useMemo(() => {
 		return ganttFeatures
 			.filter((f) => {
-				const schedule = schedules.find(
-					(s: Record<string, unknown>) => s.id === f.id,
-				);
+				const schedule = schedules.find((s) => s.id === f.id);
 				return schedule?.location;
 			})
 			.map((f) => {
-				const schedule = schedules.find(
-					(s: Record<string, unknown>) => s.id === f.id,
-				);
+				const schedule = schedules.find((s) => s.id === f.id);
 				return {
 					id: `marker-${f.id}`,
 					date: f.startAt,
-					label: `${f.name} — ${String(schedule?.location || "")}`,
+					label: `${f.name} — ${schedule?.location || ""}`,
 				};
 			});
 	}, [ganttFeatures, schedules]);
@@ -157,10 +159,7 @@ function SchedulePage() {
 							{Object.entries(groupedFeatures).map(([lane, features]) => (
 								<GanttSidebarGroup key={lane} name={lane}>
 									{features.map((feature) => (
-										<GanttSidebarItem
-											key={feature.id}
-											feature={feature}
-										/>
+										<GanttSidebarItem key={feature.id} feature={feature} />
 									))}
 								</GanttSidebarGroup>
 							))}
@@ -180,7 +179,7 @@ function SchedulePage() {
 										>
 											{(feature) => {
 												const schedule = schedules.find(
-													(s: Record<string, unknown>) => s.id === feature.id,
+													(s) => s.id === feature.id,
 												);
 												return (
 													<div className="flex items-center gap-2 px-2 text-xs">
@@ -209,14 +208,26 @@ function SchedulePage() {
 				</div>
 			</QueryState>
 
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={schedulesQuery.isLoading}
+				/>
+			)}
+
 			{/* Schedule List (compact view below Gantt) */}
 			{schedules.length > 0 && (
 				<div className="space-y-2">
 					<h2 className="font-medium text-lg">Lista de atividades</h2>
 					<div className="space-y-1">
-						{schedules.map((schedule: Record<string, unknown>) => (
+						{schedules.map((schedule) => (
 							<div
-								key={schedule.id as string}
+								key={schedule.id}
 								className="flex items-center justify-between rounded-md border px-4 py-2"
 							>
 								<div className="flex items-center gap-3">
@@ -230,13 +241,16 @@ function SchedulePage() {
 									/>
 									<div>
 										<p className="font-medium text-sm">
-											{String(schedule.title || "")}
+											{schedule.title || ""}
 										</p>
 										<div className="flex items-center gap-3 text-muted-foreground text-xs">
 											{schedule.startAt ? (
 												<span className="flex items-center gap-1">
 													<Clock className="h-3 w-3" />
-													{format(new Date(schedule.startAt as string), "dd/MM/yyyy HH:mm")}
+													{format(
+														new Date(schedule.startAt as string),
+														"dd/MM/yyyy HH:mm",
+													)}
 													{schedule.endAt
 														? ` — ${format(new Date(schedule.endAt as string), "HH:mm")}`
 														: ""}
@@ -245,7 +259,7 @@ function SchedulePage() {
 											{schedule.location ? (
 												<span className="flex items-center gap-1">
 													<MapPin className="h-3 w-3" />
-													{String(schedule.location)}
+													{schedule.location}
 												</span>
 											) : null}
 										</div>
@@ -253,13 +267,14 @@ function SchedulePage() {
 								</div>
 								<div className="flex items-center gap-2">
 									<Badge variant="secondary">
-										{STATUS_LABELS[(schedule.status as string) || "PENDING"] || "Pendente"}
+										{STATUS_LABELS[(schedule.status as string) || "PENDING"] ||
+											"Pendente"}
 									</Badge>
 									<Button
 										variant="ghost"
 										size="icon-sm"
 										className="text-destructive"
-										onClick={() => setDeleteId(schedule.id as string)}
+										onClick={() => setDeleteId(schedule.id)}
 									>
 										<Trash2 className="h-3.5 w-3.5" />
 									</Button>
@@ -276,7 +291,7 @@ function SchedulePage() {
 				onOpenChange={setShowCreate}
 				onSubmit={(values) => {
 					createSchedule.mutate(
-						{ ...values, eventId } as never,
+						{ ...values, eventId },
 						{
 							onSuccess: () => {
 								toast.success("Atividade criada");
@@ -336,7 +351,14 @@ function ScheduleDialog({
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
-	onSubmit: (v: Record<string, unknown>) => void;
+	onSubmit: (v: {
+		title: string;
+		description: string;
+		startAt: string;
+		endAt: string;
+		location: string;
+		responsible: string;
+	}) => void;
 	isLoading: boolean;
 }) {
 	const form = useForm({

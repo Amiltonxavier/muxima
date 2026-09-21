@@ -4,14 +4,14 @@ import {
 	NotFoundError,
 } from "../../shared/errors/app-error";
 import { EventRepository } from "../events/repository";
-import { MemberRepository } from "./repository";
+import { type MemberFilterParams, MemberRepository } from "./repository";
 
 export const MemberService = {
 	async addMember(
 		eventId: string,
 		userId: string,
 		email: string,
-		role: string,
+		role: "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
 	) {
 		const event = await EventRepository.findById(eventId);
 		if (!event) throw new NotFoundError("Evento não encontrado");
@@ -28,17 +28,30 @@ export const MemberService = {
 		return MemberRepository.create({ eventId, userId: email, role });
 	},
 
-	async getMembers(eventId: string, userId: string) {
+	async getMembers(
+		eventId: string,
+		userId: string,
+		pagination: { page: number; limit: number },
+		filters?: MemberFilterParams,
+	) {
 		const event = await EventRepository.findById(eventId);
 		if (!event) throw new NotFoundError("Evento não encontrado");
 
 		const isMember = event.members.some((m) => m.userId === userId);
 		if (!isMember) throw new ForbiddenError("Não tem acesso a este evento");
 
-		return MemberRepository.findByEvent(eventId);
+		const [data, total] = await Promise.all([
+			MemberRepository.findByEvent(eventId, pagination, filters),
+			MemberRepository.countByEvent(eventId, filters),
+		]);
+		return { data, total };
 	},
 
-	async updateRole(memberId: string, userId: string, newRole: string) {
+	async updateRole(
+		memberId: string,
+		userId: string,
+		newRole: "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
+	) {
 		const member = await MemberRepository.findByEventAndUser("", memberId);
 		if (!member) throw new NotFoundError("Membro não encontrado");
 

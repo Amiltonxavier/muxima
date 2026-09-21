@@ -9,23 +9,13 @@ import {
 	DialogTitle,
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
-import { Label } from "@muxima/ui/components/label";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@muxima/ui/components/select";
-import { Textarea } from "@muxima/ui/components/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muxima/ui/components/tabs";
-import {
+	type DragEndEvent,
 	KanbanBoard,
 	KanbanCard,
 	KanbanCards,
 	KanbanHeader,
 	KanbanProvider,
-	type DragEndEvent,
 } from "@muxima/ui/components/kibo-ui/kanban";
 import {
 	ListGroup,
@@ -34,6 +24,22 @@ import {
 	ListItems,
 	ListProvider,
 } from "@muxima/ui/components/kibo-ui/list";
+import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@muxima/ui/components/select";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@muxima/ui/components/tabs";
+import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -44,9 +50,10 @@ import {
 	GripVertical,
 	List,
 	Plus,
+	Search,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useCallback as useCB, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
@@ -57,7 +64,11 @@ import {
 	useUpdateTask,
 } from "@/shared/queries/task-queries";
 import { formatDate } from "@/utils/format-date";
-import { getStatusColor, TASK_CATEGORY_LABELS, TASK_STATUS_LABELS } from "@/utils/status-helpers";
+import {
+	getStatusColor,
+	TASK_CATEGORY_LABELS,
+	TASK_STATUS_LABELS,
+} from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
@@ -96,18 +107,50 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 function TasksPage() {
 	const { eventId } = Route.useParams();
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+	const [search, setSearch] = useState("");
+	const [filterStatus, setFilterStatus] = useState<
+		"ALL" | "TODO" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+	>("ALL");
+	const [filterCategory, setFilterCategory] = useState<
+		| "ALL"
+		| "FINANCE"
+		| "VENUE"
+		| "GUESTS"
+		| "FOOD"
+		| "DRINKS"
+		| "DECORATION"
+		| "CEREMONY"
+		| "DOCUMENTS"
+		| "CLOTHING"
+		| "TRANSPORT"
+		| "OTHER"
+	>("ALL");
+	const [filterPriority, setFilterPriority] = useState<
+		"ALL" | "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+	>("ALL");
+	const resetPage = useCallback(() => setPage(1), []);
 
-	const tasksQuery = useTasks(eventId);
+	const tasksQuery = useTasks(eventId, {
+		page,
+		limit,
+		search: search || undefined,
+		status: filterStatus !== "ALL" ? filterStatus : undefined,
+		category: filterCategory !== "ALL" ? filterCategory : undefined,
+		priority: filterPriority !== "ALL" ? filterPriority : undefined,
+	});
 	const createTask = useCreateTask();
 	const updateTask = useUpdateTask();
 	const deleteTask = useDeleteTask();
 
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editingTask, setEditingTask] = useState<Record<string, unknown> | null>(null);
+	const [editingTask, setEditingTask] = useState<KanbanTaskItem | null>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState("kanban");
 
-	const tasks = (tasksQuery.data ?? []) as Record<string, unknown>[];
+	const tasks = tasksQuery.data?.data ?? [];
+	const meta = tasksQuery.data?.meta;
 
 	// ── Kanban drag-end handler ───────────────────────────────────
 
@@ -125,10 +168,19 @@ function TasksPage() {
 			const task = tasks.find((t) => t.id === taskId);
 			if (task && task.status !== newStatus) {
 				updateTask.mutate(
-					{ id: taskId, status: newStatus as any },
+					{
+						id: taskId,
+						status: newStatus as
+							| "TODO"
+							| "IN_PROGRESS"
+							| "COMPLETED"
+							| "CANCELLED",
+					},
 					{
 						onSuccess: () => {
-							toast.success(`Tarefa movida para "${TASK_STATUS_LABELS[newStatus] || newStatus}"`);
+							toast.success(
+								`Tarefa movida para "${TASK_STATUS_LABELS[newStatus] || newStatus}"`,
+							);
 						},
 						onError: (e) => toast.error(e.message),
 					},
@@ -138,27 +190,27 @@ function TasksPage() {
 		[tasks, updateTask],
 	);
 
-// ── Kanban data mapping ──────────────────────────────────────
+	// ── Kanban data mapping ──────────────────────────────────────
 
-type KanbanTaskItem = {
-	id: string;
-	name: string;
-	column: string;
-	description?: string;
-	category?: string;
-	priority?: string;
-	dueDate?: string;
-};
+	type KanbanTaskItem = {
+		id: string;
+		name: string;
+		column: string;
+		description?: string;
+		category?: string;
+		priority?: string;
+		dueDate?: string;
+	};
 
-const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
-	id: t.id as string,
-	name: t.title as string,
-	column: (t.status as string) || "TODO",
-	description: t.description as string | undefined,
-	category: t.category as string | undefined,
-	priority: t.priority as string | undefined,
-	dueDate: t.dueDate as string | undefined,
-}));
+	const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
+		id: t.id,
+		name: t.title,
+		column: t.status || "TODO",
+		description: t.description ?? undefined,
+		category: t.category ?? undefined,
+		priority: t.priority ?? undefined,
+		dueDate: t.dueDate ? String(t.dueDate) : undefined,
+	}));
 
 	return (
 		<div className="space-y-6">
@@ -177,6 +229,79 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 				</Button>
 			</div>
 
+			{/* Filters */}
+			<div className="flex flex-wrap items-center gap-3">
+				<div className="relative min-w-[200px] max-w-sm flex-1">
+					<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						placeholder="Pesquisar tarefas..."
+						value={search}
+						onChange={(e) => {
+							setSearch(e.target.value);
+							resetPage();
+						}}
+						className="pl-9"
+					/>
+				</div>
+				<Select
+					value={filterStatus}
+					onValueChange={(v) => {
+						if (v) setFilterStatus(v as typeof filterStatus);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Estado" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todos os estados</SelectItem>
+						{Object.entries(TASK_STATUS_LABELS).map(([value, label]) => (
+							<SelectItem key={value} value={value}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select
+					value={filterCategory}
+					onValueChange={(v) => {
+						if (v) setFilterCategory(v as typeof filterCategory);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[160px]">
+						<SelectValue placeholder="Categoria" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todas</SelectItem>
+						{Object.entries(TASK_CATEGORY_LABELS).map(([value, label]) => (
+							<SelectItem key={value} value={value}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select
+					value={filterPriority}
+					onValueChange={(v) => {
+						if (v) setFilterPriority(v as typeof filterPriority);
+						resetPage();
+					}}
+				>
+					<SelectTrigger className="w-[140px]">
+						<SelectValue placeholder="Prioridade" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">Todas</SelectItem>
+						{Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+							<SelectItem key={value} value={value}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+
 			<QueryState
 				state={{
 					isLoading: tasksQuery.isLoading,
@@ -185,7 +310,10 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 					hasData: tasks.length > 0,
 				}}
 			>
-				<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+				<Tabs
+					value={activeTab}
+					onValueChange={(v) => setActiveTab(v as string)}
+				>
 					<TabsList>
 						<TabsTrigger value="kanban">
 							<Columns3 className="mr-2 h-4 w-4" />
@@ -211,52 +339,77 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 											{COLUMN_ICONS[column.id]}
 											<span>{column.name}</span>
 											<Badge variant="secondary" className="ml-auto">
-												{kanbanData.filter((t) => t.column === column.id).length}
+												{
+													kanbanData.filter((t) => t.column === column.id)
+														.length
+												}
 											</Badge>
 										</div>
-									</KanbanHeader>								<KanbanCards id={column.id}>
-									{(item: KanbanTaskItem) => (
-										<KanbanCard key={item.id} id={item.id} name={item.name} column={item.column}>
-											<div className="space-y-2">
-												<div className="flex items-start justify-between gap-2">
-													<p className="m-0 font-medium text-sm">{item.name}</p>
-													{item.priority && (
-														<Badge
-															className={PRIORITY_COLORS[item.priority] || ""}
-															variant="secondary"
-														>
-																{PRIORITY_LABELS[item.priority] || item.priority}
-														</Badge>
+									</KanbanHeader>{" "}
+									<KanbanCards id={column.id}>
+										{(item: KanbanTaskItem) => (
+											<KanbanCard
+												key={item.id}
+												id={item.id}
+												name={item.name}
+												column={item.column}
+											>
+												<div className="space-y-2">
+													<div className="flex items-start justify-between gap-2">
+														<p className="m-0 font-medium text-sm">
+															{item.name}
+														</p>
+														{item.priority && (
+															<Badge
+																className={PRIORITY_COLORS[item.priority] || ""}
+																variant="secondary"
+															>
+																{PRIORITY_LABELS[item.priority] ||
+																	item.priority}
+															</Badge>
+														)}
+													</div>
+													{item.description && (
+														<p className="m-0 line-clamp-2 text-muted-foreground text-xs">
+															{item.description}
+														</p>
 													)}
-												</div>
-												{item.description && (
-													<p className="m-0 text-muted-foreground text-xs line-clamp-2">
-														{item.description}
-												</p>
-												)}
-												<div className="flex items-center gap-2 text-muted-foreground text-xs">
-													{item.category && (
-														<span>
-															{TASK_CATEGORY_LABELS[item.category] || item.category}
-													</span>
-													)}
-													{item.dueDate && (
-														<>
-															<span>·</span>
-															<span>{formatDate(item.dueDate)}</span>
-														</>
-													)}
-												</div>
+													<div className="flex items-center gap-2 text-muted-foreground text-xs">
+														{item.category && (
+															<span>
+																{TASK_CATEGORY_LABELS[item.category] ||
+																	item.category}
+															</span>
+														)}
+														{item.dueDate && (
+															<>
+																<span>·</span>
+																<span>{formatDate(item.dueDate)}</span>
+															</>
+														)}
+													</div>
 													<div className="flex justify-end gap-1 pt-1">
 														<Button
 															variant="ghost"
 															size="icon-sm"
 															onClick={(e) => {
 																e.stopPropagation();
-																setEditingTask(item as Record<string, unknown>);
+																setEditingTask(item);
 															}}
 														>
-															<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+															<svg
+																className="h-3.5 w-3.5"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={2}
+																	d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+																/>
+															</svg>
 														</Button>
 														<Button
 															variant="ghost"
@@ -284,10 +437,15 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 						<ListProvider onDragEnd={() => {}}>
 							<div className="space-y-4">
 								{KANBAN_COLUMNS.map((col) => {
-									const colTasks = kanbanData.filter((t) => t.column === col.id);
+									const colTasks = kanbanData.filter(
+										(t) => t.column === col.id,
+									);
 									return (
 										<ListGroup key={col.id} id={col.id}>
-											<ListHeader name={col.name} color={getStatusColor(col.id)} />
+											<ListHeader
+												name={col.name}
+												color={getStatusColor(col.id)}
+											/>
 											<ListItems>
 												{colTasks.length === 0 ? (
 													<p className="py-4 text-center text-muted-foreground text-xs">
@@ -325,20 +483,39 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 																</div>
 																{task.priority && (
 																	<Badge
-																		className={PRIORITY_COLORS[task.priority] || ""}
+																		className={
+																			PRIORITY_COLORS[task.priority] || ""
+																		}
 																		variant="secondary"
 																	>
-																		{PRIORITY_LABELS[task.priority] || task.priority}
+																		{PRIORITY_LABELS[task.priority] ||
+																			task.priority}
 																	</Badge>
 																)}
 																<Button
 																	variant="ghost"
 																	size="icon-sm"
 																	onClick={() =>
-																		setEditingTask(task as Record<string, unknown>)
+																		setEditingTask(
+																			kanbanData.find(
+																				(k) => k.id === task.id,
+																			) ?? null,
+																		)
 																	}
 																>
-																	<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+																	<svg
+																		className="h-3.5 w-3.5"
+																		fill="none"
+																		stroke="currentColor"
+																		viewBox="0 0 24 24"
+																	>
+																		<path
+																			strokeLinecap="round"
+																			strokeLinejoin="round"
+																			strokeWidth={2}
+																			d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+																		/>
+																	</svg>
 																</Button>
 																<Button
 																	variant="ghost"
@@ -361,6 +538,18 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 					</TabsContent>
 				</Tabs>
 			</QueryState>
+
+			{meta && activeTab === "list" && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={tasksQuery.isLoading}
+				/>
+			)}
 
 			{/* ── Create Dialog ────────────────────────────────────── */}
 			<TaskDialog
@@ -387,18 +576,16 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 					open={!!editingTask}
 					onOpenChange={() => setEditingTask(null)}
 					initialValues={{
-						title: (editingTask.title as string) || "",
-						description: (editingTask.description as string) || "",
-						category: (editingTask.category as string) || "OTHER",
-						priority: (editingTask.priority as string) || "MEDIUM",
-						status: (editingTask.status as string) || "TODO",
-						dueDate: editingTask.dueDate
-							? (editingTask.dueDate as string).split("T")[0]
-							: "",
+						title: editingTask.name || "",
+						description: editingTask.description || "",
+						category: editingTask.category || "OTHER",
+						priority: editingTask.priority || "MEDIUM",
+						status: editingTask.column || "TODO",
+						dueDate: editingTask.dueDate || "",
 					}}
 					onSubmit={(values) => {
 						updateTask.mutate(
-							{ id: editingTask.id as string, ...values },
+							{ id: editingTask.id, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Tarefa atualizada");
@@ -419,7 +606,8 @@ const kanbanData: KanbanTaskItem[] = tasks.map((t) => ({
 						<DialogTitle>Eliminar tarefa</DialogTitle>
 					</DialogHeader>
 					<p className="text-muted-foreground text-sm">
-						Tem certeza que deseja eliminar esta tarefa? Esta ação não pode ser desfeita.
+						Tem certeza que deseja eliminar esta tarefa? Esta ação não pode ser
+						desfeita.
 					</p>
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setDeleteId(null)}>
@@ -498,9 +686,28 @@ function TaskDialog({
 		defaultValues: {
 			title: initialValues?.title || "",
 			description: initialValues?.description || "",
-			category: (initialValues?.category || "OTHER") as any,
-			priority: (initialValues?.priority || "MEDIUM") as any,
-			status: (initialValues?.status || "TODO") as any,
+			category: (initialValues?.category || "OTHER") as
+				| "FINANCE"
+				| "VENUE"
+				| "GUESTS"
+				| "FOOD"
+				| "DRINKS"
+				| "DECORATION"
+				| "CEREMONY"
+				| "DOCUMENTS"
+				| "CLOTHING"
+				| "TRANSPORT"
+				| "OTHER",
+			priority: (initialValues?.priority || "MEDIUM") as
+				| "LOW"
+				| "MEDIUM"
+				| "HIGH"
+				| "URGENT",
+			status: (initialValues?.status || "TODO") as
+				| "TODO"
+				| "IN_PROGRESS"
+				| "COMPLETED"
+				| "CANCELLED",
 			dueDate: initialValues?.dueDate || "",
 		},
 		onSubmit: async ({ value }) => {
@@ -552,7 +759,22 @@ function TaskDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as
+													| "FINANCE"
+													| "VENUE"
+													| "GUESTS"
+													| "FOOD"
+													| "DRINKS"
+													| "DECORATION"
+													| "CEREMONY"
+													| "DOCUMENTS"
+													| "CLOTHING"
+													| "TRANSPORT"
+													| "OTHER",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -582,7 +804,11 @@ function TaskDialog({
 											{ value: "URGENT", label: "Urgente" },
 										]}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />
@@ -612,7 +838,11 @@ function TaskDialog({
 											{ value: "CANCELLED", label: "Cancelado" },
 										]}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as any)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as "TODO" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

@@ -1,16 +1,50 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
+import type { PaginationParams } from "./task-queries";
+
+export interface VendorFilters {
+	search?: string;
+	category?:
+		| "VENUE"
+		| "DECORATION"
+		| "MUSIC"
+		| "PHOTOGRAPHY"
+		| "VIDEO"
+		| "CATERING"
+		| "CAKE"
+		| "DRINKS"
+		| "TRANSPORT"
+		| "BEAUTY"
+		| "SECURITY"
+		| "ENTERTAINMENT"
+		| "OTHER";
+	status?:
+		| "PROSPECT"
+		| "CONTACTED"
+		| "NEGOTIATING"
+		| "CONTRACTED"
+		| "COMPLETED"
+		| "CANCELLED";
+}
 
 export const vendorKeys = {
 	all: ["vendors"] as const,
-	list: (eventId: string) => [...vendorKeys.all, "list", eventId] as const,
+	list: (eventId: string, params: Record<string, unknown>) =>
+		[...vendorKeys.all, "list", eventId, params] as const,
 	detail: (id: string) => [...vendorKeys.all, "detail", id] as const,
 };
 
-export function useVendors(eventId: string) {
+export function useVendors(
+	eventId: string,
+	pagination: PaginationParams & VendorFilters = { page: 1, limit: 20 },
+) {
+	const page = pagination.page ?? 1;
+	const limit = pagination.limit ?? 20;
+	const { search, category, status } = pagination;
+	const input = { eventId, page, limit, search, category, status };
 	return useQuery({
-		...orpc.vendors.list.queryOptions({ input: { eventId } }),
-		queryKey: vendorKeys.list(eventId),
+		...orpc.vendors.list.queryOptions({ input }),
+		queryKey: vendorKeys.list(eventId, input),
 		enabled: !!eventId,
 	});
 }
@@ -30,7 +64,7 @@ export function useCreateVendor() {
 		orpc.vendors.create.mutationOptions({
 			onSuccess: (data) => {
 				queryClient.invalidateQueries({
-					queryKey: vendorKeys.list(data.eventId),
+					queryKey: [...vendorKeys.all, "list", data.eventId],
 				});
 			},
 		}),

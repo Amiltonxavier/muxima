@@ -1,9 +1,6 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-} from "@muxima/ui/components/card";
+import { Card, CardContent } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -14,6 +11,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
+import { Pagination } from "@muxima/ui/components/pagination";
 import {
 	Select,
 	SelectContent,
@@ -39,16 +37,20 @@ export const Route = createFileRoute("/_private/events/$eventId/members/")({
 function MembersPage() {
 	const { eventId } = Route.useParams();
 	const queryClient = useQueryClient();
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 
 	const membersQuery = useQuery(
-		orpc.members.list.queryOptions({ input: { eventId } }),
+		orpc.members.list.queryOptions({ input: { eventId, page, limit } }),
 	);
 
 	const addMember = useMutation(
 		orpc.members.add.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({
-					queryKey: orpc.members.list.queryKey({ input: { eventId } }),
+					queryKey: orpc.members.list.queryKey({
+						input: { eventId, page, limit },
+					}),
 				});
 				toast.success("Membro adicionado com sucesso");
 				setShowAddDialog(false);
@@ -63,7 +65,9 @@ function MembersPage() {
 		orpc.members.updateRole.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({
-					queryKey: orpc.members.list.queryKey({ input: { eventId } }),
+					queryKey: orpc.members.list.queryKey({
+						input: { eventId, page, limit },
+					}),
 				});
 				toast.success("Papel atualizado com sucesso");
 			},
@@ -77,7 +81,9 @@ function MembersPage() {
 		orpc.members.remove.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({
-					queryKey: orpc.members.list.queryKey({ input: { eventId } }),
+					queryKey: orpc.members.list.queryKey({
+						input: { eventId, page, limit },
+					}),
 				});
 				toast.success("Membro removido com sucesso");
 				setDeletingMemberId(null);
@@ -88,7 +94,8 @@ function MembersPage() {
 		}),
 	);
 
-	const members = (membersQuery.data ?? []) as Array<Record<string, unknown>>;
+	const members = membersQuery.data?.data ?? [];
+	const meta = membersQuery.data?.meta;
 	const [showAddDialog, setShowAddDialog] = useState(false);
 	const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
 
@@ -118,7 +125,7 @@ function MembersPage() {
 			>
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{members.map((member) => {
-						const user = member.user as Record<string, unknown> | undefined;
+						const user = member.user;
 						const userName = user?.name ? String(user.name) : "Utilizador";
 						const userEmail = user?.email ? String(user.email) : "";
 						const initials = userName
@@ -126,11 +133,11 @@ function MembersPage() {
 							.map((n: string) => n[0])
 							.join("")
 							.slice(0, 2);
-						const memberRole = String(member.role);
-						const memberStatus = String(member.status);
+						const memberRole = member.role;
+						const memberStatus = member.status;
 
 						return (
-							<Card key={String(member.id)}>
+							<Card key={member.id}>
 								<CardContent className="p-4">
 									<div className="flex items-start justify-between">
 										<div className="flex items-center gap-3">
@@ -163,8 +170,12 @@ function MembersPage() {
 											onValueChange={(v) => {
 												if (v) {
 													updateRole.mutate({
-														memberId: String(member.id),
-														role: v as never,
+														memberId: member.id,
+														role: v as
+															| "PARTNER"
+															| "ADMIN"
+															| "EDITOR"
+															| "VIEWER",
 													});
 												}
 											}}
@@ -197,6 +208,18 @@ function MembersPage() {
 					})}
 				</div>
 			</QueryState>
+
+			{meta && (
+				<Pagination
+					meta={meta}
+					onPageChange={setPage}
+					onLimitChange={(l) => {
+						setLimit(l);
+						setPage(1);
+					}}
+					disabled={membersQuery.isLoading}
+				/>
+			)}
 
 			{members.length === 0 && !membersQuery.isLoading && (
 				<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
@@ -265,13 +288,16 @@ function AddMemberDialog({
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
-	onSubmit: (values: { email: string; role: string }) => void;
+	onSubmit: (values: {
+		email: string;
+		role: "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER";
+	}) => void;
 	isLoading: boolean;
 }) {
 	const form = useForm({
 		defaultValues: {
 			email: "",
-			role: "EDITOR",
+			role: "EDITOR" as "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
 		},
 		onSubmit: async ({ value }) => {
 			if (!value.email) {
@@ -320,7 +346,11 @@ function AddMemberDialog({
 								<Select
 									items={toSelectItems(MEMBER_ROLE_LABELS)}
 									value={field.state.value}
-									onValueChange={(v) => field.handleChange(v as never)}
+									onValueChange={(v) =>
+										field.handleChange(
+											v as "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
+										)
+									}
 								>
 									<SelectTrigger>
 										<SelectValue />

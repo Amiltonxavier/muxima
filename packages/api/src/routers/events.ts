@@ -1,27 +1,63 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { eventListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const eventsRouter = {
-	list: protectedProcedure.handler(async ({ context }) => {
-		const events = await db.event.findMany({
-			where: {
+	list: protectedProcedure
+		.input(eventListInput)
+		.handler(async ({ context, input }) => {
+			const { page, limit, skip } = parsePagination(input);
+			const membershipWhere: Prisma.EventWhereInput = {
 				members: {
 					some: {
 						userId: context.session.user.id,
 					},
 				},
-			},
-			include: {
-				members: true,
-				budget: true,
-			},
-			orderBy: {
-				createdAt: "desc",
-			},
-		});
-		return events;
-	}),
+			};
+
+			const filterConditions: Prisma.EventWhereInput[] = [];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ name: { contains: input.search, mode: "insensitive" } },
+						{ venueName: { contains: input.search, mode: "insensitive" } },
+						{ description: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			if (input.type) {
+				filterConditions.push({ type: input.type });
+			}
+
+			const where: Prisma.EventWhereInput = {
+				AND: [membershipWhere, ...filterConditions],
+			};
+
+			const [events, total] = await Promise.all([
+				db.event.findMany({
+					where,
+					include: {
+						members: true,
+						budget: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.event.count({ where }),
+			]);
+
+			return { data: events, meta: getPaginationMeta(total, page, limit) };
+		}),
 
 	getById: protectedProcedure
 		.input(z.object({ id: z.string() }))
@@ -199,10 +235,10 @@ export const eventsRouter = {
 					municipality: input.municipality,
 					neighborhood: input.neighborhood,
 					reference: input.reference,
-				capacity: input.capacity,
-				limitGuestCapacity: input.limitGuestCapacity,
-				description: input.description,
-				status: input.status,
+					capacity: input.capacity,
+					limitGuestCapacity: input.limitGuestCapacity,
+					description: input.description,
+					status: input.status,
 				},
 			});
 

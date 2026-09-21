@@ -1,21 +1,57 @@
 import db from "@muxima/db";
+import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { requireEventAccess } from "../shared/auth/event-access";
+import { memberListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const membersRouter = {
 	list: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(memberListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
+			const { page, limit, skip } = parsePagination(input);
 
-			const members = await db.eventMember.findMany({
-				where: { eventId: input.eventId },
-				include: { user: true },
-				orderBy: { createdAt: "desc" },
-			});
+			const filterConditions: Prisma.EventMemberWhereInput[] = [
+				{ eventId: input.eventId },
+			];
 
-			return members;
+			if (input.search) {
+				filterConditions.push({
+					user: {
+						OR: [
+							{ name: { contains: input.search, mode: "insensitive" } },
+							{ email: { contains: input.search, mode: "insensitive" } },
+						],
+					},
+				});
+			}
+
+			if (input.role) {
+				filterConditions.push({ role: input.role });
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			const where: Prisma.EventMemberWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [members, total] = await Promise.all([
+				db.eventMember.findMany({
+					where,
+					include: { user: true },
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.eventMember.count({ where }),
+			]);
+
+			return { data: members, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	add: protectedProcedure

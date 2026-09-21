@@ -1,11 +1,13 @@
 import db from "@muxima/db";
-import type { ExpenseStatus } from "@muxima/db/prisma";
+import type { ExpenseStatus, Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { expenseListInput } from "../shared/schemas/filters";
+import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const budgetRouter = {
 	getByEventId: protectedProcedure
@@ -123,20 +125,56 @@ export const budgetRouter = {
 		}),
 
 	getExpenses: protectedProcedure
-		.input(z.object({ eventId: z.string() }))
+		.input(z.object({ eventId: z.string() }).merge(expenseListInput))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const expenses = await db.expense.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					vendor: true,
-					budgetCategory: true,
-					payments: true,
-				},
-				orderBy: { createdAt: "desc" },
-			});
+			const { page, limit, skip } = parsePagination(input);
 
-			return expenses;
+			const filterConditions: Prisma.ExpenseWhereInput[] = [
+				{ eventId: input.eventId },
+			];
+
+			if (input.search) {
+				filterConditions.push({
+					OR: [
+						{ description: { contains: input.search, mode: "insensitive" } },
+						{ notes: { contains: input.search, mode: "insensitive" } },
+					],
+				});
+			}
+
+			if (input.status) {
+				filterConditions.push({ status: input.status });
+			}
+
+			if (input.type) {
+				filterConditions.push({ type: input.type });
+			}
+
+			if (input.vendorId) {
+				filterConditions.push({ vendorId: input.vendorId });
+			}
+
+			const where: Prisma.ExpenseWhereInput = {
+				AND: filterConditions,
+			};
+
+			const [expenses, total] = await Promise.all([
+				db.expense.findMany({
+					where,
+					include: {
+						vendor: true,
+						budgetCategory: true,
+						payments: true,
+					},
+					orderBy: { createdAt: "desc" },
+					skip,
+					take: limit,
+				}),
+				db.expense.count({ where }),
+			]);
+
+			return { data: expenses, meta: getPaginationMeta(total, page, limit) };
 		}),
 
 	createExpense: protectedProcedure
@@ -157,7 +195,12 @@ export const budgetRouter = {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
 			const paidPercentage = input.paidPercentage ?? 0;
-			let status: "PLANNED" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "CANCELLED" = "PLANNED";
+			let status:
+				| "PLANNED"
+				| "PARTIALLY_PAID"
+				| "PAID"
+				| "OVERDUE"
+				| "CANCELLED" = "PLANNED";
 			if (paidPercentage >= 100) status = "PAID";
 			else if (paidPercentage > 0) status = "PARTIALLY_PAID";
 

@@ -1,4 +1,39 @@
 import db from "@muxima/db";
+import type { ExpenseStatus, ExpenseType, Prisma } from "@muxima/db/prisma";
+
+export type ExpenseFilterParams = {
+	search?: string;
+	status?: ExpenseStatus;
+	type?: ExpenseType;
+	vendorId?: string;
+};
+
+function buildExpenseWhere(
+	eventId: string,
+	filters?: ExpenseFilterParams,
+): Prisma.ExpenseWhereInput {
+	const conditions: Prisma.ExpenseWhereInput[] = [{ eventId }];
+
+	if (filters?.search) {
+		conditions.push({
+			OR: [
+				{ description: { contains: filters.search, mode: "insensitive" } },
+				{ notes: { contains: filters.search, mode: "insensitive" } },
+			],
+		});
+	}
+	if (filters?.status) {
+		conditions.push({ status: filters.status });
+	}
+	if (filters?.type) {
+		conditions.push({ type: filters.type });
+	}
+	if (filters?.vendorId) {
+		conditions.push({ vendorId: filters.vendorId });
+	}
+
+	return { AND: conditions };
+}
 
 export const BudgetRepository = {
 	findByEventId(eventId: string) {
@@ -29,7 +64,14 @@ export const BudgetRepository = {
 		return db.budgetCategory.create({ data });
 	},
 
-	updateCategory(id: string, data: Record<string, unknown>) {
+	updateCategory(
+		id: string,
+		data: Partial<{
+			name: string;
+			description: string;
+			plannedAmount: number;
+		}>,
+	) {
 		return db.budgetCategory.update({ where: { id }, data });
 	},
 
@@ -37,12 +79,23 @@ export const BudgetRepository = {
 		return db.budgetCategory.delete({ where: { id } });
 	},
 
-	findExpensesByEventId(eventId: string) {
+	findExpensesByEventId(
+		eventId: string,
+		pagination: { page: number; limit: number },
+		filters?: ExpenseFilterParams,
+	) {
+		const skip = (pagination.page - 1) * pagination.limit;
 		return db.expense.findMany({
-			where: { eventId },
+			where: buildExpenseWhere(eventId, filters),
 			include: { vendor: true, budgetCategory: true, payments: true },
 			orderBy: { createdAt: "desc" },
+			skip,
+			take: pagination.limit,
 		});
+	},
+
+	countExpensesByEventId(eventId: string, filters?: ExpenseFilterParams) {
+		return db.expense.count({ where: buildExpenseWhere(eventId, filters) });
 	},
 
 	createExpense(data: {
@@ -58,7 +111,19 @@ export const BudgetRepository = {
 		return db.expense.create({ data });
 	},
 
-	updateExpense(id: string, data: Record<string, unknown>) {
+	updateExpense(
+		id: string,
+		data: Partial<{
+			description: string;
+			totalAmount: number;
+			budgetCategoryId: string;
+			vendorId: string;
+			dueDate: Date;
+			status: "PLANNED" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "CANCELLED";
+			paidPercentage: number;
+			notes: string;
+		}>,
+	) {
 		return db.expense.update({ where: { id }, data });
 	},
 
