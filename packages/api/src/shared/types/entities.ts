@@ -41,14 +41,23 @@ export type VendorStatus =
 	| "COMPLETED"
 	| "CANCELLED";
 export type GuestType = "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
-export type GuestStatus = "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
+export type GuestStatus =
+	| "PENDING"
+	| "CONFIRMED"
+	| "DECLINED"
+	| "WAITING"
+	| "MAYBE"
+	| "CANCELLED";
 export type CompanionStatus = "PENDING" | "CONFIRMED" | "DECLINED";
 export type GuestInvitationStatus =
 	| "CREATED"
 	| "SENT"
 	| "OPENED"
 	| "RESPONDED"
-	| "EXPIRED";
+	| "EXPIRED"
+	| "CANCELLED";
+export type RsvpStatus = "PENDING" | "CONFIRMED" | "MAYBE" | "DECLINED";
+export type InvitationResponse = "CONFIRM" | "DECLINE" | "MAYBE";
 export type TaskCategory =
 	| "FINANCE"
 	| "VENUE"
@@ -321,7 +330,11 @@ export type GuestInvitation = {
 	sentAt: Date | null;
 	openedAt: Date | null;
 	respondedAt: Date | null;
-	response: string | null;
+	publishedAt: Date | null;
+	response: InvitationResponse | null;
+	rsvpStatus: RsvpStatus;
+	expiresAt: Date | null;
+	qrCode: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 };
@@ -335,6 +348,81 @@ export type InvitationGuest = {
 
 export type InvitationGuestWithInvitation = InvitationGuest & {
 	invitation: GuestInvitation;
+};
+
+export type GuestInvitationWithGuests = GuestInvitation & {
+	guests: (InvitationGuest & { guest: Guest })[];
+	event: {
+		id: string;
+		name: string;
+		type: EventType;
+		eventDate: Date | null;
+		startTime: string | null;
+		endTime: string | null;
+		venueName: string | null;
+		address: string | null;
+		neighborhood: string | null;
+		municipality: string | null;
+		province: string | null;
+		description: string | null;
+		capacity: number | null;
+		limitGuestCapacity: boolean;
+		status: EventStatus;
+		owner: UserSummary;
+	};
+};
+
+export type PublicInvitationGuest = {
+	id: string;
+	name: string;
+	status: GuestStatus;
+	companions: GuestCompanion[];
+};
+
+export type PublicInvitation = {
+	id: string;
+	code: string;
+	status: GuestInvitationStatus;
+	rsvpStatus: RsvpStatus;
+	response: InvitationResponse | null;
+	respondedAt: Date | null;
+	expiresAt: Date | null;
+	publishedAt: Date | null;
+	canRespond: boolean;
+	event: {
+		id: string;
+		name: string;
+		type: EventType;
+		status: EventStatus;
+		eventDate: Date | null;
+		startTime: string | null;
+		endTime: string | null;
+		venueName: string | null;
+		address: string | null;
+		neighborhood: string | null;
+		municipality: string | null;
+		province: string | null;
+		description: string | null;
+	};
+	host: UserSummary;
+	guests: PublicInvitationGuest[];
+};
+
+export type PublicInvitationLookup =
+	| { result: "NOT_FOUND" }
+	| { result: "EXPIRED" }
+	| { result: "CANCELLED" }
+	| { result: "AVAILABLE"; invitation: PublicInvitation };
+
+export type InvitationStats = {
+	total: number;
+	published: number;
+	unpublished: number;
+	responded: number;
+	responses: Record<InvitationResponse, number>;
+	expired: number;
+	cancelled: number;
+	responseRate: number;
 };
 
 // ── Table ────────────────────────────────────────────────────────
@@ -483,6 +571,9 @@ export type GuestStats = {
 	confirmed: number;
 	pending: number;
 	declined: number;
+	waiting: number;
+	maybe: number;
+	cancelled: number;
 	totalCompanions: number;
 	totalConfirmedPeople: number;
 	capacity: number;

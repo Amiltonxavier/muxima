@@ -3,12 +3,15 @@ import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
+	createInvitation as createGuestInvitation,
+	respondToInvitation as respondToGuestInvitation,
+} from "../modules/invitations/service";
+import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
 import {
 	guestListInput,
-	paginationInput,
 	tableListInput,
 } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
@@ -163,7 +166,14 @@ export const guestsRouter = {
 				companionsLimit: z.number().int().min(0).optional(),
 				notes: z.string().optional(),
 				status: z
-					.enum(["PENDING", "CONFIRMED", "DECLINED", "WAITING"])
+					.enum([
+						"PENDING",
+						"CONFIRMED",
+						"DECLINED",
+						"WAITING",
+						"MAYBE",
+						"CANCELLED",
+					])
 					.optional(),
 			}),
 		)
@@ -424,27 +434,10 @@ export const guestsRouter = {
 		)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-
-			const code = Math.random().toString(36).substring(2, 10).toUpperCase();
-
-			const invitation = await db.guestInvitation.create({
-				data: {
-					eventId: input.eventId,
-					code,
-					status: "SENT",
-					sentAt: new Date(),
-					guests: {
-						create: input.guestIds.map((guestId) => ({ guestId })),
-					},
-				},
-				include: {
-					guests: {
-						include: { guest: true },
-					},
-				},
+			return createGuestInvitation(db, {
+				eventId: input.eventId,
+				guestIds: input.guestIds,
 			});
-
-			return invitation;
 		}),
 
 	getInvitation: protectedProcedure
@@ -511,29 +504,6 @@ export const guestsRouter = {
 			}
 		}),
 
-	getInvitationsByEvent: protectedProcedure
-		.input(z.object({ eventId: z.string() }).merge(paginationInput))
-		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
-			const { page, limit, skip } = parsePagination(input);
-			const where = { eventId: input.eventId };
-
-			const [invitations, total] = await Promise.all([
-				db.guestInvitation.findMany({
-					where,
-					include: {
-						guests: { include: { guest: true } },
-					},
-					orderBy: { createdAt: "desc" },
-					skip,
-					take: limit,
-				}),
-				db.guestInvitation.count({ where }),
-			]);
-
-			return { data: invitations, meta: getPaginationMeta(total, page, limit) };
-		}),
-
 	updateCompanion: protectedProcedure
 		.input(
 			z.object({
@@ -575,7 +545,7 @@ export const guestsRouter = {
 				select: { capacity: true, limitGuestCapacity: true },
 			});
 
-			const [totalGuests, confirmed, pending, declined, waiting] =
+			const [totalGuests, confirmed, pending, declined, waiting, maybe, cancelled] =
 				await Promise.all([
 					db.guest.count({ where: { eventId: input.eventId } }),
 					db.guest.count({
@@ -589,6 +559,12 @@ export const guestsRouter = {
 					}),
 					db.guest.count({
 						where: { eventId: input.eventId, status: "WAITING" },
+					}),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "MAYBE" },
+					}),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "CANCELLED" },
 					}),
 				]);
 
@@ -614,6 +590,8 @@ export const guestsRouter = {
 				pending,
 				declined,
 				waiting,
+				maybe,
+				cancelled,
 				totalCompanions,
 				confirmedCompanions,
 				totalConfirmedPeople,
@@ -628,49 +606,11 @@ export const guestsRouter = {
 		.input(
 			z.object({
 				code: z.string(),
-				response: z.enum(["CONFIRM", "DECLINE"]),
+				response: z.enum(["CONFIRM", "DECLINE", "MAYBE"]),
 			}),
 		)
 		.handler(async ({ input }) => {
-			const invitation = await db.guestInvitation.findUnique({
-				where: { code: input.code },
-				include: {
-					guests: {
-						include: { guest: true },
-					},
-				},
-			});
-
-			if (!invitation) {
-				throw new Error("Convite não encontrado");
-			}
-
-			if (invitation.status === "EXPIRED") {
-				throw new Error("Este convite expirou");
-			}
-
-			const guestStatus =
-				input.response === "CONFIRM" ? "CONFIRMED" : "DECLINED";
-
-			await db.guest.updateMany({
-				where: {
-					id: {
-						in: invitation.guests.map((ig) => ig.guestId),
-					},
-				},
-				data: { status: guestStatus },
-			});
-
-			const updated = await db.guestInvitation.update({
-				where: { id: invitation.id },
-				data: {
-					status: "RESPONDED",
-					respondedAt: new Date(),
-					response: input.response,
-				},
-			});
-
-			return updated;
+			return respondToGuestInvitation(db, input.code, input.response);
 		}),
 
 	getTableStats: protectedProcedure

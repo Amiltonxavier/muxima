@@ -52,6 +52,8 @@ export const VALID_GUEST_STATUSES = [
 	"CONFIRMED",
 	"DECLINED",
 	"WAITING",
+	"MAYBE",
+	"CANCELLED",
 ] as const;
 export const VALID_GUEST_TYPES = [
 	"FAMILY",

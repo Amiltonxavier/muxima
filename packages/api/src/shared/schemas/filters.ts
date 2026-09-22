@@ -52,7 +52,16 @@ export type TaskListInput = z.infer<typeof taskListInput>;
 // ── Guests ───────────────────────────────────────────────────────
 export const guestFiltersSchema = z.object({
 	search: z.string().trim().optional(),
-	status: z.enum(["PENDING", "CONFIRMED", "DECLINED", "WAITING"]).optional(),
+	status: z
+		.enum([
+			"PENDING",
+			"CONFIRMED",
+			"DECLINED",
+			"WAITING",
+			"MAYBE",
+			"CANCELLED",
+		])
+		.optional(),
 	type: z.enum(["FAMILY", "FRIEND", "COLLEAGUE", "VIP", "OTHER"]).optional(),
 });
 

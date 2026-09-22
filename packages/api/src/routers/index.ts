@@ -7,6 +7,7 @@ import { documentsRouter } from "./documents";
 import { eventsRouter } from "./events";
 import { guestsRouter } from "./guests";
 import { inventoryRouter } from "./inventory";
+import { invitationsRouter } from "./invitations";
 import { membersRouter } from "./members";
 import { notificationsRouter } from "./notifications";
 import { tasksRouter } from "./tasks";
@@ -22,6 +23,7 @@ export const appRouter = {
 	budget: budgetRouter,
 	vendors: vendorsRouter,
 	guests: guestsRouter,
+	invitations: invitationsRouter,
 	tasks: tasksRouter,
 	inventory: inventoryRouter,
 	documents: documentsRouter,
