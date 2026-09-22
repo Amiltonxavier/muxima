@@ -93,7 +93,7 @@
 | `vendors.list` | list | Vendor[] | ✅ Sim | `page`, `limit` | `{ data, meta }` | Implementado |
 | `guests.list` | list | Guest[] | ✅ Sim | `page`, `limit` | `{ data, meta }` | Implementado |
 | `guests.getTables` | getTables | Table[] | ✅ Sim | `page`, `limit` | `{ data, meta }` | Implementado |
-| `guests.getInvitationsByEvent` | getInvitationsByEvent | Invitation[] | ✅ Sim | `page`, `limit` | `{ data, meta }` | Implementado |
+| `guests.getInvitationsByEvent` | invitations.list | GuestInvitation[] | ✅ Sim | `page`, `limit`, `search`, `response` | `{ data, meta }` | Implementado (via rutas `invitations.list`) |
 | `documents.list` | list | Document[] | ✅ Sim | `page`, `limit` | `{ data, meta }` | Implementado |
 
 ### 3.3 Exceções Justificadas (Sem Paginação)
