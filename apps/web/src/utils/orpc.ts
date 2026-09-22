@@ -72,7 +72,8 @@ export const link = new RPCLink({
 					const currentPath = window.location.pathname;
 					if (
 						!currentPath.startsWith("/login") &&
-						!currentPath.startsWith("/register")
+						!currentPath.startsWith("/register") &&
+						!currentPath.startsWith("/invite/")
 					) {
 						toast.error("Sessão expirada. Por favor, inicie sessão novamente.");
 						window.location.href = "/login";

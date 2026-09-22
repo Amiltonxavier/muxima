@@ -32,6 +32,8 @@ export const GUEST_STATUS_LABELS: Record<string, string> = {
 	CONFIRMED: "Confirmado",
 	DECLINED: "Recusado",
 	WAITING: "Em espera",
+	MAYBE: "Talvez",
+	CANCELLED: "Cancelado",
 };
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
@@ -128,11 +130,20 @@ export const INVITATION_STATUS_LABELS: Record<string, string> = {
 	OPENED: "Aberto",
 	RESPONDED: "Respondido",
 	EXPIRED: "Expirado",
+	CANCELLED: "Cancelado",
 };
 
 export const INVITATION_RESPONSE_LABELS: Record<string, string> = {
-	CONFIRM: "Confirmar",
-	DECLINE: "Recusar",
+	CONFIRM: "Confirmado",
+	DECLINE: "Recusado",
+	MAYBE: "Talvez",
+};
+
+export const RSVP_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Sem resposta",
+	CONFIRMED: "Confirmado",
+	MAYBE: "Talvez",
+	DECLINED: "Recusado",
 };
 
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -156,6 +167,12 @@ export function getStatusColor(status: string): string {
 		PENDING: "bg-amber-50 text-amber-700",
 		DECLINED: "bg-red-50 text-red-700",
 		WAITING: "bg-blue-50 text-blue-700",
+		MAYBE: "bg-yellow-50 text-yellow-700",
+		RESPONDED: "bg-green-50 text-green-700",
+		OPENED: "bg-blue-50 text-blue-700",
+		SENT: "bg-neutral-100 text-neutral-700",
+		CREATED: "bg-neutral-100 text-neutral-700",
+		EXPIRED: "bg-neutral-200 text-neutral-600",
 		TODO: "bg-neutral-100 text-neutral-700",
 		IN_PROGRESS: "bg-blue-50 text-blue-700",
 		PROSPECT: "bg-neutral-100 text-neutral-700",
