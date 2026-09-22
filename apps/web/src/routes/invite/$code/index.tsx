@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HeartCrack, Hourglass, SearchX } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect } from "react";
-import { LoadingState } from "@/shared/components/states/loading-state";
-import { EventDetails } from "./-components/event-details";
-import { GuestList } from "./-components/guest-list";
-import { InviteHeader } from "./-components/invite-header";
-import { InviteMessage } from "./-components/invite-message";
-import { InviteShell } from "./-components/invite-shell";
-import { RsvpSection } from "./-components/rsvp-section";
+import { toast } from "sonner";
+import "./-styles/invite.css";
+import { InvitationEnvelope } from "./-components/invitation-envelope";
+import { InvitationOpenCard } from "./-components/invitation-open-card";
+import { InviteAtmosphere } from "./-components/invite-atmosphere";
+import { InviteFeedback, InviteLoading } from "./-components/invite-feedback";
+import { useInvitationOpening } from "./-hooks/use-invitation-opening";
 import {
 	usePublicInvitation,
 	usePublicRespond,
@@ -22,6 +23,7 @@ function InvitePage() {
 	const normalizedCode = code.toUpperCase();
 	const invitationQuery = usePublicInvitation(normalizedCode);
 	const respondMutation = usePublicRespond(normalizedCode);
+	const opening = useInvitationOpening();
 	const lookup = invitationQuery.data;
 
 	useEffect(() => {
@@ -32,76 +34,110 @@ function InvitePage() {
 		}
 	}, [lookup]);
 
+	const handleShare = () => {
+		navigator.clipboard.writeText(window.location.href);
+		toast.success("Link do convite copiado!");
+	};
+
 	if (invitationQuery.isLoading) {
 		return (
-			<InviteShell>
-				<LoadingState />
-			</InviteShell>
+			<InviteAtmosphere>
+				<InviteLoading />
+			</InviteAtmosphere>
 		);
 	}
 
 	if (invitationQuery.isError) {
 		return (
-			<InviteShell>
-				<InviteMessage
+			<InviteAtmosphere>
+				<InviteFeedback
 					icon={SearchX}
 					title="Ups, algo correu mal"
-					description="Não foi possível carregar o convite. Tenta novamente em instantes."
+					description="Não foi possível abrir o convite. Pedimos desculpa — tenta novamente em instantes."
 				/>
-			</InviteShell>
+			</InviteAtmosphere>
 		);
 	}
 
 	if (!lookup || lookup.result === "NOT_FOUND") {
 		return (
-			<InviteShell>
-				<InviteMessage
+			<InviteAtmosphere>
+				<InviteFeedback
 					icon={SearchX}
 					title="Convite não encontrado"
-					description="O código do convite não existe ou ainda não foi ativado pelo anfitrião."
+					description="Este convite ainda não foi ativado pelo anfitrião, ou o endereço não está correto."
 				/>
-			</InviteShell>
+			</InviteAtmosphere>
 		);
 	}
 
 	if (lookup.result === "EXPIRED") {
 		return (
-			<InviteShell>
-				<InviteMessage
+			<InviteAtmosphere>
+				<InviteFeedback
 					icon={Hourglass}
 					title="Este convite expirou"
-					description="O prazo para responder a este convite já terminou."
+					description="O prazo para responder a este convite já terminou. Agradecemos o teu carinho."
 				/>
-			</InviteShell>
+			</InviteAtmosphere>
 		);
 	}
 
 	if (lookup.result === "CANCELLED") {
 		return (
-			<InviteShell>
-				<InviteMessage
+			<InviteAtmosphere>
+				<InviteFeedback
 					icon={HeartCrack}
 					title="Este convite foi cancelado"
-					description="O anfitrião cancelou este convite."
+					description="O anfitrião cancelou este convite com muito respeito por ti."
 				/>
-			</InviteShell>
+			</InviteAtmosphere>
 		);
 	}
 
 	const invitation = lookup.invitation;
+	const showEnvelope = opening.phase !== "open";
 
 	return (
-		<InviteShell>
-			<InviteHeader invitation={invitation} />
-			<EventDetails invitation={invitation} />
-			<GuestList invitation={invitation} />
-			<RsvpSection
-				invitation={invitation}
-				isResponding={respondMutation.isPending}
-				onRespond={(response) =>
-					respondMutation.mutate({ code: normalizedCode, response })
-				}
-			/>
-		</InviteShell>
+		<InviteAtmosphere>
+			<AnimatePresence mode="wait">
+				{showEnvelope ? (
+					<motion.div
+						key="envelope"
+						exit={{
+							opacity: 0,
+							scale: 0.92,
+							y: 24,
+							transition: {
+								duration: opening.reduceMotion ? 0 : 0.45,
+								ease: [0.22, 1, 0.36, 1],
+							},
+						}}
+					>
+						<InvitationEnvelope
+							invitation={invitation}
+							phase={opening.phase}
+							reduceMotion={opening.reduceMotion}
+							onOpen={opening.open}
+						/>
+					</motion.div>
+				) : (
+					<motion.div key="card" className="w-full">
+						<InvitationOpenCard
+							invitation={invitation}
+							reduceMotion={opening.reduceMotion}
+							isResponding={respondMutation.isPending}
+							onRespond={(response) =>
+								respondMutation.mutate({
+									code: normalizedCode,
+									response,
+								})
+							}
+							onShare={handleShare}
+						/>
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</InviteAtmosphere>
 	);
 }

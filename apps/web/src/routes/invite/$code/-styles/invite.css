@@ -1,0 +1,190 @@
+/* ============================================================
+   Public Invite — convite digital editorial (só para /invite)
+   ============================================================ */
+
+.invite-scene {
+	--ip-ink: #37312a;
+	--ip-ink-soft: #7d7060;
+	--ip-accent: #a8873f;
+	--ip-accent-soft: #c9b083;
+	--ip-line: #e8dcc7;
+	--ip-paper: #fffdf8;
+	--ip-paper-deep: #f4ecdd;
+	--ip-shadow: rgba(84, 66, 41, 0.22);
+	--ip-shadow-soft: rgba(84, 66, 41, 0.1);
+	--ip-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+	color: var(--ip-ink);
+
+	background-color: #f3ecdf;
+	background-image:
+		radial-gradient(
+			130% 100% at 50% -10%,
+			#fbf7ee 0%,
+			rgba(251, 247, 238, 0) 55%
+		),
+		radial-gradient(
+			120% 80% at 50% 110%,
+			#ece0cb 0%,
+			rgba(236, 224, 203, 0) 50%
+		),
+		linear-gradient(180deg, #f6f0e4 0%, #f1e9da 100%);
+}
+
+/* foco visível mas elegante para interações do convite */
+.invite-scene .envelope-focus {
+	outline: none;
+}
+.invite-scene .envelope-focus:focus-visible {
+	outline: 2px solid var(--ip-accent);
+	outline-offset: 8px;
+	border-radius: 6px;
+}
+
+/* ---- Tipografia ---- */
+.invite-serif {
+	font-family: var(--ip-serif);
+}
+.invite-luxe {
+	letter-spacing: 0.32em;
+}
+.invite-sub-luxe {
+	letter-spacing: 0.22em;
+}
+
+/* ---- Ornamento separador ---- */
+.ornament-rule {
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		var(--ip-line) 18%,
+		var(--ip-line) 42%,
+		var(--ip-accent-soft) 50%,
+		var(--ip-line) 58%,
+		var(--ip-line) 82%,
+		transparent 100%
+	);
+}
+
+/* ============================================================
+   Envelope
+   ============================================================ */
+
+.envelope {
+	position: relative;
+	width: 100%;
+	max-width: 400px;
+	aspect-ratio: 10 / 6.4;
+	perspective: 1300px;
+}
+
+.envelope__scene {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	transform-style: preserve-3d;
+}
+
+.envelope__inner {
+	position: absolute;
+	inset: 0;
+	border-radius: 3% / 6%;
+	background: linear-gradient(180deg, #e7d9be 0%, #efe3c9 100%);
+	box-shadow:
+		inset 0 0 0 1px rgba(168, 135, 63, 0.25),
+		inset 0 14px 26px -18px var(--ip-shadow);
+}
+
+.envelope__card {
+	position: absolute;
+	left: 7%;
+	right: 7%;
+	top: 4%;
+	height: 40%;
+	border-radius: 3px;
+	background: var(--ip-paper);
+	box-shadow: 0 14px 26px -14px var(--ip-shadow);
+	transform-origin: 50% 120%;
+}
+
+.envelope__front {
+	position: absolute;
+	inset: 0;
+	background: var(--ip-paper);
+	border-radius: 3% / 6%;
+	clip-path: polygon(0 14%, 50% 0, 100% 14%, 100% 100%, 0 100%);
+	background-image:
+		radial-gradient(
+			90% 60% at 50% 0%,
+			rgba(255, 255, 255, 0.7),
+			transparent 60%
+		),
+		linear-gradient(180deg, #fbf6ea 0%, #f8f1e2 100%);
+	box-shadow: 0 26px 50px -30px var(--ip-shadow);
+}
+
+.envelope__flap {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 58%;
+	background: linear-gradient(180deg, #f7efe0 0%, #f1e7d0 100%);
+	clip-path: polygon(0 0, 100% 0, 50% 74%);
+	transform-origin: 50% 0;
+	backface-visibility: hidden;
+	border-radius: 3% / 6%;
+}
+
+.invite-scene .envelope-stamp {
+	border: 1px solid rgba(168, 135, 63, 0.45);
+	outline: 1px dashed rgba(168, 135, 63, 0.35);
+	outline-offset: 4px;
+	background:
+		radial-gradient(
+			60% 60% at 50% 42%,
+			rgba(201, 176, 131, 0.28),
+			transparent 78%
+		),
+		var(--ip-paper);
+}
+
+/* ---- fundo: textura de papel do convite aberto ---- */
+.invite-paper {
+	background:
+		radial-gradient(
+			120% 90% at 50% 0%,
+			rgba(255, 255, 255, 0.9),
+			transparent 70%
+		),
+		repeating-linear-gradient(
+			0deg,
+			transparent 0px,
+			transparent 26px,
+			rgba(168, 135, 63, 0.035) 27px,
+			transparent 28px
+		),
+		var(--ip-paper);
+}
+
+/* ---- convite aberto ---- */
+.invite-card {
+	width: 100%;
+	max-width: 540px;
+	border-radius: 6px;
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 0.8) inset,
+		0 30px 70px -42px var(--ip-shadow),
+		0 8px 24px -18px var(--ip-shadow-soft);
+}
+
+.invite-rule {
+	height: 1px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		var(--ip-line) 30%,
+		var(--ip-line) 70%,
+		transparent
+	);
+}
