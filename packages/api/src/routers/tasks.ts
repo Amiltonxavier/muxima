@@ -296,4 +296,69 @@ export const tasksRouter = {
 
 			return { success: true };
 		}),
+
+	getStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const [total, todo, inProgress, completed, cancelled] =
+				await Promise.all([
+					db.task.count({ where: { eventId: input.eventId } }),
+					db.task.count({
+						where: { eventId: input.eventId, status: "TODO" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "IN_PROGRESS" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "COMPLETED" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "CANCELLED" },
+					}),
+				]);
+
+			const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+			return {
+				total,
+				todo,
+				inProgress,
+				completed,
+				cancelled,
+				completionRate,
+			};
+		}),
+
+	getScheduleStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const [total, pending, inProgress, completed, cancelled] =
+				await Promise.all([
+					db.schedule.count({ where: { eventId: input.eventId } }),
+					db.schedule.count({
+						where: { eventId: input.eventId, status: "PENDING" },
+					}),
+					db.schedule.count({
+						where: { eventId: input.eventId, status: "IN_PROGRESS" },
+					}),
+					db.schedule.count({
+						where: { eventId: input.eventId, status: "COMPLETED" },
+					}),
+					db.schedule.count({
+						where: { eventId: input.eventId, status: "CANCELLED" },
+					}),
+				]);
+
+			return {
+				total,
+				pending,
+				inProgress,
+				completed,
+				cancelled,
+			};
+		}),
 };

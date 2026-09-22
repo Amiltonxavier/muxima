@@ -8,13 +8,13 @@ import {
 } from "@muxima/ui/components/card";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Calendar, Gift, MapPin, Plus } from "lucide-react";
+import { Calendar, MapPin, Plus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { QueryState } from "@/shared/components/states";
-import { formatDate, getDaysRemaining } from "@/utils/format-date";
 import { orpc } from "@/utils/orpc";
 import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
 import { useEvents } from "../events/-queries/event-queries";
+import { dateHelper } from "@/shared/utils/date-helper";
 
 export const Route = createFileRoute("/_private/_dashboard/")({
 	component: DashboardPage,
@@ -70,9 +70,6 @@ function DashboardPage() {
 				>
 					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						{events.map((event: Record<string, unknown>) => {
-							const daysRemaining = event.eventDate
-								? getDaysRemaining(event.eventDate as string)
-								: null;
 							return (
 								<Card
 									key={event.id as string}
@@ -103,9 +100,9 @@ function DashboardPage() {
 											<div className="flex items-center gap-2 text-muted-foreground text-xs">
 												<Calendar className="h-3 w-3" />
 												<span>
-													{event.eventDate
+													{/*event.eventDate
 														? formatDate(event.eventDate as string)
-														: "Sem data"}
+														: "Sem data"*/}
 												</span>
 											</div>
 											{Boolean(event.venueName) && (
@@ -114,15 +111,11 @@ function DashboardPage() {
 													<span>{String(event.venueName || "")}</span>
 												</div>
 											)}
-											{daysRemaining !== null && (
+											
 												<div className="text-muted-foreground text-xs">
-													{daysRemaining > 0
-														? `${daysRemaining} dias restantes`
-														: daysRemaining === 0
-															? "É hoje!"
-															: "Evento realizado"}
+													{dateHelper.formatRelativeToNow(event.eventDate)}
 												</div>
-											)}
+											
 											<div className="pt-2">
 												<Button
 													className="w-full"
@@ -143,20 +136,6 @@ function DashboardPage() {
 						})}
 					</div>
 				</QueryState>
-
-				{events.length === 0 && !eventsQuery.isLoading && (
-					<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
-						<Gift className="mb-4 h-12 w-12 text-muted-foreground" />
-						<h3 className="font-medium text-lg">Ainda não possui eventos</h3>
-						<p className="mb-4 text-muted-foreground text-sm">
-							Crie o seu primeiro evento para começar a planear
-						</p>
-						<Button render={<Link to="/events" />}>
-							<Plus className="mr-2 h-4 w-4" />
-							Criar evento
-						</Button>
-					</div>
-				)}
 			</div>
 		</div>
 	);

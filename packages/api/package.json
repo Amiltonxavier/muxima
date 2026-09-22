@@ -9,8 +9,12 @@
 			"default": "./src/*.ts"
 		}
 	},
-	"scripts": {},
+	"scripts": {
+		"test": "vitest",
+		"test:run": "vitest run"
+	},
 	"dependencies": {
+		"@fastify/rate-limit": "^11.2.0",
 		"@muxima/auth": "workspace:*",
 		"@muxima/db": "workspace:*",
 		"@muxima/env": "workspace:*",
@@ -25,7 +29,9 @@
 	"devDependencies": {
 		"@fastify/cors": "^11.3.0",
 		"@muxima/config": "workspace:*",
+		"@types/node": "catalog:",
 		"fastify": "^5.10.0",
-		"typescript": "^6.0.3"
+		"typescript": "^6.0.3",
+		"vitest": "catalog:"
 	}
 }

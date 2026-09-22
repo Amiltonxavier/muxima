@@ -250,4 +250,33 @@ export const inventoryRouter = {
 
 			return movement;
 		}),
+
+	getStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const itemsAgg = await db.inventoryItem.aggregate({
+				where: { eventId: input.eventId },
+				_sum: { plannedQuantity: true, currentQuantity: true },
+				_count: true,
+			});
+
+			const totalItems = itemsAgg._count;
+			const totalPlanned =
+				itemsAgg._sum.plannedQuantity?.toNumber() ?? 0;
+			const totalCurrent =
+				itemsAgg._sum.currentQuantity?.toNumber() ?? 0;
+			const fulfillmentRate =
+				totalPlanned > 0
+					? Math.round((totalCurrent / totalPlanned) * 100)
+					: 0;
+
+			return {
+				totalItems,
+				totalPlanned,
+				totalCurrent,
+				fulfillmentRate,
+			};
+		}),
 };

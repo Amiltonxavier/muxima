@@ -348,4 +348,85 @@ export const budgetRouter = {
 
 			return payment;
 		}),
+
+	getStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const budget = await db.budget.findUnique({
+				where: { eventId: input.eventId },
+				select: { plannedAmount: true, reserveAmount: true },
+			});
+
+			const expensesAgg = await db.expense.aggregate({
+				where: { eventId: input.eventId },
+				_sum: { totalAmount: true },
+			});
+
+			const paymentsAgg = await db.payment.aggregate({
+				where: { expense: { eventId: input.eventId } },
+				_sum: { amount: true },
+			});
+
+			const plannedAmount = Number(budget?.plannedAmount ?? 0);
+			const reserveAmount = Number(budget?.reserveAmount ?? 0);
+			const totalSpent = expensesAgg._sum.totalAmount?.toNumber() ?? 0;
+			const totalPaid = paymentsAgg._sum.amount?.toNumber() ?? 0;
+			const available = plannedAmount - totalSpent;
+			const utilizationRate =
+				plannedAmount > 0 ? Math.round((totalSpent / plannedAmount) * 100) : 0;
+			const paymentRate =
+				totalSpent > 0 ? Math.round((totalPaid / totalSpent) * 100) : 0;
+			const categoryCount = await db.budgetCategory.count({
+				where: { eventId: input.eventId },
+			});
+
+			return {
+				plannedAmount,
+				reserveAmount,
+				totalSpent,
+				totalPaid,
+				available: available > 0 ? available : 0,
+				utilizationRate,
+				paymentRate,
+				categoryCount,
+			};
+		}),
+
+	getExpenseStats: protectedProcedure
+		.input(z.object({ expenseId: z.string() }))
+		.handler(async ({ context, input }) => {
+			const expense = await db.expense.findUnique({
+				where: { id: input.expenseId },
+				select: { totalAmount: true, eventId: true },
+			});
+
+			if (!expense) {
+				throw new Error("Despesa não encontrada");
+			}
+
+			await requireEventAccess(context.session.user.id, expense.eventId);
+
+			const paymentsAgg = await db.payment.aggregate({
+				where: { expenseId: input.expenseId },
+				_sum: { amount: true },
+				_count: true,
+			});
+
+			const totalAmount = expense.totalAmount.toNumber();
+			const totalPaid = paymentsAgg._sum.amount?.toNumber() ?? 0;
+			const paymentCount = paymentsAgg._count;
+			const remaining = totalAmount - totalPaid;
+			const paymentRate =
+				totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0;
+
+			return {
+				totalAmount,
+				totalPaid,
+				remaining: remaining > 0 ? remaining : 0,
+				paymentRate,
+				paymentCount,
+			};
+		}),
 };

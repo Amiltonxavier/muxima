@@ -575,32 +575,38 @@ export const guestsRouter = {
 				select: { capacity: true, limitGuestCapacity: true },
 			});
 
-			const guests = await db.guest.findMany({
-				where: { eventId: input.eventId },
-				include: {
-					companions: true,
-				},
+			const [totalGuests, confirmed, pending, declined, waiting] =
+				await Promise.all([
+					db.guest.count({ where: { eventId: input.eventId } }),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "CONFIRMED" },
+					}),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "PENDING" },
+					}),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "DECLINED" },
+					}),
+					db.guest.count({
+						where: { eventId: input.eventId, status: "WAITING" },
+					}),
+				]);
+
+			const totalCompanions = await db.guestCompanion.count({
+				where: { guest: { eventId: input.eventId } },
 			});
 
-			const totalGuests = guests.length;
-			const confirmed = guests.filter((g) => g.status === "CONFIRMED").length;
-			const pending = guests.filter((g) => g.status === "PENDING").length;
-			const declined = guests.filter((g) => g.status === "DECLINED").length;
-			const waiting = guests.filter((g) => g.status === "WAITING").length;
-
-			const totalCompanions = guests.reduce(
-				(sum, g) => sum + g.companions.length,
-				0,
-			);
-			const confirmedCompanions = guests.reduce(
-				(sum, g) =>
-					sum + g.companions.filter((c) => c.status === "CONFIRMED").length,
-				0,
-			);
+			const confirmedCompanions = await db.guestCompanion.count({
+				where: { guest: { eventId: input.eventId }, status: "CONFIRMED" },
+			});
 
 			const totalConfirmedPeople = confirmed + confirmedCompanions;
 			const capacity = event?.capacity ?? 0;
 			const limitGuestCapacity = event?.limitGuestCapacity ?? false;
+			const confirmationRate =
+				totalGuests > 0
+					? Math.round((confirmed / totalGuests) * 100)
+					: 0;
 
 			return {
 				totalGuests,
@@ -611,6 +617,7 @@ export const guestsRouter = {
 				totalCompanions,
 				confirmedCompanions,
 				totalConfirmedPeople,
+				confirmationRate,
 				capacity,
 				limitGuestCapacity,
 				atCapacity: capacity > 0 && totalConfirmedPeople >= capacity,
@@ -664,5 +671,34 @@ export const guestsRouter = {
 			});
 
 			return updated;
+		}),
+
+	getTableStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const [total, totalCapacity, totalOccupied] = await Promise.all([
+				db.table.count({
+					where: { eventId: input.eventId, deletedAt: null },
+				}),
+				db.table.aggregate({
+					where: { eventId: input.eventId, deletedAt: null },
+					_sum: { capacity: true },
+				}),
+				db.tableGuest.count({
+					where: { table: { eventId: input.eventId, deletedAt: null } },
+				}),
+			]);
+
+			const capacity = totalCapacity._sum.capacity ?? 0;
+			const available = capacity - totalOccupied;
+
+			return {
+				total,
+				totalCapacity: capacity,
+				totalOccupied,
+				available: available > 0 ? available : 0,
+			};
 		}),
 };

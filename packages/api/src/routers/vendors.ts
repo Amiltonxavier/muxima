@@ -209,4 +209,26 @@ export const vendorsRouter = {
 
 			return { success: true };
 		}),
+
+	getStats: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const total = await db.vendor.count({
+				where: { eventId: input.eventId },
+			});
+
+			const expensesAgg = await db.expense.aggregate({
+				where: { eventId: input.eventId, vendorId: { not: null } },
+				_sum: { totalAmount: true },
+				_count: true,
+			});
+
+			return {
+				total,
+				totalExpenses: expensesAgg._sum.totalAmount?.toNumber() ?? 0,
+				expenseCount: expensesAgg._count,
+			};
+		}),
 };

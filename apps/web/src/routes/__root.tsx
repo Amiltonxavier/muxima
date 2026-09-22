@@ -5,9 +5,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
 	createRootRouteWithContext,
+	ErrorComponent,
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -22,6 +24,7 @@ export interface RouterAppContext {
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
 	component: RootComponent,
+	errorComponent: RootError,
 	head: () => ({
 		meta: [
 			{
@@ -40,6 +43,21 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 		],
 	}),
 });
+
+function RootError({ error, reset }: ErrorComponentProps) {
+	return (
+		<div className="flex min-h-svh flex-col items-center justify-center gap-4">
+			<ErrorComponent error={error} />
+			<button
+				type="button"
+				className="rounded-md bg-primary px-4 py-2 text-primary-foreground text-sm"
+				onClick={() => reset()}
+			>
+				Tentar novamente
+			</button>
+		</div>
+	);
+}
 
 function RootComponent() {
 	const [_client] = useState<AppRouterClient>(() => createORPCClient(link));

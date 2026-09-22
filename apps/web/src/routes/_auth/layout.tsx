@@ -1,14 +1,25 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { Gift } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { LoadingState } from "@/shared/components/states/loading-state";
 
 export const Route = createFileRoute("/_auth")({
 	beforeLoad: async () => {
-		const { data: session } = await authClient.getSession();
-		if (session) {
-			throw redirect({ to: "/dashboard" });
+		try {
+			const { data: session } = await authClient.getSession();
+			if (session) {
+				throw redirect({ to: "/" });
+			}
+		} catch (e) {
+			// If it's a redirect from TanStack Router, rethrow it
+			if (e && typeof e === "object" && "isRedirect" in e) {
+				throw e;
+			}
+			// On error, let the user see the auth page
+			return;
 		}
 	},
+	pendingComponent: LoadingState,
 	component: AuthLayout,
 });
 

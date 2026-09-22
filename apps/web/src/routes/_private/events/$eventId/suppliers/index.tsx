@@ -33,11 +33,11 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
-import { QueryState } from "@/shared/components/states";
-import {
+import { QueryState } from "@/shared/components/states";	import {
 	useCreateVendor,
 	useDeleteVendor,
 	useUpdateVendor,
+	useVendorStats,
 	useVendors,
 } from "@/shared/queries/vendor-queries";
 import { formatCurrency } from "@/utils/format-currency";
@@ -75,6 +75,9 @@ function SuppliersPage() {
 		notes?: string;
 	} | null>(null);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
+
+	const vendorsStatsQuery = useVendorStats(eventId);
+	const vendorsStats = vendorsStatsQuery.data;
 
 	const vendors = vendorsQuery.data?.data ?? [];
 	const meta = vendorsQuery.data?.meta;
@@ -116,15 +119,8 @@ function SuppliersPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{vendors.map((v) => {
-								const expenses = (v.expenses ?? []) as Array<{
-									totalAmount?: number;
-								}>;
-								const totalExpenses = expenses.reduce(
-									(sum, e) => sum + Number(e.totalAmount || 0),
-									0,
-								);
-								return (
+						{vendors.map((v) => {
+							return (
 									<TableRow key={v.id}>
 										<TableCell className="font-medium">{v.name}</TableCell>
 										<TableCell>
@@ -140,16 +136,11 @@ function SuppliersPage() {
 													</p>
 												)}
 											</div>
-										</TableCell>
-										<TableCell>
-											{totalExpenses > 0 ? (
-												<span className="font-medium text-sm">
-													{expenses.length} ({formatCurrency(totalExpenses)})
-												</span>
-											) : (
-												<span className="text-muted-foreground text-sm">—</span>
-											)}
-										</TableCell>
+										</TableCell>								<TableCell>
+									<span className="text-muted-foreground text-sm">
+										{vendorsStats?.expenseCount ?? 0} despesas
+									</span>
+								</TableCell>
 										<TableCell>
 											<Badge
 												className={getStatusColor(

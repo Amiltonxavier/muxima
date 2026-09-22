@@ -30,6 +30,7 @@ export const createEventSchema = z.object({
 	neighborhood: z.string().optional(),
 	reference: z.string().optional(),
 	capacity: z.number().int().positive().optional(),
+	limitGuestCapacity: z.boolean().optional(),
 	currency: z.string().default("AOA"),
 	description: z.string().optional(),
 	budgetAmount: z.number().positive().optional(),
@@ -51,6 +52,7 @@ export const updateEventSchema = z.object({
 	neighborhood: z.string().optional(),
 	reference: z.string().optional(),
 	capacity: z.number().int().positive().optional(),
+	limitGuestCapacity: z.boolean().optional(),
 	description: z.string().optional(),
 	status: z
 		.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])

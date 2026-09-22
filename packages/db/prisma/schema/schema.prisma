@@ -16,6 +16,15 @@ datasource db {
 enum EventType {
   ENGAGEMENT
   WEDDING
+  BIRTHDAY
+  CONFERENCE
+  WORKSHOP
+  GRADUATION
+  DINNER
+  CORPORATE
+  BABY_SHOWER
+  CEREMONY
+  PARTY
 }
 
 enum EventStatus {
@@ -115,6 +124,8 @@ enum GuestStatus {
   CONFIRMED
   DECLINED
   WAITING
+  CANCELLED
+  MAYBE
 }
 
 enum CompanionStatus {
@@ -129,6 +140,14 @@ enum GuestInvitationStatus {
   OPENED
   RESPONDED
   EXPIRED
+  CANCELLED
+}
+
+enum RsvpStatus {
+  PENDING
+  CONFIRMED
+  MAYBE
+  DECLINED
 }
 
 enum TaskCategory {
@@ -488,6 +507,9 @@ model GuestInvitation {
   openedAt   DateTime?
   respondedAt DateTime?
   response   String?
+  qrCode     String?
+  rsvpStatus RsvpStatus             @default(PENDING)
+  expiresAt  DateTime?
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
 

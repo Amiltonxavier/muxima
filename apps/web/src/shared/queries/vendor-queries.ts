@@ -94,3 +94,11 @@ export function useDeleteVendor() {
 		}),
 	);
 }
+
+export function useVendorStats(eventId: string) {
+	return useQuery({
+		...orpc.vendors.getStats.queryOptions({ input: { eventId } }),
+		queryKey: [...vendorKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}

@@ -88,7 +88,7 @@ export const VendorService = {
 		if (!vendor) throw new NotFoundError("Fornecedor não encontrado");
 		return VendorRepository.update(id, {
 			...data,
-			email: data.email === "" ? null : data.email,
+			email: data.email === "" ? undefined : data.email,
 		});
 	},
 

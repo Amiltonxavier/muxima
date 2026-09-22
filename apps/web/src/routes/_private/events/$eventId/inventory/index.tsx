@@ -1,11 +1,6 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@muxima/ui/components/card";
+import { Card } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -24,6 +19,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@muxima/ui/components/select";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@muxima/ui/components/table";
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
@@ -85,34 +88,50 @@ function InventoryPage() {
 					hasData: items.length > 0,
 				}}
 			>
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{items.map((item) => {
-						const planned = Number(item.plannedQuantity) || 0;
-						const current = Number(item.currentQuantity) || 0;
-						const percent =
-							planned > 0 ? Math.round((current / planned) * 100) : 0;
-						return (
-							<Card key={item.id}>
-								<CardHeader>
-									<div className="flex items-start justify-between">
-										<CardTitle>{item.name}</CardTitle>
-										<Badge variant="secondary">
-											{INVENTORY_CATEGORY_LABELS[item.category] ||
-												item.category}
-										</Badge>
-									</div>
-								</CardHeader>
-								<CardContent>
-									<div className="space-y-2">
-										<div className="flex justify-between text-sm">
-											<span className="text-muted-foreground">
-												Planeado: {planned}{" "}
-												{INVENTORY_UNIT_LABELS[item.unit] || item.unit}
-											</span>
-											<span>Atual: {current}</span>
-										</div>
-										<Progress value={percent} />
-										<div className="flex justify-end pt-2">
+				<Card>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Nome</TableHead>
+								<TableHead>Categoria</TableHead>
+								<TableHead>Unidade</TableHead>
+								<TableHead>Planeado</TableHead>
+								<TableHead>Atual</TableHead>
+								<TableHead>Progresso</TableHead>
+								<TableHead className="w-16" />
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{items.map((item) => {
+								const planned = Number(item.plannedQuantity) || 0;
+								const current = Number(item.currentQuantity) || 0;
+								const percent =
+									planned > 0 ? Math.round((current / planned) * 100) : 0;
+								return (
+									<TableRow key={item.id}>
+										<TableCell className="font-medium">
+											{item.name}
+									</TableCell>
+										<TableCell>
+											<Badge variant="secondary">
+												{INVENTORY_CATEGORY_LABELS[item.category] ||
+													item.category}
+											</Badge>
+										</TableCell>
+										<TableCell>
+											{INVENTORY_UNIT_LABELS[item.unit] || item.unit}
+										</TableCell>
+										<TableCell>{planned}</TableCell>
+										<TableCell>{current}</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-2">
+												<Progress value={percent} className="h-2 w-20" />
+												<span className="text-muted-foreground text-xs">
+													{percent}%
+												</span>
+											</div>
+										</TableCell>
+										<TableCell>
 											<Button
 												variant="ghost"
 												size="icon-sm"
@@ -121,13 +140,13 @@ function InventoryPage() {
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</Button>
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-						);
-					})}
-				</div>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</Card>
 			</QueryState>
 
 			{meta && (

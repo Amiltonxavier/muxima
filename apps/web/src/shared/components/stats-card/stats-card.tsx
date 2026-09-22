@@ -10,15 +10,19 @@ type StatsCardProps = {
 	title: string;
 	value: ReactNode;
 	description?: ReactNode;
+	icon?: ReactNode;
 };
 
-export function StatsCard({ title, value, description }: StatsCardProps) {
+export function StatsCard({ title, value, description, icon }: StatsCardProps) {
 	return (
 		<Card>
-			<CardHeader className="pb-2">
+			<CardHeader className="flex flex-row items-center justify-between pb-2">
 				<CardTitle className="font-medium text-muted-foreground text-xs">
 					{title}
 				</CardTitle>
+				{icon && (
+					<div className="text-muted-foreground">{icon}</div>
+				)}
 			</CardHeader>
 
 			<CardContent>

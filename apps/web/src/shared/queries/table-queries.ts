@@ -59,3 +59,11 @@ export function useDeleteTable() {
 		}),
 	);
 }
+
+export function useTableStats(eventId: string) {
+	return useQuery({
+		...orpc.guests.getTableStats.queryOptions({ input: { eventId } }),
+		queryKey: [...tableKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}

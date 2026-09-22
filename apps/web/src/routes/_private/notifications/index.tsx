@@ -21,6 +21,14 @@ import {
 	useNotifications,
 } from "./-queries/notification-queries";
 
+type NotificationItem = {
+	id: string;
+	title?: string;
+	message?: string;
+	readAt?: Date | null;
+	createdAt?: Date | string;
+};
+
 export const Route = createFileRoute("/_private/notifications/")({
 	component: NotificationsPage,
 });
@@ -59,9 +67,13 @@ function NotificationsPage() {
 					</p>
 				</div>
 				{notifications.length > 0 && (
-					<Button variant="outline" onClick={() => markAllAsRead.mutate()}>
+					<Button
+						variant="outline"
+						onClick={() => markAllAsRead.mutate()}
+						disabled={markAllAsRead.isPending}
+					>
 						<CheckCheck className="mr-2 h-4 w-4" />
-						Marcar todas como lidas
+						{markAllAsRead.isPending ? "A marcar..." : "Marcar todas como lidas"}
 					</Button>
 				)}
 			</div>
@@ -126,10 +138,10 @@ function NotificationsPage() {
 				}}
 			>
 				<div className="space-y-2">
-					{notifications.map((n: Record<string, unknown>) => {
+					{notifications.map((n: NotificationItem) => {
 						const isRead = !!n.readAt;
 						return (
-							<Card key={n.id as string} className={isRead ? "opacity-60" : ""}>
+							<Card key={n.id} className={isRead ? "opacity-60" : ""}>
 								<CardContent className="flex items-center justify-between p-4">
 									<div className="flex items-center gap-3">
 										<div
@@ -149,7 +161,7 @@ function NotificationsPage() {
 												</p>
 											)}
 											<p className="mt-1 text-muted-foreground text-xs">
-												{formatRelativeTime(n.createdAt as string)}
+												{formatRelativeTime(n.createdAt || "")}
 											</p>
 										</div>
 									</div>
@@ -158,9 +170,8 @@ function NotificationsPage() {
 											<Button
 												variant="ghost"
 												size="icon-sm"
-												onClick={() =>
-													markAsRead.mutate({ id: n.id as string })
-												}
+												onClick={() => markAsRead.mutate({ id: n.id })}
+												disabled={markAsRead.isPending}
 											>
 												<Check className="h-3.5 w-3.5" />
 											</Button>
@@ -169,9 +180,8 @@ function NotificationsPage() {
 											variant="ghost"
 											size="icon-sm"
 											className="text-destructive"
-											onClick={() =>
-												deleteNotification.mutate({ id: n.id as string })
-											}
+											onClick={() => deleteNotification.mutate({ id: n.id })}
+											disabled={deleteNotification.isPending}
 										>
 											<Trash2 className="h-3.5 w-3.5" />
 										</Button>

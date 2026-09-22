@@ -18,8 +18,8 @@ function LoginPage() {
 
 	const form = useForm({
 		defaultValues: {
-			email: "admin@muxima.ao",
-			password: "admin123",
+			email: "ana@muxima.ao",
+			password: "Muxima@2024",
 		},
 		onSubmit: async ({ value }) => {
 			const result = loginSchema.safeParse(value);
@@ -41,7 +41,7 @@ function LoginPage() {
 				}
 
 				toast.success("Sessão iniciada com sucesso");
-				window.location.href = "/dashboard";
+				window.location.href = "/";
 			} catch {
 				toast.error("Erro ao iniciar sessão");
 			} finally {

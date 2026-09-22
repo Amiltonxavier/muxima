@@ -1,4 +1,5 @@
 import fastifyCors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { auth } from "@muxima/auth";
 import { env } from "@muxima/env/server";
 import type { FastifyInstance } from "fastify";
@@ -20,6 +21,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 		maxAge: 86400,
 	});
 
+	// Rate limiting
+	await fastify.register(rateLimit, {
+		max: 100,
+		timeWindow: "1 minute",
+	});
+
 	// Global error handler
 	fastify.setErrorHandler(errorHandler);
 
@@ -30,10 +37,16 @@ export async function buildApp(): Promise<FastifyInstance> {
 		}
 	});
 
-	// Better Auth handler
+	// Better Auth handler (stricter rate limit for auth endpoints)
 	fastify.route({
 		method: ["GET", "POST"],
 		url: "/api/auth/*",
+		config: {
+			rateLimit: {
+				max: 20,
+				timeWindow: "1 minute",
+			},
+		},
 		async handler(request, reply) {
 			try {
 				const url = new URL(request.url, `http://${request.headers.host}`);
@@ -54,9 +67,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 				reply.send(response.body ? await response.text() : null);
 			} catch (error) {
 				fastify.log.error({ err: error }, "Authentication Error:");
-				reply.status(500).send({
-					error: "Internal authentication error",
-					code: "AUTH_FAILURE",
+				// Return 401 so the frontend can distinguish "no session" from
+				// a real server error (500). Without this, a transient DB
+				// failure would cause the frontend to treat it as "logged out"
+				// and redirect to /login.
+				reply.status(401).send({
+					error: {
+						code: "UNAUTHORIZED",
+						message: "Sessão inválida",
+					},
 				});
 			}
 		},

@@ -33,10 +33,10 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
-import { StatsCard } from "@/shared/components/stats-card/stats-card";
-import {
+import { StatsCard } from "@/shared/components/stats-card/stats-card";	import {
 	useCreateTable,
 	useDeleteTable,
+	useTableStats,
 	useTables,
 	useUpdateTable,
 } from "@/shared/queries/table-queries";
@@ -87,8 +87,11 @@ function TablesPage() {
 	// Filters
 	const [searchQuery, setSearchQuery] = useState("");
 
+	const tablesStatsQuery = useTableStats(eventId);
+
 	const tables = tablesQuery.data?.data ?? [];
 	const meta = tablesQuery.data?.meta;
+	const tableStats = tablesStatsQuery.data;
 
 	const filteredTables = useMemo(() => {
 		return tables.filter((table) => {
@@ -102,16 +105,6 @@ function TablesPage() {
 		});
 	}, [tables, searchQuery]);
 
-	// Metrics
-	const totalCapacity = tables.reduce(
-		(sum, t) => sum + ((t.capacity as number) || 0),
-		0,
-	);
-	const totalOccupied = tables.reduce(
-		(sum, t) => sum + ((t.tableGuests as Array<unknown>)?.length || 0),
-		0,
-	);
-
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
@@ -119,7 +112,7 @@ function TablesPage() {
 				<div>
 					<h1 className="font-semibold text-2xl">Mesas</h1>
 					<p className="text-muted-foreground text-sm">
-						{tables.length} mesas · {totalCapacity} lugares · {totalOccupied}{" "}
+						{tableStats?.total ?? 0} mesas · {tableStats?.totalCapacity ?? 0} lugares · {tableStats?.totalOccupied ?? 0}{" "}
 						ocupados
 					</p>
 				</div>
@@ -131,13 +124,13 @@ function TablesPage() {
 
 			{/* Metrics Cards */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				<StatsCard title="Total de mesas" value={tables.length} />
+			<StatsCard title="Total de mesas" value={tableStats?.total ?? 0} />
 
-				<StatsCard title="Lugares totais" value={totalCapacity} />
+			<StatsCard title="Lugares totais" value={tableStats?.totalCapacity ?? 0} />
 
-				<StatsCard title="Ocupados" value={totalOccupied} />
+			<StatsCard title="Ocupados" value={tableStats?.totalOccupied ?? 0} />
 
-				<StatsCard title="Disponíveis" value={totalCapacity - totalOccupied} />
+			<StatsCard title="Disponíveis" value={tableStats?.available ?? 0} />
 			</div>
 
 			{/* Filters */}

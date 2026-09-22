@@ -126,3 +126,19 @@ export function useCreateSchedule() {
 		}),
 	);
 }
+
+export function useTaskStats(eventId: string) {
+	return useQuery({
+		...orpc.tasks.getStats.queryOptions({ input: { eventId } }),
+		queryKey: [...taskKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}
+
+export function useScheduleStats(eventId: string) {
+	return useQuery({
+		...orpc.tasks.getScheduleStats.queryOptions({ input: { eventId } }),
+		queryKey: [...taskKeys.all, "scheduleStats", eventId],
+		enabled: !!eventId,
+	});
+}

@@ -35,6 +35,7 @@ import {
 } from "@muxima/ui/components/table";
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -42,16 +43,19 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { CurrencyInput } from "@/shared/components/currency-input";
 import { QueryState } from "@/shared/components/states";
+import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
 	useBudget,
 	useCreateExpense,
 	useDeleteExpense,
+	useExpenseStats,
 	useExpenses,
 	useUpdateExpense,
 	useUpsertBudget,
 } from "@/shared/queries/budget-queries";
 import { useVendors } from "@/shared/queries/vendor-queries";
 import { expenseSchema } from "@/utils/budget-schemas";
+import { orpc } from "@/utils/orpc";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
 import {
@@ -76,7 +80,10 @@ function BudgetPage() {
 		page: expensePage,
 		limit: expenseLimit,
 	});
-	const vendorsQuery = useVendors(eventId, { page: 1, limit: 100 });
+	const vendorsQuery = useVendors(eventId, { page: 1, limit: 50 });
+	const budgetStatsQuery = useQuery(
+		orpc.budget.getStats.queryOptions({ input: { eventId } }),
+	);
 	const createExpense = useCreateExpense();
 	const updateExpense = useUpdateExpense();
 	const deleteExpense = useDeleteExpense();
@@ -119,15 +126,12 @@ function BudgetPage() {
 	const budget = budgetQuery.data;
 	const expenses = expensesQuery.data?.data ?? [];
 	const expensesMeta = expensesQuery.data?.meta;
-	const plannedAmount = Number(budget?.plannedAmount ?? 0);
-	const reserveAmount = Number(budget?.reserveAmount ?? 0);
-	const totalExpenses = expenses.reduce(
-		(sum, e) => sum + Number(e.totalAmount || 0),
-		0,
-	);
-	const remaining = plannedAmount - totalExpenses;
-	const percent =
-		plannedAmount > 0 ? Math.round((totalExpenses / plannedAmount) * 100) : 0;
+	const budgetStats = budgetStatsQuery.data;
+
+	const plannedAmount = budgetStats?.plannedAmount ?? Number(budget?.plannedAmount ?? 0);
+	const totalExpenses = budgetStats?.totalSpent ?? 0;
+	const remaining = budgetStats?.available ?? 0;
+	const percent = budgetStats?.utilizationRate ?? 0;
 
 	return (
 		<div className="space-y-6">
@@ -158,52 +162,35 @@ function BudgetPage() {
 				</div>
 			</div>
 
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Planeado
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl">
-							{formatCurrency(plannedAmount)}
-						</div>
-						{reserveAmount > 0 && (
-							<p className="mt-1 text-muted-foreground text-xs">
-								Reserva: {formatCurrency(reserveAmount)}
-							</p>
-						)}
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Gasto
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="font-semibold text-2xl text-amber-600">
-							{formatCurrency(totalExpenses)}
-						</div>
-						<Progress value={percent} className="mt-2" />
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-muted-foreground text-xs">
-							Disponível
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div
-							className={`font-semibold text-2xl ${remaining < 0 ? "text-red-600" : "text-green-600"}`}
-						>
-							{formatCurrency(remaining > 0 ? remaining : 0)}
-						</div>
-					</CardContent>
-				</Card>
+			{budgetQuery.isLoading ? (
+				<div className="grid gap-4 sm:grid-cols-3">
+					{Array.from({ length: 3 }).map((_, i) => (
+						<Card key={`skeleton-${i}`}>
+							<CardHeader>
+								<div className="h-4 w-20 animate-pulse rounded bg-muted" />
+							</CardHeader>
+							<CardContent>
+								<div className="h-8 w-28 animate-pulse rounded bg-muted" />
+							</CardContent>
+						</Card>
+					))}
+				</div>
+			) : (			<div className="grid gap-4 sm:grid-cols-3">
+				<StatsCard
+					title="Planeado"
+					value={formatCurrency(plannedAmount)}
+					description={(budgetStats?.reserveAmount ?? 0) > 0 ? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}` : undefined}
+				/>
+				<StatsCard
+					title="Gasto"
+					value={<span className="text-amber-600">{formatCurrency(totalExpenses)}</span>}
+				/>
+				<StatsCard
+					title="Disponível"
+					value={<span className={remaining < 0 ? "text-red-600" : "text-green-600"}>{formatCurrency(remaining > 0 ? remaining : 0)}</span>}
+				/>
 			</div>
+			)}
 
 			<QueryState
 				state={{
@@ -453,12 +440,12 @@ function ViewExpenseDialog({
 	};
 	onClose: () => void;
 }) {
-	const totalPaid = (expense.payments ?? []).reduce(
-		(sum, p) => sum + Number(p.amount ?? 0),
-		0,
-	);
-	const totalAmount = Number(expense.totalAmount ?? 0);
-	const remaining = totalAmount - totalPaid;
+	const expenseStatsQuery = useExpenseStats(expense.id ?? "");
+	const expenseStats = expenseStatsQuery.data;
+	const totalPaid = expenseStats?.totalPaid ?? 0;
+	const totalAmount = expenseStats?.totalAmount ?? Number(expense.totalAmount ?? 0);
+	const remaining = expenseStats?.remaining ?? totalAmount - totalPaid;
+	const paymentRate = expenseStats?.paymentRate ?? 0;
 	const vendor = expense.vendor;
 	const category = expense.budgetCategory;
 	const payments = expense.payments ?? [];
@@ -495,14 +482,7 @@ function ViewExpenseDialog({
 							<span>
 								Restante: {formatCurrency(remaining > 0 ? remaining : 0)}
 							</span>
-						</div>
-						<Progress
-							value={
-								totalAmount > 0
-									? Math.round((totalPaid / totalAmount) * 100)
-									: 0
-							}
-						/>
+						</div>					<Progress value={paymentRate} />
 					</div>
 
 					<div className="grid grid-cols-2 gap-3">

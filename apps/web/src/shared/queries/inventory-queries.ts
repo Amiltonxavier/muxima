@@ -87,3 +87,11 @@ export function useAddInventoryMovement() {
 		}),
 	);
 }
+
+export function useInventoryStats(eventId: string) {
+	return useQuery({
+		...orpc.inventory.getStats.queryOptions({ input: { eventId } }),
+		queryKey: [...inventoryKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}

@@ -119,10 +119,9 @@ const globalNavGroups: NavGroup[] = [
 	{
 		label: "",
 		items: [
-			{
-				label: "Dashboard",
-				icon: <Home className="h-4 w-4" />,
-				to: "/dashboard",
+			{						label: "Dashboard",
+						icon: <Home className="h-4 w-4" />,
+						to: "/",
 			},
 			{
 				label: "Eventos",
@@ -171,10 +170,9 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 						<span className="text-lg">MUXIMA</span>
 					</Link>
 				) : (
-					<Link
-						to="/dashboard"
-						className="flex items-center gap-2 font-semibold"
-						onClick={onNavigate}
+					<Link							to="/"
+							className="flex items-center gap-2 font-semibold"
+							onClick={onNavigate}
 					>
 						<Gift className="h-5 w-5" />
 						<span className="text-lg">MUXIMA</span>
@@ -209,10 +207,9 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 										params: { eventId: eventId || "" },
 									})
 								: matchRoute({
-										to: item.to,
-										fuzzy: item.to !== "/dashboard",
-									});
-							return (
+										to: item.to,								fuzzy: item.to !== "/",
+							});
+						return (
 								<Link
 									key={item.to}
 									to={item.to}
@@ -274,15 +271,14 @@ function CollapsedNav() {
 					const isActive = isEventContext
 						? matchRoute({ to: item.to, params: { eventId: eventId || "" } })
 						: matchRoute({
-								to: item.to,
-								fuzzy: item.to !== "/dashboard",
-							});
-					return (
-						<Link
-							key={item.to}
-							to={item.to}
-							params={isEventContext && eventId ? { eventId } : undefined}
-							className={cn(
+								to: item.to,										fuzzy: item.to !== "/",
+								});
+						return (
+								<Link
+									key={item.to}
+									to={item.to}
+									params={isEventContext && eventId ? { eventId } : undefined}
+									className={cn(
 								"flex h-9 w-9 items-center justify-center rounded-md transition-colors",
 								isActive
 									? "bg-accent text-accent-foreground"

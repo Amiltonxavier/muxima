@@ -113,3 +113,19 @@ export function useCreatePayment() {
 		}),
 	);
 }
+
+export function useBudgetStats(eventId: string) {
+	return useQuery({
+		...orpc.budget.getStats.queryOptions({ input: { eventId } }),
+		queryKey: [...budgetKeys.all, "stats", eventId],
+		enabled: !!eventId,
+	});
+}
+
+export function useExpenseStats(expenseId: string) {
+	return useQuery({
+		...orpc.budget.getExpenseStats.queryOptions({ input: { expenseId } }),
+		queryKey: [...budgetKeys.all, "expenseStats", expenseId],
+		enabled: !!expenseId,
+	});
+}

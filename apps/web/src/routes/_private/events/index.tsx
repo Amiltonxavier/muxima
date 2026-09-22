@@ -44,6 +44,7 @@ import {
 	useDeleteEvent,
 	useEvents,
 } from "./-queries/event-queries";
+import { dateHelper } from "@/shared/utils/date-helper";
 
 export const Route = createFileRoute("/_private/events/")({
 	component: EventsPage,
@@ -166,8 +167,8 @@ function EventsPage() {
 												<Calendar className="h-3 w-3" />
 												<span>
 													{event.eventDate
-														? formatDate(event.eventDate as string)
-														: "Sem data"}
+														? dateHelper.formatShort(event.eventDate as string)
+														: "-"}
 												</span>
 											</div>
 										</div>
