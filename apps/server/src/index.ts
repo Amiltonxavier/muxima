@@ -39,7 +39,7 @@ async function main() {
 
 		rpcApp.all("/rpc/*", async (request, reply) => {
 			const { matched } = await rpcHandler.handle(request, reply, {
-				context: await createContext(request.headers),
+				context: await createContext(request.headers, { ip: request.ip }),
 				prefix: "/rpc",
 			});
 			if (!matched) reply.status(404).send();
@@ -47,7 +47,7 @@ async function main() {
 
 		rpcApp.all("/api-reference/*", async (request, reply) => {
 			const { matched } = await apiHandler.handle(request, reply, {
-				context: await createContext(request.headers),
+				context: await createContext(request.headers, { ip: request.ip }),
 				prefix: "/api-reference",
 			});
 			if (!matched) reply.status(404).send();
