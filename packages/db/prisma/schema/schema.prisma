@@ -502,14 +502,15 @@ model GuestInvitation {
   eventId    String
   code       String
   url        String?
-  status     GuestInvitationStatus   @default(CREATED)
-  sentAt     DateTime?
-  openedAt   DateTime?
+  status      GuestInvitationStatus   @default(CREATED)
+  sentAt      DateTime?
+  openedAt    DateTime?
   respondedAt DateTime?
-  response   String?
-  qrCode     String?
-  rsvpStatus RsvpStatus             @default(PENDING)
-  expiresAt  DateTime?
+  publishedAt DateTime?
+  response    String?
+  qrCode      String?
+  rsvpStatus  RsvpStatus             @default(PENDING)
+  expiresAt   DateTime?
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
 
