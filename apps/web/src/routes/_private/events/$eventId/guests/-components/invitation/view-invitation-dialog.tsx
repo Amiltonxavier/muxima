@@ -67,14 +67,18 @@ export function ViewInvitationDialog({
 		}
 	};
 
-	const handleResponse = (response: "CONFIRM" | "DECLINE") => {
+	const handleResponse = (response: "CONFIRM" | "DECLINE" | "MAYBE") => {
 		if (!invitation?.code) return;
 		respondToInvitation.mutate(
 			{ code: String(invitation.code), response },
 			{
 				onSuccess: () => {
 					toast.success(
-						response === "CONFIRM" ? "Convite confirmado" : "Convite recusado",
+						response === "CONFIRM"
+							? "Convite confirmado"
+							: response === "MAYBE"
+								? "Convite marcado como talvez"
+								: "Convite recusado",
 					);
 					invitationQuery.refetch();
 				},
@@ -154,6 +158,7 @@ export function ViewInvitationDialog({
 							response={invitation.response}
 							respondedAt={invitation.respondedAt}
 							onConfirm={() => handleResponse("CONFIRM")}
+							onMaybe={() => handleResponse("MAYBE")}
 							onDecline={() => handleResponse("DECLINE")}
 							isResponding={respondToInvitation.isPending}
 						/>

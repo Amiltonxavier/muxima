@@ -17,6 +17,12 @@ import {
 } from "@/utils/status-helpers";
 import type { GuestFormApi } from "../../-types/guest.types";
 
+export const EDITABLE_GUEST_STATUS_OPTIONS = toSelectItems(
+	GUEST_STATUS_LABELS,
+).filter((item) =>
+	["PENDING", "CONFIRMED", "DECLINED", "WAITING"].includes(item.value),
+);
+
 export function GuestFormFields({
 	form,
 	tables,
@@ -147,7 +153,7 @@ export function GuestFormFields({
 						<div className="space-y-2">
 							<Label>Estado</Label>
 							<Select
-								items={toSelectItems(GUEST_STATUS_LABELS)}
+								items={EDITABLE_GUEST_STATUS_OPTIONS}
 								value={field.state.value}
 								onValueChange={(v) =>
 									field.handleChange(v as typeof field.state.value)
@@ -157,7 +163,7 @@ export function GuestFormFields({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									{toSelectItems(GUEST_STATUS_LABELS).map((item) => (
+									{EDITABLE_GUEST_STATUS_OPTIONS.map((item) => (
 										<SelectItem key={item.value} value={item.value}>
 											{item.label}
 										</SelectItem>

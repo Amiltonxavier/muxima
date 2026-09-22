@@ -4,7 +4,7 @@ import type { PaginationParams } from "./task-queries";
 
 export interface GuestFilters {
 	search?: string;
-	status?: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING";
+	status?: "PENDING" | "CONFIRMED" | "DECLINED" | "WAITING" | "MAYBE" | "CANCELLED";
 	type?: "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
 }
 

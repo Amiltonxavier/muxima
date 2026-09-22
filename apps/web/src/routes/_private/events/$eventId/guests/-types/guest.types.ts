@@ -37,7 +37,7 @@ export type GuestFormState = {
 	group: string;
 	type: GuestType;
 	notes: string;
-	status: GuestStatus;
+	status: "PENDING" | "DECLINED" | "CONFIRMED" | "WAITING";
 	tableId: string;
 };
 
