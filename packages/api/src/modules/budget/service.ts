@@ -1,5 +1,160 @@
-import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import db from "@muxima/db";
+import type { PrismaClient } from "@muxima/db/prisma";
+import {
+	ForbiddenError,
+	NotFoundError,
+	ValidationError,
+} from "../../shared/errors/app-error";
+import { InventoryService } from "../inventory/service";
 import { BudgetRepository, type ExpenseFilterParams } from "./repository";
+import type {
+	ExpenseInventoryInput,
+	CreateExpenseInput as ParsedCreateExpenseInput,
+	UpdateExpenseInput,
+} from "./schemas";
+
+type ExpenseStatusValue =
+	| "PLANNED"
+	| "PARTIALLY_PAID"
+	| "PAID"
+	| "OVERDUE"
+	| "CANCELLED";
+
+function expenseStatusFromPaidPercentage(
+	paidPercentage: number,
+): ExpenseStatusValue {
+	if (paidPercentage >= 100) return "PAID";
+	if (paidPercentage > 0) return "PARTIALLY_PAID";
+	return "PLANNED";
+}
+
+function toInventoryData(
+	inventory: ExpenseInventoryInput,
+	vendorId?: string | null,
+) {
+	return {
+		name: inventory.name,
+		category: inventory.category,
+		unit: inventory.unit,
+		plannedQuantity: inventory.plannedQuantity,
+		currentQuantity: 0,
+		venueQuantity: inventory.venueQuantity ?? 0,
+		unitPrice: inventory.unitPrice,
+		notes: inventory.notes,
+		vendorId: vendorId ?? undefined,
+	};
+}
+
+/**
+ * Creates an expense, optionally together with the inventory item it
+ * represents, inside a single transaction: either both records are persisted
+ * or none is.
+ */
+export async function createExpenseWithInventory(
+	client: PrismaClient,
+	eventId: string,
+	userId: string,
+	input: ParsedCreateExpenseInput,
+) {
+	return client.$transaction(async (tx) => {
+		let inventoryItemId: string | null = null;
+
+		if (input.isInventoryItem && input.inventory) {
+			const item = await InventoryService.create(
+				tx,
+				eventId,
+				userId,
+				toInventoryData(input.inventory, input.vendorId),
+			);
+			inventoryItemId = item.id;
+		}
+
+		const paidPercentage = input.paidPercentage ?? 0;
+		return tx.expense.create({
+			data: {
+				eventId,
+				budgetCategoryId: input.budgetCategoryId,
+				vendorId: input.vendorId,
+				inventoryItemId,
+				description: input.description,
+				type: input.type ?? "EXPENSE",
+				totalAmount: input.totalAmount,
+				dueDate: input.dueDate ? new Date(input.dueDate) : null,
+				status: expenseStatusFromPaidPercentage(paidPercentage),
+				paidPercentage,
+				notes: input.notes,
+				createdBy: userId,
+			},
+		});
+	});
+}
+
+/**
+ * Updates an expense and keeps its inventory relationship consistent:
+ * - `isInventoryItem: true` creates the inventory item when there is none and
+ *   updates the linked item when the payload is provided;
+ * - `isInventoryItem: false` detaches the relationship (the inventory item
+ *   itself is preserved so its history is never lost).
+ */
+export async function updateExpenseWithInventory(
+	client: PrismaClient,
+	userId: string,
+	input: UpdateExpenseInput & { id: string },
+) {
+	return client.$transaction(async (tx) => {
+		const expense = await tx.expense.findUnique({
+			where: { id: input.id },
+		});
+		if (!expense) throw new NotFoundError("Despesa não encontrada");
+
+		let inventoryItemId = expense.inventoryItemId;
+
+		if (input.isInventoryItem === false) {
+			// Detach only — the inventory item and its history are preserved.
+			inventoryItemId = null;
+		} else if (input.isInventoryItem === true) {
+			if (expense.inventoryItemId) {
+				if (input.inventory) {
+					await InventoryService.update(tx, expense.inventoryItemId, {
+						name: input.inventory.name,
+						category: input.inventory.category,
+						unit: input.inventory.unit,
+						plannedQuantity: input.inventory.plannedQuantity,
+						venueQuantity: input.inventory.venueQuantity,
+						unitPrice: input.inventory.unitPrice,
+						notes: input.inventory.notes,
+					});
+				}
+			} else {
+				if (!input.inventory) {
+					throw new ValidationError(
+						"Dados de inventário obrigatórios para um item do inventário",
+					);
+				}
+				const item = await InventoryService.create(
+					tx,
+					expense.eventId,
+					userId,
+					toInventoryData(input.inventory, expense.vendorId),
+				);
+				inventoryItemId = item.id;
+			}
+		}
+
+		return tx.expense.update({
+			where: { id: expense.id },
+			data: {
+				description: input.description,
+				vendorId: input.vendorId,
+				totalAmount: input.totalAmount,
+				dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+				notes: input.notes,
+				status: input.status,
+				inventoryItemId,
+			},
+		});
+	});
+}
 
 export const BudgetService = {
 	async getByEventId(eventId: string, _userId: string) {
@@ -55,25 +210,9 @@ export const BudgetService = {
 	async createExpense(
 		eventId: string,
 		userId: string,
-		data: {
-			description: string;
-			totalAmount: number;
-			budgetCategoryId?: string;
-			vendorId?: string;
-			dueDate?: string;
-			notes?: string;
-		},
+		data: ParsedCreateExpenseInput,
 	) {
-		return BudgetRepository.createExpense({
-			eventId,
-			description: data.description,
-			totalAmount: data.totalAmount,
-			budgetCategoryId: data.budgetCategoryId,
-			vendorId: data.vendorId,
-			dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-			notes: data.notes,
-			createdBy: userId,
-		});
+		return createExpenseWithInventory(db, eventId, userId, data);
 	},
 
 	async createPayment(

@@ -98,19 +98,6 @@ export const BudgetRepository = {
 		return db.expense.count({ where: buildExpenseWhere(eventId, filters) });
 	},
 
-	createExpense(data: {
-		eventId: string;
-		description: string;
-		totalAmount: number;
-		budgetCategoryId?: string;
-		vendorId?: string;
-		dueDate?: Date;
-		notes?: string;
-		createdBy: string;
-	}) {
-		return db.expense.create({ data });
-	},
-
 	updateExpense(
 		id: string,
 		data: Partial<{

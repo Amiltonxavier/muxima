@@ -99,6 +99,12 @@ export const TASK_CATEGORY_LABELS: Record<string, string> = {
 	OTHER: "Outro",
 };
 
+export const INVENTORY_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Pendente",
+	IN_PROGRESS: "Em curso",
+	COMPLETED: "Concluído",
+};
+
 export const INVENTORY_CATEGORY_LABELS: Record<string, string> = {
 	DRINK: "Bebidas",
 	FOOD: "Alimentação",
@@ -185,7 +191,15 @@ export function getStatusColor(status: string): string {
 
 export function getStatusLabel(
 	status: string,
-	type: "event" | "expense" | "guest" | "task" | "vendor" | "role" | "document",
+	type:
+		| "event"
+		| "expense"
+		| "guest"
+		| "task"
+		| "vendor"
+		| "role"
+		| "document"
+		| "inventory",
 ): string {
 	const labels: Record<string, Record<string, string>> = {
 		event: EVENT_STATUS_LABELS,
@@ -195,6 +209,7 @@ export function getStatusLabel(
 		vendor: VENDOR_STATUS_LABELS,
 		role: MEMBER_ROLE_LABELS,
 		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
+		inventory: INVENTORY_STATUS_LABELS,
 	};
 	return labels[type]?.[status] || status;
 }

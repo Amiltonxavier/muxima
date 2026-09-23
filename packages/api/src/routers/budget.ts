@@ -3,11 +3,35 @@ import type { ExpenseStatus, Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
+	createExpenseSchema,
+	updateExpenseSchema,
+} from "../modules/budget/schemas";
+import {
+	createExpenseWithInventory,
+	updateExpenseWithInventory,
+} from "../modules/budget/service";
+import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
 import { expenseListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
+
+const expenseInventoryItemInclude = {
+	inventoryItem: {
+		select: {
+			id: true,
+			name: true,
+			category: true,
+			unit: true,
+			status: true,
+			plannedQuantity: true,
+			currentQuantity: true,
+			venueQuantity: true,
+			unitPrice: true,
+		},
+	},
+} as const;
 
 export const budgetRouter = {
 	getByEventId: protectedProcedure
@@ -166,6 +190,7 @@ export const budgetRouter = {
 						vendor: true,
 						budgetCategory: true,
 						payments: true,
+						...expenseInventoryItemInclude,
 					},
 					orderBy: { createdAt: "desc" },
 					skip,
@@ -178,83 +203,29 @@ export const budgetRouter = {
 		}),
 
 	createExpense: protectedProcedure
-		.input(
-			z.object({
-				eventId: z.string(),
-				budgetCategoryId: z.string().optional(),
-				vendorId: z.string().optional(),
-				description: z.string().min(1),
-				type: z.enum(["EXPENSE", "INCOME"]).optional().default("EXPENSE"),
-				totalAmount: z.number().positive(),
-				dueDate: z.string().optional(),
-				paidPercentage: z.number().min(0).max(100).optional().default(0),
-				notes: z.string().optional(),
-			}),
-		)
+		.input(createExpenseSchema.extend({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-			const paidPercentage = input.paidPercentage ?? 0;
-			let status:
-				| "PLANNED"
-				| "PARTIALLY_PAID"
-				| "PAID"
-				| "OVERDUE"
-				| "CANCELLED" = "PLANNED";
-			if (paidPercentage >= 100) status = "PAID";
-			else if (paidPercentage > 0) status = "PARTIALLY_PAID";
-
-			const expense = await db.expense.create({
-				data: {
-					eventId: input.eventId,
-					budgetCategoryId: input.budgetCategoryId,
-					vendorId: input.vendorId,
-					description: input.description,
-					type: input.type as "EXPENSE" | "INCOME",
-					totalAmount: input.totalAmount,
-					dueDate: input.dueDate ? new Date(input.dueDate) : null,
-					status,
-					paidPercentage,
-					notes: input.notes,
-					createdBy: context.session.user.id,
-				},
-			});
-
-			return expense;
+			return createExpenseWithInventory(
+				db,
+				input.eventId,
+				context.session.user.id,
+				input,
+			);
 		}),
 
 	updateExpense: protectedProcedure
-		.input(
-			z.object({
-				id: z.string(),
-				description: z.string().min(1).optional(),
-				vendorId: z.string().nullable().optional(),
-				totalAmount: z.number().positive().optional(),
-				dueDate: z.string().optional(),
-				notes: z.string().optional(),
-				status: z
-					.enum(["PLANNED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"])
-					.optional(),
-			}),
-		)
+		.input(updateExpenseSchema.extend({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const expense = await db.expense.findUnique({ where: { id: input.id } });
+			const expense = await db.expense.findUnique({
+				where: { id: input.id },
+				select: { eventId: true },
+			});
 			if (!expense) throw new Error("Despesa não encontrada");
 			await requireEventAccess(context.session.user.id, expense.eventId);
 
-			const updated = await db.expense.update({
-				where: { id: input.id },
-				data: {
-					description: input.description,
-					vendorId: input.vendorId,
-					totalAmount: input.totalAmount,
-					dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
-					notes: input.notes,
-					status: input.status,
-				},
-			});
-
-			return updated;
+			return updateExpenseWithInventory(db, context.session.user.id, input);
 		}),
 
 	deleteExpense: protectedProcedure
@@ -274,7 +245,12 @@ export const budgetRouter = {
 		.handler(async ({ context, input }) => {
 			const expense = await db.expense.findUnique({
 				where: { id: input.id },
-				include: { vendor: true, budgetCategory: true, payments: true },
+				include: {
+					vendor: true,
+					budgetCategory: true,
+					payments: true,
+					...expenseInventoryItemInclude,
+				},
 			});
 			if (!expense) throw new Error("Despesa não encontrada");
 			await requireEventAccess(context.session.user.id, expense.eventId);

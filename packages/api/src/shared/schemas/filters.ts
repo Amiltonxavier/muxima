@@ -53,14 +53,7 @@ export type TaskListInput = z.infer<typeof taskListInput>;
 export const guestFiltersSchema = z.object({
 	search: z.string().trim().optional(),
 	status: z
-		.enum([
-			"PENDING",
-			"CONFIRMED",
-			"DECLINED",
-			"WAITING",
-			"MAYBE",
-			"CANCELLED",
-		])
+		.enum(["PENDING", "CONFIRMED", "DECLINED", "WAITING", "MAYBE", "CANCELLED"])
 		.optional(),
 	type: z.enum(["FAMILY", "FRIEND", "COLLEAGUE", "VIP", "OTHER"]).optional(),
 });
@@ -126,6 +119,7 @@ export type ExpenseListInput = z.infer<typeof expenseListInput>;
 export const inventoryFiltersSchema = z.object({
 	search: z.string().trim().optional(),
 	category: z.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"]).optional(),
+	status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
 	vendorId: z.string().uuid().optional(),
 });
 

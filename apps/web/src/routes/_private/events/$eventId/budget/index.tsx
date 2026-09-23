@@ -1,11 +1,11 @@
+import type {
+	InventoryCategory,
+	InventoryUnit,
+} from "@muxima/api/shared/types/entities";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@muxima/ui/components/card";
+import { Card, CardContent, CardHeader } from "@muxima/ui/components/card";
+import { Checkbox } from "@muxima/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -34,7 +34,7 @@ import {
 	TableRow,
 } from "@muxima/ui/components/table";
 import { Textarea } from "@muxima/ui/components/textarea";
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
@@ -54,20 +54,55 @@ import {
 	useUpsertBudget,
 } from "@/shared/queries/budget-queries";
 import { useVendors } from "@/shared/queries/vendor-queries";
-import { expenseSchema } from "@/utils/budget-schemas";
-import { orpc } from "@/utils/orpc";
+import { type ExpenseInput, expenseSchema } from "@/utils/budget-schemas";
 import { formatCurrency } from "@/utils/format-currency";
 import { formatDate } from "@/utils/format-date";
+import {
+	type InventoryItemInput,
+	inventoryItemSchema,
+} from "@/utils/inventory-schemas";
+import { orpc } from "@/utils/orpc";
 import {
 	EXPENSE_STATUS_LABELS,
 	getStatusColor,
 	getStatusLabel,
+	INVENTORY_CATEGORY_LABELS,
+	INVENTORY_UNIT_LABELS,
 	toSelectItems,
 } from "@/utils/status-helpers";
 
 export const Route = createFileRoute("/_private/events/$eventId/budget/")({
 	component: BudgetPage,
 });
+
+type ExpenseStatusValue =
+	| "PLANNED"
+	| "PARTIALLY_PAID"
+	| "PAID"
+	| "OVERDUE"
+	| "CANCELLED";
+
+type ExpenseListItem = NonNullable<
+	ReturnType<typeof useExpenses>["data"]
+>["data"][number];
+
+type InventoryInitialValues = {
+	id: string;
+	name: string;
+	category: InventoryCategory;
+	unit: InventoryUnit;
+	plannedQuantity: number;
+	currentQuantity: number;
+	venueQuantity: number;
+	unitPrice: number;
+};
+
+type ExpenseDialogSubmitValues = ExpenseInput & {
+	vendorId?: string;
+	status?: ExpenseStatusValue;
+	isInventoryItem: boolean;
+	inventory?: InventoryItemInput;
+};
 
 function BudgetPage() {
 	const { eventId } = Route.useParams();
@@ -93,32 +128,12 @@ function BudgetPage() {
 
 	const [showCreateExpenseDialog, setShowCreateExpenseDialog] = useState(false);
 	const [showEditBudgetDialog, setShowEditBudgetDialog] = useState(false);
-	const [editingExpense, setEditingExpense] = useState<{
-		id?: string;
-		description?: string;
-		vendorId?: string;
-		totalAmount?: number;
-		dueDate?: string;
-		notes?: string;
-		status?: string;
-		vendor?: { name?: string };
-	} | null>(null);
-	const [viewingExpense, setViewingExpense] = useState<{
-		id?: string;
-		description?: string;
-		vendorId?: string;
-		totalAmount?: number;
-		dueDate?: string;
-		notes?: string;
-		status?: string;
-		vendor?: { name?: string; phone?: string };
-		payments?: Array<{
-			amount?: number;
-			paymentDate?: string;
-			method?: string;
-		}>;
-		budgetCategory?: { name?: string };
-	} | null>(null);
+	const [editingExpense, setEditingExpense] = useState<ExpenseListItem | null>(
+		null,
+	);
+	const [viewingExpense, setViewingExpense] = useState<ExpenseListItem | null>(
+		null,
+	);
 	const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
 		null,
 	);
@@ -128,10 +143,10 @@ function BudgetPage() {
 	const expensesMeta = expensesQuery.data?.meta;
 	const budgetStats = budgetStatsQuery.data;
 
-	const plannedAmount = budgetStats?.plannedAmount ?? Number(budget?.plannedAmount ?? 0);
+	const plannedAmount =
+		budgetStats?.plannedAmount ?? Number(budget?.plannedAmount ?? 0);
 	const totalExpenses = budgetStats?.totalSpent ?? 0;
 	const remaining = budgetStats?.available ?? 0;
-	const percent = budgetStats?.utilizationRate ?? 0;
 
 	return (
 		<div className="space-y-6">
@@ -175,21 +190,36 @@ function BudgetPage() {
 						</Card>
 					))}
 				</div>
-			) : (			<div className="grid gap-4 sm:grid-cols-3">
-				<StatsCard
-					title="Planeado"
-					value={formatCurrency(plannedAmount)}
-					description={(budgetStats?.reserveAmount ?? 0) > 0 ? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}` : undefined}
-				/>
-				<StatsCard
-					title="Gasto"
-					value={<span className="text-amber-600">{formatCurrency(totalExpenses)}</span>}
-				/>
-				<StatsCard
-					title="Disponível"
-					value={<span className={remaining < 0 ? "text-red-600" : "text-green-600"}>{formatCurrency(remaining > 0 ? remaining : 0)}</span>}
-				/>
-			</div>
+			) : (
+				<div className="grid gap-4 sm:grid-cols-3">
+					<StatsCard
+						title="Planeado"
+						value={formatCurrency(plannedAmount)}
+						description={
+							(budgetStats?.reserveAmount ?? 0) > 0
+								? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}`
+								: undefined
+						}
+					/>
+					<StatsCard
+						title="Gasto"
+						value={
+							<span className="text-amber-600">
+								{formatCurrency(totalExpenses)}
+							</span>
+						}
+					/>
+					<StatsCard
+						title="Disponível"
+						value={
+							<span
+								className={remaining < 0 ? "text-red-600" : "text-green-600"}
+							>
+								{formatCurrency(remaining > 0 ? remaining : 0)}
+							</span>
+						}
+					/>
+				</div>
 			)}
 
 			<QueryState
@@ -345,9 +375,31 @@ function BudgetPage() {
 						notes: editingExpense.notes ?? "",
 						status: editingExpense.status ?? "PLANNED",
 					}}
+					inventoryInitial={
+						editingExpense.inventoryItem
+							? {
+									id: editingExpense.inventoryItem.id,
+									name: editingExpense.inventoryItem.name,
+									category: editingExpense.inventoryItem.category,
+									unit: editingExpense.inventoryItem.unit,
+									plannedQuantity: Number(
+										editingExpense.inventoryItem.plannedQuantity,
+									),
+									currentQuantity: Number(
+										editingExpense.inventoryItem.currentQuantity,
+									),
+									venueQuantity: Number(
+										editingExpense.inventoryItem.venueQuantity,
+									),
+									unitPrice: Number(
+										editingExpense.inventoryItem.unitPrice ?? 0,
+									),
+								}
+							: null
+					}
 					onSubmit={(values) => {
 						updateExpense.mutate(
-							{ id: editingExpense.id!, ...values },
+							{ id: editingExpense.id, ...values },
 							{
 								onSuccess: () => {
 									toast.success("Despesa atualizada");
@@ -423,27 +475,14 @@ function ViewExpenseDialog({
 	expense,
 	onClose,
 }: {
-	expense: {
-		id?: string;
-		description?: string;
-		totalAmount?: number;
-		status?: string;
-		dueDate?: string;
-		notes?: string;
-		vendor?: { name?: string; phone?: string };
-		budgetCategory?: { name?: string };
-		payments?: Array<{
-			amount?: number;
-			paymentDate?: string;
-			method?: string;
-		}>;
-	};
+	expense: ExpenseListItem;
 	onClose: () => void;
 }) {
 	const expenseStatsQuery = useExpenseStats(expense.id ?? "");
 	const expenseStats = expenseStatsQuery.data;
 	const totalPaid = expenseStats?.totalPaid ?? 0;
-	const totalAmount = expenseStats?.totalAmount ?? Number(expense.totalAmount ?? 0);
+	const totalAmount =
+		expenseStats?.totalAmount ?? Number(expense.totalAmount ?? 0);
 	const remaining = expenseStats?.remaining ?? totalAmount - totalPaid;
 	const paymentRate = expenseStats?.paymentRate ?? 0;
 	const vendor = expense.vendor;
@@ -482,7 +521,8 @@ function ViewExpenseDialog({
 							<span>
 								Restante: {formatCurrency(remaining > 0 ? remaining : 0)}
 							</span>
-						</div>					<Progress value={paymentRate} />
+						</div>{" "}
+						<Progress value={paymentRate} />
 					</div>
 
 					<div className="grid grid-cols-2 gap-3">
@@ -688,6 +728,7 @@ function ExpenseDialog({
 	open,
 	onOpenChange,
 	initialValues,
+	inventoryInitial,
 	onSubmit,
 	isLoading,
 	vendors = [],
@@ -702,7 +743,8 @@ function ExpenseDialog({
 		notes: string;
 		status?: string;
 	};
-	onSubmit: (values: any) => void;
+	inventoryInitial?: InventoryInitialValues | null;
+	onSubmit: (values: ExpenseDialogSubmitValues) => void;
 	isLoading: boolean;
 	vendors?: Array<{ id?: string; name?: string }>;
 }) {
@@ -715,12 +757,14 @@ function ExpenseDialog({
 			totalAmount: initialValues?.totalAmount ?? 0,
 			dueDate: initialValues?.dueDate ?? "",
 			notes: initialValues?.notes ?? "",
-			status: (initialValues?.status ?? "PLANNED") as
-				| "PLANNED"
-				| "PARTIALLY_PAID"
-				| "PAID"
-				| "OVERDUE"
-				| "CANCELLED",
+			status: (initialValues?.status ?? "PLANNED") as ExpenseStatusValue,
+			isInventoryItem: !!inventoryInitial,
+			inventoryName: inventoryInitial?.name ?? "",
+			inventoryCategory: inventoryInitial?.category ?? "DRINK",
+			inventoryUnit: inventoryInitial?.unit ?? "UNIT",
+			inventoryPlannedQuantity: inventoryInitial?.plannedQuantity ?? 0,
+			inventoryVenueQuantity: inventoryInitial?.venueQuantity ?? 0,
+			inventoryUnitPrice: inventoryInitial?.unitPrice ?? 0,
 		},
 		onSubmit: async ({ value }) => {
 			const result = expenseSchema.safeParse(value);
@@ -728,13 +772,45 @@ function ExpenseDialog({
 				toast.error(result.error.issues[0].message);
 				return;
 			}
-			onSubmit({
+			const base: ExpenseInput & {
+				vendorId?: string;
+				status?: ExpenseStatusValue;
+			} = {
 				...result.data,
 				vendorId: value.vendorId || undefined,
 				status: value.status,
+			};
+
+			if (!value.isInventoryItem) {
+				onSubmit({ ...base, isInventoryItem: false });
+				return;
+			}
+
+			const inventoryResult = inventoryItemSchema.safeParse({
+				name: value.inventoryName,
+				category: value.inventoryCategory,
+				unit: value.inventoryUnit,
+				plannedQuantity: value.inventoryPlannedQuantity,
+				venueQuantity: value.inventoryVenueQuantity,
+				unitPrice: value.inventoryUnitPrice,
+			});
+			if (!inventoryResult.success) {
+				toast.error(inventoryResult.error.issues[0].message);
+				return;
+			}
+
+			onSubmit({
+				...base,
+				isInventoryItem: true,
+				inventory: inventoryResult.data,
 			});
 		},
 	});
+
+	const showInventorySection = useStore(
+		form.store,
+		(state) => state.values.isInventoryItem,
+	);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -844,6 +920,153 @@ function ExpenseDialog({
 								</div>
 							)}
 						</form.Field>
+					)}
+					<form.Field name="isInventoryItem">
+						{(field) => (
+							<label
+								htmlFor="is-inventory-item"
+								className="flex cursor-pointer items-center gap-2 text-sm"
+							>
+								<Checkbox
+									id="is-inventory-item"
+									checked={field.state.value}
+									onCheckedChange={(checked) =>
+										field.handleChange(checked === true)
+									}
+									disabled={isLoading}
+								/>
+								É um item do inventário
+							</label>
+						)}
+					</form.Field>
+
+					{showInventorySection && (
+						<div className="space-y-4 rounded border p-4">
+							<div className="flex items-center justify-between">
+								<p className="font-medium text-sm">Dados do inventário</p>
+								{inventoryInitial && (
+									<p className="text-muted-foreground text-xs">
+										Actual: {inventoryInitial.currentQuantity}
+									</p>
+								)}
+							</div>
+							<p className="text-muted-foreground text-xs">
+								Ao guardar, esta despesa cria e amarra o item correspondente ao
+								inventário.
+							</p>
+							<form.Field name="inventoryName">
+								{(field) => (
+									<div className="space-y-2">
+										<Label>Produto</Label>
+										<Input
+											value={field.state.value}
+											onChange={(e) => field.handleChange(e.target.value)}
+											disabled={isLoading}
+										/>
+									</div>
+								)}
+							</form.Field>
+							<div className="grid grid-cols-2 gap-4">
+								<form.Field name="inventoryCategory">
+									{(field) => (
+										<div className="space-y-2">
+											<Label>Categoria</Label>
+											<Select
+												items={toSelectItems(INVENTORY_CATEGORY_LABELS)}
+												value={field.state.value}
+												onValueChange={(v) =>
+													field.handleChange(v as InventoryCategory)
+												}
+											>
+												<SelectTrigger>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{toSelectItems(INVENTORY_CATEGORY_LABELS).map(
+														(item) => (
+															<SelectItem key={item.value} value={item.value}>
+																{item.label}
+															</SelectItem>
+														),
+													)}
+												</SelectContent>
+											</Select>
+										</div>
+									)}
+								</form.Field>
+								<form.Field name="inventoryUnit">
+									{(field) => (
+										<div className="space-y-2">
+											<Label>Unidade</Label>
+											<Select
+												items={toSelectItems(INVENTORY_UNIT_LABELS)}
+												value={field.state.value}
+												onValueChange={(v) =>
+													field.handleChange(v as InventoryUnit)
+												}
+											>
+												<SelectTrigger>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{toSelectItems(INVENTORY_UNIT_LABELS).map((item) => (
+														<SelectItem key={item.value} value={item.value}>
+															{item.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
+									)}
+								</form.Field>
+							</div>
+							<div className="grid grid-cols-3 gap-4">
+								<form.Field name="inventoryPlannedQuantity">
+									{(field) => (
+										<div className="space-y-2">
+											<Label>Quantidade planeada</Label>
+											<Input
+												type="number"
+												min={1}
+												value={field.state.value || ""}
+												onChange={(e) =>
+													field.handleChange(Number(e.target.value) || 0)
+												}
+												disabled={isLoading}
+											/>
+										</div>
+									)}
+								</form.Field>
+								<form.Field name="inventoryVenueQuantity">
+									{(field) => (
+										<div className="space-y-2">
+											<Label>Para o salão</Label>
+											<Input
+												type="number"
+												min={0}
+												value={field.state.value || ""}
+												onChange={(e) =>
+													field.handleChange(Number(e.target.value) || 0)
+												}
+												disabled={isLoading}
+											/>
+										</div>
+									)}
+								</form.Field>
+								<form.Field name="inventoryUnitPrice">
+									{(field) => (
+										<div className="space-y-2">
+											<Label>Preço unit. (Kz)</Label>
+											<CurrencyInput
+												value={field.state.value || 0}
+												onChange={(v) => field.handleChange(v)}
+												disabled={isLoading}
+											/>
+										</div>
+									)}
+								</form.Field>
+							</div>
+						</div>
 					)}
 					<form.Field name="notes">
 						{(field) => (

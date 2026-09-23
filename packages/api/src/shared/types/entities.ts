@@ -99,6 +99,7 @@ export type MovementType =
 	| "ADJUSTMENT"
 	| "LOSS"
 	| "RETURN";
+export type InventoryStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 export type DocumentType = "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
 export type DocumentStatus = "ACTIVE" | "ARCHIVED" | "DELETED";
 export type NotificationType =
@@ -219,6 +220,7 @@ export type Expense = {
 	eventId: string;
 	budgetCategoryId: string | null;
 	vendorId: string | null;
+	inventoryItemId: string | null;
 	description: string;
 	type: ExpenseType;
 	totalAmount: number;
@@ -234,6 +236,7 @@ export type Expense = {
 export type ExpenseWithRelations = Expense & {
 	vendor: Vendor | null;
 	budgetCategory: BudgetCategory | null;
+	inventoryItem: InventoryItem | null;
 	payments: Payment[];
 };
 
@@ -495,6 +498,8 @@ export type InventoryItem = {
 	category: InventoryCategory;
 	plannedQuantity: number;
 	currentQuantity: number;
+	venueQuantity: number;
+	status: InventoryStatus;
 	unit: InventoryUnit;
 	unitPrice: number | null;
 	vendorId: string | null;
@@ -508,15 +513,83 @@ export type InventoryItemWithRelations = InventoryItem & {
 	movements: InventoryMovement[];
 };
 
+// Row shape returned by the inventory list/detail endpoints. All quantities,
+// values and percentages are calculated by the backend — the frontend only
+// renders them.
+export type InventoryListItem = {
+	id: string;
+	eventId: string;
+	name: string;
+	category: InventoryCategory;
+	unit: InventoryUnit;
+	status: InventoryStatus;
+	plannedQuantity: number;
+	currentQuantity: number;
+	venueQuantity: number;
+	remainingQuantity: number;
+	completionPercentage: number;
+	unitPrice: number | null;
+	totalValue: number;
+	completedValue: number;
+	pendingValue: number;
+	vendorId: string | null;
+	vendor: Vendor | null;
+	notes: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
 // ── InventoryMovement ───────────────────────────────────────────
 export type InventoryMovement = {
 	id: string;
 	inventoryItemId: string;
 	type: MovementType;
 	quantity: number;
+	unitPrice: number | null;
+	totalCost: number | null;
 	reason: string | null;
 	createdBy: string;
 	createdAt: Date;
+};
+
+export type InventoryMovementDto = InventoryMovement & {
+	creator: UserSummary | null;
+};
+
+export type InventoryHistory = {
+	item: {
+		id: string;
+		name: string;
+		unit: InventoryUnit;
+		status: InventoryStatus;
+		plannedQuantity: number;
+		currentQuantity: number;
+		remainingQuantity: number;
+		completionPercentage: number;
+		unitPrice: number | null;
+	};
+	movements: InventoryMovementDto[];
+	totals: {
+		movementsCount: number;
+		totalEntered: number;
+		totalCost: number;
+	};
+};
+
+// ── Inventory Stats ──────────────────────────────────────────────
+export type InventoryStats = {
+	totalItems: number;
+	totalQuantity: number;
+	totalCurrent: number;
+	totalVenue: number;
+	totalRemaining: number;
+	completionPercentage: number;
+	totalValue: number;
+	completedValue: number;
+	pendingValue: number;
+	completedItems: number;
+	inProgressItems: number;
+	pendingItems: number;
 };
 
 // ── Document ─────────────────────────────────────────────────────
@@ -671,6 +744,7 @@ export type CreateExpenseInput = {
 	vendorId?: string;
 	dueDate?: string;
 	notes?: string;
+	inventory?: CreateInventoryItemInput;
 };
 
 export type CreateInventoryItemInput = {
@@ -679,6 +753,7 @@ export type CreateInventoryItemInput = {
 	category: InventoryCategory;
 	plannedQuantity: number;
 	currentQuantity?: number;
+	venueQuantity?: number;
 	unit: InventoryUnit;
 	unitPrice?: number;
 	vendorId?: string;

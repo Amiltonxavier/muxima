@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
+import { inventoryKeys } from "./inventory-queries";
 import type { PaginationParams } from "./task-queries";
 
 export interface ExpenseFilters {
@@ -65,6 +66,8 @@ export function useCreateExpense() {
 				queryClient.invalidateQueries({
 					queryKey: [...budgetKeys.all, "expenses", data.eventId],
 				});
+				// Creating a linked expense also creates an inventory item.
+				queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
 			},
 		}),
 	);
@@ -77,6 +80,8 @@ export function useUpdateExpense() {
 		orpc.budget.updateExpense.mutationOptions({
 			onSuccess: (_data) => {
 				queryClient.invalidateQueries({ queryKey: budgetKeys.all });
+				// The expense may have created/updated/detached an inventory item.
+				queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
 			},
 		}),
 	);

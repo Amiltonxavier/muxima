@@ -100,6 +100,11 @@ export const VALID_INVENTORY_CATEGORIES = [
 	"DECORATION",
 	"OTHER",
 ] as const;
+export const VALID_INVENTORY_STATUSES = [
+	"PENDING",
+	"IN_PROGRESS",
+	"COMPLETED",
+] as const;
 export const VALID_DOCUMENT_TYPES = [
 	"CONTRACT",
 	"RECEIPT",

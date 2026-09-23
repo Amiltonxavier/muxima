@@ -213,6 +213,12 @@ enum MovementType {
   RETURN
 }
 
+enum InventoryStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
 enum DocumentType {
   CONTRACT
   RECEIPT
@@ -378,13 +384,15 @@ model Expense {
   createdBy        String
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  inventoryItemId  String?
 
-  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  budgetCategory BudgetCategory? @relation(fields: [budgetCategoryId], references: [id])
-  vendor         Vendor?        @relation(fields: [vendorId], references: [id])
-  payments       Payment[]
-  documents      Document[]
-  creator        User           @relation(fields: [createdBy], references: [id])
+  event           Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  budgetCategory  BudgetCategory? @relation(fields: [budgetCategoryId], references: [id])
+  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  payments        Payment[]
+  documents       Document[]
+  creator         User            @relation(fields: [createdBy], references: [id])
 
   @@index([eventId])
   @@index([budgetCategoryId])
@@ -624,6 +632,8 @@ model InventoryItem {
   category         InventoryCategory
   plannedQuantity  Decimal
   currentQuantity  Decimal           @default(0)
+  venueQuantity    Decimal           @default(0)
+  status           InventoryStatus   @default(PENDING)
   unit             InventoryUnit
   unitPrice        Decimal?
   vendorId         String?
@@ -634,6 +644,7 @@ model InventoryItem {
   event     Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   vendor    Vendor?            @relation(fields: [vendorId], references: [id])
   movements InventoryMovement[]
+  expenses  Expense[]
 
   @@index([eventId])
   @@index([vendorId])
@@ -645,6 +656,8 @@ model InventoryMovement {
   inventoryItemId String
   type            MovementType
   quantity        Decimal
+  unitPrice       Decimal?
+  totalCost       Decimal?
   reason          String?
   createdBy       String
   createdAt       DateTime     @default(now())

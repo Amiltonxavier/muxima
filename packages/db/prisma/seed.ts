@@ -1327,7 +1327,9 @@ async function main() {
 			category: "DRINK" as const,
 			unit: "BOTTLE" as const,
 			plannedQuantity: 40,
-			currentQuantity: 30,
+			currentQuantity: 29,
+			venueQuantity: 30,
+			status: "IN_PROGRESS" as const,
 			unitPrice: 12_000,
 			vendorId: null,
 		},
@@ -1338,6 +1340,8 @@ async function main() {
 			plannedQuantity: 20,
 			currentQuantity: 20,
 			unitPrice: 18_000,
+			venueQuantity: 20,
+			status: "COMPLETED" as const,
 			vendorId: null,
 		},
 		{
@@ -1347,6 +1351,8 @@ async function main() {
 			plannedQuantity: 100,
 			currentQuantity: 80,
 			unitPrice: 300,
+			venueQuantity: 80,
+			status: "IN_PROGRESS" as const,
 			vendorId: null,
 		},
 		{
@@ -1356,6 +1362,8 @@ async function main() {
 			plannedQuantity: 30,
 			currentQuantity: 0,
 			unitPrice: 2_500,
+			venueQuantity: 30,
+			status: "PENDING" as const,
 			vendorId: null,
 		},
 		{
@@ -1365,6 +1373,8 @@ async function main() {
 			plannedQuantity: 15,
 			currentQuantity: 10,
 			unitPrice: 8_000,
+			venueQuantity: 15,
+			status: "IN_PROGRESS" as const,
 			vendorId: null,
 		},
 		{
@@ -1374,6 +1384,8 @@ async function main() {
 			plannedQuantity: 50,
 			currentQuantity: 0,
 			unitPrice: 6_500,
+			venueQuantity: 50,
+			status: "PENDING" as const,
 			vendorId: "vnd_002",
 		},
 		{
@@ -1383,6 +1395,8 @@ async function main() {
 			plannedQuantity: 40,
 			currentQuantity: 0,
 			unitPrice: 4_000,
+			venueQuantity: 40,
+			status: "PENDING" as const,
 			vendorId: "vnd_002",
 		},
 		{
@@ -1392,6 +1406,8 @@ async function main() {
 			plannedQuantity: 30,
 			currentQuantity: 0,
 			unitPrice: 1_500,
+			venueQuantity: 30,
+			status: "PENDING" as const,
 			vendorId: "vnd_002",
 		},
 		{
@@ -1401,6 +1417,8 @@ async function main() {
 			plannedQuantity: 25,
 			currentQuantity: 0,
 			unitPrice: 3_000,
+			venueQuantity: 25,
+			status: "PENDING" as const,
 			vendorId: "vnd_002",
 		},
 		{
@@ -1410,6 +1428,8 @@ async function main() {
 			plannedQuantity: 1,
 			currentQuantity: 0,
 			unitPrice: 250_000,
+			venueQuantity: 1,
+			status: "PENDING" as const,
 			vendorId: null,
 		},
 		{
@@ -1419,6 +1439,8 @@ async function main() {
 			plannedQuantity: 80,
 			currentQuantity: 60,
 			unitPrice: 800,
+			venueQuantity: 80,
+			status: "IN_PROGRESS" as const,
 			vendorId: "vnd_001",
 		},
 		{
@@ -1428,6 +1450,8 @@ async function main() {
 			plannedQuantity: 50,
 			currentQuantity: 50,
 			unitPrice: 500,
+			venueQuantity: 50,
+			status: "COMPLETED" as const,
 			vendorId: "vnd_001",
 		},
 		{
@@ -1437,6 +1461,8 @@ async function main() {
 			plannedQuantity: 10,
 			currentQuantity: 8,
 			unitPrice: 15_000,
+			venueQuantity: 10,
+			status: "IN_PROGRESS" as const,
 			vendorId: "vnd_001",
 		},
 		{
@@ -1446,6 +1472,8 @@ async function main() {
 			plannedQuantity: 30,
 			currentQuantity: 30,
 			unitPrice: 2_000,
+			venueQuantity: 30,
+			status: "COMPLETED" as const,
 			vendorId: "vnd_001",
 		},
 		{
@@ -1455,6 +1483,8 @@ async function main() {
 			plannedQuantity: 3,
 			currentQuantity: 0,
 			unitPrice: 45_000,
+			venueQuantity: 3,
+			status: "PENDING" as const,
 			vendorId: null,
 		},
 	];
@@ -1484,6 +1514,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[0],
 			type: "PURCHASE" as const,
 			quantity: 20,
+			unitPrice: 12_000,
+			totalCost: 240_000,
 			reason: "Compra inicial ao fornecedor",
 			createdBy: USER_ADMIN,
 		},
@@ -1491,6 +1523,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[0],
 			type: "PURCHASE" as const,
 			quantity: 10,
+			unitPrice: 12_000,
+			totalCost: 120_000,
 			reason: "Segunda compra — completar stock",
 			createdBy: USER_ADMIN,
 		},
@@ -1498,13 +1532,17 @@ async function main() {
 			inventoryItemId: inventoryItemIds[1],
 			type: "PURCHASE" as const,
 			quantity: 20,
+			unitPrice: 18_000,
+			totalCost: 360_000,
 			reason: "Compra de champanhe para brinde",
 			createdBy: USER_OWNER,
 		},
 		{
 			inventoryItemId: inventoryItemIds[2],
 			type: "PURCHASE" as const,
-			quantity: 80,
+			quantity: 100,
+			unitPrice: 300,
+			totalCost: 30_000,
 			reason: "Compra de águas",
 			createdBy: USER_ADMIN,
 		},
@@ -1512,13 +1550,17 @@ async function main() {
 			inventoryItemId: inventoryItemIds[2],
 			type: "CONSUMPTION" as const,
 			quantity: 20,
+			unitPrice: 300,
+			totalCost: 6_000,
 			reason: "Teste de menu com fornecedor",
 			createdBy: USER_OWNER,
 		},
 		{
 			inventoryItemId: inventoryItemIds[4],
 			type: "PURCHASE" as const,
-			quantity: 10,
+			quantity: 15,
+			unitPrice: 8_000,
+			totalCost: 120_000,
 			reason: "Compra de cerveja Eza",
 			createdBy: USER_ADMIN,
 		},
@@ -1526,6 +1568,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[4],
 			type: "CONSUMPTION" as const,
 			quantity: 5,
+			unitPrice: 8_000,
+			totalCost: 40_000,
 			reason: "Reunião de planeamento",
 			createdBy: USER_PARTNER,
 		},
@@ -1533,6 +1577,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[10],
 			type: "PURCHASE" as const,
 			quantity: 60,
+			unitPrice: 800,
+			totalCost: 48_000,
 			reason: "Rosas para centros de mesa",
 			createdBy: USER_OWNER,
 		},
@@ -1540,6 +1586,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[11],
 			type: "PURCHASE" as const,
 			quantity: 50,
+			unitPrice: 500,
+			totalCost: 25_000,
 			reason: "Velas aromáticas para mesas",
 			createdBy: USER_OWNER,
 		},
@@ -1547,6 +1595,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[12],
 			type: "PURCHASE" as const,
 			quantity: 8,
+			unitPrice: 15_000,
+			totalCost: 120_000,
 			reason: "Tecido organza para decoração",
 			createdBy: USER_OWNER,
 		},
@@ -1554,6 +1604,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[13],
 			type: "PURCHASE" as const,
 			quantity: 30,
+			unitPrice: 2_000,
+			totalCost: 60_000,
 			reason: "Leteus para decoração de mesas",
 			createdBy: USER_OWNER,
 		},
@@ -1561,6 +1613,8 @@ async function main() {
 			inventoryItemId: inventoryItemIds[0],
 			type: "LOSS" as const,
 			quantity: 1,
+			unitPrice: 12_000,
+			totalCost: 12_000,
 			reason: "Garrafa quebrada durante transporte",
 			createdBy: USER_ADMIN,
 		},
@@ -1704,6 +1758,16 @@ async function main() {
 		});
 	}
 	console.log("  ✅ Expenses");
+
+	// ── Expenses linked to inventory items (Dispensa ↔ Inventory) ──
+	await prisma.expense.update({
+		where: { id: "exp_004" },
+		data: { inventoryItemId: "inv_001" },
+	});
+	await prisma.expense.update({
+		where: { id: "exp_006" },
+		data: { inventoryItemId: "inv_015" },
+	});
 
 	// ================================================================
 	// 18. PAYMENTS

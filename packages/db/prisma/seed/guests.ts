@@ -427,3 +427,5 @@ export async function seedGuests() {
 		{ id: "gst_con_149", name: "Célia Candundo", email: "celia.candundo@outlook.com", phone: "+244 923 457 087", group: "Outros", type: "OTHER", status: "CONFIRMED", companionsLimit: 0 },
 		{ id: "gst_con_150", name: "Rui Mabululu", email: "rui.mabululu@gmail.com", phone: "+244 923 457 088", group: "Outros", type: "OTHER", status: "DECLINED", companionsLimit: 0 },
 	];
+
+}
