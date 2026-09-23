@@ -179,8 +179,8 @@ function BudgetPage() {
 
 			{budgetQuery.isLoading ? (
 				<div className="grid gap-4 sm:grid-cols-3">
-					{Array.from({ length: 3 }).map((_, i) => (
-						<Card key={`skeleton-${i}`}>
+					{["card-1", "card-2", "card-3"].map((id) => (
+						<Card key={id}>
 							<CardHeader>
 								<div className="h-4 w-20 animate-pulse rounded bg-muted" />
 							</CardHeader>
@@ -567,9 +567,9 @@ function ViewExpenseDialog({
 								Pagamentos ({payments.length})
 							</h4>
 							<div className="space-y-2">
-								{payments.map((payment, i) => (
+								{payments.map((payment) => (
 									<div
-										key={i}
+										key={payment.id}
 										className="flex items-center justify-between rounded border p-2.5 text-sm"
 									>
 										<div>
