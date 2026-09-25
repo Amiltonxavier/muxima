@@ -302,31 +302,32 @@ export const tasksRouter = {
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
-const [total, todo, inProgress, completed, cancelled, overdue] =
-			await Promise.all([
-				db.task.count({ where: { eventId: input.eventId } }),
-				db.task.count({
-					where: { eventId: input.eventId, status: "TODO" },
-				}),
-				db.task.count({
-					where: { eventId: input.eventId, status: "IN_PROGRESS" },
-				}),
-				db.task.count({
-					where: { eventId: input.eventId, status: "COMPLETED" },
-				}),
-				db.task.count({
-					where: { eventId: input.eventId, status: "CANCELLED" },
-				}),
-				db.task.count({
-					where: {
-						eventId: input.eventId,
-						status: { in: ["TODO", "IN_PROGRESS"] },
-						dueDate: { lt: new Date() },
-					},
-				}),
-			]);
+			const [total, todo, inProgress, completed, cancelled, overdue] =
+				await Promise.all([
+					db.task.count({ where: { eventId: input.eventId } }),
+					db.task.count({
+						where: { eventId: input.eventId, status: "TODO" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "IN_PROGRESS" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "COMPLETED" },
+					}),
+					db.task.count({
+						where: { eventId: input.eventId, status: "CANCELLED" },
+					}),
+					db.task.count({
+						where: {
+							eventId: input.eventId,
+							status: { in: ["TODO", "IN_PROGRESS"] },
+							dueDate: { lt: new Date() },
+						},
+					}),
+				]);
 
-			const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+			const completionRate =
+				total > 0 ? Math.round((completed / total) * 100) : 0;
 
 			return {
 				total,

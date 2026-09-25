@@ -1,7 +1,7 @@
 // event-stats/queries/use-event-stats.ts
 
-import { orpc } from "@/utils/orpc";
 import { useQuery } from "@tanstack/react-query";
+import { orpc } from "@/utils/orpc";
 
 export function useEventStats(eventId: string) {
 	const guests = useQuery(

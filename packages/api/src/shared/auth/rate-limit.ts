@@ -23,9 +23,7 @@ export function createMemoryRateLimiter(
 		);
 
 		if (recent.length >= options.limit) {
-			throw new Error(
-				"Demasiadas tentativas. Tente novamente mais tarde.",
-			);
+			throw new Error("Demasiadas tentativas. Tente novamente mais tarde.");
 		}
 
 		recent.push(now);
@@ -34,9 +32,7 @@ export function createMemoryRateLimiter(
 		if (hits.size > 10_000) {
 			for (const [staleKey, timestamps] of hits) {
 				if (
-					timestamps.every(
-						(timestamp) => now - timestamp >= options.windowMs,
-					)
+					timestamps.every((timestamp) => now - timestamp >= options.windowMs)
 				) {
 					hits.delete(staleKey);
 				}

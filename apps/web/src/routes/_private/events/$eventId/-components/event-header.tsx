@@ -1,19 +1,17 @@
 // -components/event-header.tsx
 
-import { Pencil, Trash2 } from "lucide-react";
+import type { EventType } from "@muxima/api/shared/types/entities";
 
 import { Button } from "@muxima/ui/components/button";
-
+import { Pencil, Trash2 } from "lucide-react";
 import { BackButton } from "@/shared/components/back-to";
-
-import { UpdateEventStatus } from "./update-event-status";
 import { EventTypeBadge } from "./event-type-badge";
-import { EventType } from "@muxima/api/shared/types/entities";
+import { UpdateEventStatus } from "./update-event-status";
 
 interface EventHeaderProps {
 	eventId: string;
 	name: string;
-	type: EventType
+	type: EventType;
 	description?: string | null;
 	status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 	onEdit: () => void;
@@ -38,11 +36,7 @@ export function EventHeader({
 					<h1 className="font-semibold text-2xl">{name}</h1>
 					<EventTypeBadge type={type} />
 
-					<UpdateEventStatus
-						eventId={eventId}
-						status={status}
-					/>
-					
+					<UpdateEventStatus eventId={eventId} status={status} />
 				</div>
 
 				{description && (
@@ -50,7 +44,6 @@ export function EventHeader({
 						{description}
 					</p>
 				)}
-
 			</div>
 
 			<div className="flex gap-2">

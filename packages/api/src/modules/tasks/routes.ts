@@ -68,11 +68,9 @@ export async function taskRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
+			});
 		await requireEventAccess(userId, eventId);
 		const data = updateTaskSchema.parse(request.body);
 		const task = await TaskService.update(id, data);
@@ -88,11 +86,9 @@ export async function taskRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
+			});
 		await requireEventAccess(userId, eventId);
 		await TaskService.delete(id);
 		return reply.status(204).send();
@@ -143,11 +139,9 @@ export async function taskRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		const data = updateScheduleSchema.parse(request.body);
 		const schedule = await TaskService.updateSchedule(id, data);
@@ -163,11 +157,9 @@ export async function taskRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		await TaskService.deleteSchedule(id);
 		return reply.status(204).send();

@@ -1,16 +1,13 @@
-
-import { CreditCard } from "lucide-react";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
 } from "@muxima/ui/components/card";
-import { ChartStatItem } from "./chart-stat-item";
+import { CreditCard } from "lucide-react";
 import { ProgressDonut } from "@/shared/components/charts";
 import { formatCurrency } from "@/utils/format-currency";
-
-
+import { ChartStatItem } from "./chart-stat-item";
 
 interface BudgetSummaryChartProps {
 	data?: {
@@ -22,9 +19,7 @@ interface BudgetSummaryChartProps {
 	};
 }
 
-export function BudgetSummaryChart({
-	data,
-}: BudgetSummaryChartProps) {
+export function BudgetSummaryChart({ data }: BudgetSummaryChartProps) {
 	if (!data) {
 		return null;
 	}
@@ -57,10 +52,7 @@ export function BudgetSummaryChart({
 								value={formatCurrency(data.totalBudget)}
 							/>
 
-							<ChartStatItem
-								label="Gasto"
-								value={formatCurrency(data.spent)}
-							/>
+							<ChartStatItem label="Gasto" value={formatCurrency(data.spent)} />
 
 							{data.planned > 0 && (
 								<ChartStatItem
@@ -71,13 +63,9 @@ export function BudgetSummaryChart({
 
 							<ChartStatItem
 								label="Disponível"
-								value={formatCurrency(
-									data.available > 0 ? data.available : 0,
-								)}
+								value={formatCurrency(data.available > 0 ? data.available : 0)}
 								valueClassName={
-									data.available < 0
-										? "text-red-600"
-										: "text-green-600"
+									data.available < 0 ? "text-red-600" : "text-green-600"
 								}
 							/>
 						</div>

@@ -48,11 +48,9 @@ export async function vendorRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("vendor", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		const vendor = await VendorService.findById(id);
 		return successResponse(vendor);
@@ -79,11 +77,9 @@ export async function vendorRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("vendor", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		const data = updateVendorSchema.parse(request.body);
 		const vendor = await VendorService.update(id, data);
@@ -99,11 +95,9 @@ export async function vendorRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("vendor", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Fornecedor não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		await VendorService.delete(id);
 		return reply.status(204).send();

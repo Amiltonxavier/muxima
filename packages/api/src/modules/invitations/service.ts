@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import type { PrismaClient, Prisma } from "@muxima/db/prisma";
+import type { Prisma, PrismaClient } from "@muxima/db/prisma";
 import type {
 	InvitationResponse,
 	InvitationStats,
@@ -65,9 +65,10 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function generateInvitationCode(): string {
 	const bytes = randomBytes(8);
-	return Array.from(bytes, (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join(
-		"",
-	);
+	return Array.from(
+		bytes,
+		(byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length],
+	).join("");
 }
 
 function isUniqueViolation(error: unknown): boolean {

@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	generateInvitationCode,
 	getPublicInvitation,
+	type InvitationDb,
 	isInvitationExpired,
 	respondToInvitation,
-	type InvitationDb,
 } from "./service";
 
 type FakeInvitation = {
@@ -57,9 +57,7 @@ function makeInvitation(
 					id: "g-1",
 					name: "Amílton",
 					status: "PENDING",
-					companions: [
-						{ id: "c-1", name: "Mariana", status: "PENDING" },
-					],
+					companions: [{ id: "c-1", name: "Mariana", status: "PENDING" }],
 				},
 			},
 		],
@@ -184,9 +182,9 @@ describe("generateInvitationCode", () => {
 
 describe("isInvitationExpired", () => {
 	it("expires when status is EXPIRED", () => {
-		expect(
-			isInvitationExpired({ status: "EXPIRED", expiresAt: null }),
-		).toBe(true);
+		expect(isInvitationExpired({ status: "EXPIRED", expiresAt: null })).toBe(
+			true,
+		);
 	});
 
 	it("expires when expiresAt is in the past", () => {
@@ -210,17 +208,13 @@ describe("isInvitationExpired", () => {
 
 describe("getPublicInvitation", () => {
 	it("returns NOT_FOUND for an unknown code", async () => {
-		const { fake } = createFakeDb([
-			makeInvitation({ code: "ABC23456" }),
-		]);
+		const { fake } = createFakeDb([makeInvitation({ code: "ABC23456" })]);
 		const result = await getPublicInvitation(fake, "NOPE1234");
 		expect(result).toEqual({ result: "NOT_FOUND" });
 	});
 
 	it("returns NOT_FOUND for an unpublished invitation", async () => {
-		const { fake } = createFakeDb([
-			makeInvitation({ publishedAt: null }),
-		]);
+		const { fake } = createFakeDb([makeInvitation({ publishedAt: null })]);
 		const result = await getPublicInvitation(fake, "ABC23456");
 		expect(result).toEqual({ result: "NOT_FOUND" });
 	});
@@ -236,9 +230,7 @@ describe("getPublicInvitation", () => {
 	});
 
 	it("returns CANCELLED for a published cancelled invitation", async () => {
-		const { fake } = createFakeDb([
-			makeInvitation({ status: "CANCELLED" }),
-		]);
+		const { fake } = createFakeDb([makeInvitation({ status: "CANCELLED" })]);
 		const result = await getPublicInvitation(fake, "ABC23456");
 		expect(result).toEqual({ result: "CANCELLED" });
 	});
@@ -292,9 +284,7 @@ describe("respondToInvitation", () => {
 	});
 
 	it("throws when the invitation is expired", async () => {
-		const { fake } = createFakeDb([
-			makeInvitation({ status: "EXPIRED" }),
-		]);
+		const { fake } = createFakeDb([makeInvitation({ status: "EXPIRED" })]);
 		await expect(
 			respondToInvitation(fake, "ABC23456", "CONFIRM"),
 		).rejects.toThrow("Este convite expirou");
@@ -349,9 +339,7 @@ describe("respondToInvitation", () => {
 		// 4 confirmed guests + 2 confirmed companions already counted.
 		db.guestInvitation.findUnique;
 		(db.guest.count as ReturnType<typeof vi.fn>).mockResolvedValue(4);
-		(db.guestCompanion.count as ReturnType<typeof vi.fn>).mockResolvedValue(
-			2,
-		);
+		(db.guestCompanion.count as ReturnType<typeof vi.fn>).mockResolvedValue(2);
 
 		await expect(
 			respondToInvitation(fake, "ABC23456", "CONFIRM"),

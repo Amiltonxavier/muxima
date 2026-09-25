@@ -1,4 +1,4 @@
-import { prisma, EVENTS, TableAssignment } from "./helpers";
+import { EVENTS, prisma, type TableAssignment } from "./helpers";
 
 // ── Table ID helpers ─────────────────────────────────────────────
 const eventShortMap: Record<string, string> = {
@@ -77,10 +77,22 @@ export async function seedTables(
 	// ── WEDDING ─────────────────────────────────────────────────
 	const weddingGuests = guestIds[EVENTS.WEDDING] ?? [];
 	const weddingTables: TableDef[] = [
-		{ name: "Mesa da Família Noiva", capacity: 8, location: "Ao lado do palco" },
-		{ name: "Mesa da Família Noivo", capacity: 8, location: "Ao lado do palco" },
+		{
+			name: "Mesa da Família Noiva",
+			capacity: 8,
+			location: "Ao lado do palco",
+		},
+		{
+			name: "Mesa da Família Noivo",
+			capacity: 8,
+			location: "Ao lado do palco",
+		},
 		{ name: "Mesa Padrinhos", capacity: 6, location: "Frente ao altar" },
-		{ name: "Mesa Amigos da Universidade", capacity: 10, location: "Zona central" },
+		{
+			name: "Mesa Amigos da Universidade",
+			capacity: 10,
+			location: "Zona central",
+		},
 		{ name: "Mesa Trabalho Banco", capacity: 8, location: "Zona lateral" },
 		{ name: "Mesa VIP", capacity: 6, location: "Ao lado da mesa principal" },
 		{ name: "Mesa Vizinhos", capacity: 8, location: "Zona traseira" },
@@ -88,7 +100,11 @@ export async function seedTables(
 		{ name: "Mesa Família distante", capacity: 8, location: "Zona lateral" },
 		{ name: "Mesa Amigos do Noivo", capacity: 10, location: "Zona central" },
 		{ name: "Mesa Colegas de Trabalho", capacity: 8, location: "Zona lateral" },
-		{ name: "Mesa Convidados Especiais", capacity: 6, location: "Ao lado da mesa principal" },
+		{
+			name: "Mesa Convidados Especiais",
+			capacity: 6,
+			location: "Ao lado da mesa principal",
+		},
 	];
 	const w = distribute(EVENTS.WEDDING, weddingTables, weddingGuests);
 	allTables.push(...w.tableData);

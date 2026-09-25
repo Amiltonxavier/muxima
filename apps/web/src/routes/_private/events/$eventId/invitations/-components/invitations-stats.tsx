@@ -1,7 +1,11 @@
 import type { InvitationStats } from "@muxima/api/shared/types/entities";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
-export function InvitationsStats({ stats }: { stats?: InvitationStats | null }) {
+export function InvitationsStats({
+	stats,
+}: {
+	stats?: InvitationStats | null;
+}) {
 	if (!stats) {
 		return null;
 	}

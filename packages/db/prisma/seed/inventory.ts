@@ -1,4 +1,11 @@
-import { prisma, EVENTS, USER_OWNER, USER_ADMIN, USER_PARTNER, daysAgo } from "./helpers";
+import {
+	daysAgo,
+	EVENTS,
+	prisma,
+	USER_ADMIN,
+	USER_OWNER,
+	USER_PARTNER,
+} from "./helpers";
 
 const now = new Date();
 
@@ -9,7 +16,15 @@ function inventoryItem(data: {
 	category: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
 	plannedQuantity: number;
 	currentQuantity: number;
-	unit: "UNIT" | "BOX" | "CASE" | "BOTTLE" | "KG" | "LITER" | "PACKAGE" | "OTHER";
+	unit:
+		| "UNIT"
+		| "BOX"
+		| "CASE"
+		| "BOTTLE"
+		| "KG"
+		| "LITER"
+		| "PACKAGE"
+		| "OTHER";
 	vendorId?: string | null;
 	notes?: string;
 }) {

@@ -6,7 +6,6 @@ import { ScheduleStatsCard } from "./schedule-stats-card";
 import { TasksStatsCard } from "./tasks-stats-card";
 import { VendorsStatsCard } from "./vendors-stats-card";
 
-
 interface EventStatsProps {
 	eventId: string;
 }
@@ -16,20 +15,11 @@ export function EventStats({ eventId }: EventStatsProps) {
 
 	return (
 		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			<TasksStatsCard
-				eventId={eventId}
-				stats={stats.tasks.data}
-			/>
+			<TasksStatsCard eventId={eventId} stats={stats.tasks.data} />
 
-			<PendingTasksCard
-				eventId={eventId}
-				count={stats.tasks.data?.todo ?? 0}
-			/>
+			<PendingTasksCard eventId={eventId} count={stats.tasks.data?.todo ?? 0} />
 
-			<ScheduleStatsCard
-				eventId={eventId}
-				stats={stats.schedules.data}
-			/>
+			<ScheduleStatsCard eventId={eventId} stats={stats.schedules.data} />
 		</div>
 	);
 }

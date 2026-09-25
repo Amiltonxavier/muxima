@@ -1,24 +1,19 @@
 import { Button } from "@muxima/ui/components/button";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
 } from "@muxima/ui/components/card";
-
-import { AlertTriangle, ArrowRight } from "lucide-react";
-
 import { Link } from "@tanstack/react-router";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 interface PendingTasksCardProps {
 	eventId: string;
 	count: number;
 }
 
-export function PendingTasksCard({
-	eventId,
-	count,
-}: PendingTasksCardProps) {
+export function PendingTasksCard({ eventId, count }: PendingTasksCardProps) {
 	if (count <= 0) {
 		return null;
 	}
@@ -41,12 +36,7 @@ export function PendingTasksCard({
 					variant="ghost"
 					size="sm"
 					className="h-auto p-0"
-					render={
-						<Link
-							to="/events/$eventId/tasks"
-							params={{ eventId }}
-						/>
-					}
+					render={<Link to="/events/$eventId/tasks" params={{ eventId }} />}
 				>
 					Gerir tarefas <ArrowRight size={4} />
 				</Button>

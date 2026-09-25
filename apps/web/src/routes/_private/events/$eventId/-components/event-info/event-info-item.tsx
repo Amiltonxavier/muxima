@@ -1,6 +1,5 @@
-import type { LucideIcon } from "lucide-react";
-
 import { Card, CardContent } from "@muxima/ui/components/card";
+import type { LucideIcon } from "lucide-react";
 
 interface EventInfoItemProps {
 	icon: LucideIcon;

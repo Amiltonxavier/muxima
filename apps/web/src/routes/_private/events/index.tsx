@@ -32,6 +32,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { CurrencyInput } from "@/shared/components/currency-input";
 import { QueryState } from "@/shared/components/states";
+import { dateHelper } from "@/shared/utils/date-helper";
 import { createEventSchema } from "@/utils/event-schemas";
 import { formatDate, getDaysRemaining } from "@/utils/format-date";
 import {
@@ -44,7 +45,6 @@ import {
 	useDeleteEvent,
 	useEvents,
 } from "./-queries/event-queries";
-import { dateHelper } from "@/shared/utils/date-helper";
 
 export const Route = createFileRoute("/_private/events/")({
 	component: EventsPage,

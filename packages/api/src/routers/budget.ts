@@ -358,19 +358,18 @@ export const budgetRouter = {
 				where: { eventId: input.eventId },
 			});
 
-			const [expenseCount, paidExpenses, pendingExpenses] =
-				await Promise.all([
-					db.expense.count({ where: { eventId: input.eventId } }),
-					db.expense.count({
-						where: { eventId: input.eventId, status: "PAID" },
-					}),
-					db.expense.count({
-						where: {
-							eventId: input.eventId,
-							status: { in: ["PLANNED", "PARTIALLY_PAID"] },
-						},
-					}),
-				]);
+			const [expenseCount, paidExpenses, pendingExpenses] = await Promise.all([
+				db.expense.count({ where: { eventId: input.eventId } }),
+				db.expense.count({
+					where: { eventId: input.eventId, status: "PAID" },
+				}),
+				db.expense.count({
+					where: {
+						eventId: input.eventId,
+						status: { in: ["PLANNED", "PARTIALLY_PAID"] },
+					},
+				}),
+			]);
 
 			return {
 				plannedAmount,

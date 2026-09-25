@@ -1,4 +1,11 @@
-import { prisma, EVENTS, monthsAhead, monthsAgo, daysAhead, daysAgo } from "./helpers";
+import {
+	daysAgo,
+	daysAhead,
+	EVENTS,
+	monthsAgo,
+	monthsAhead,
+	prisma,
+} from "./helpers";
 
 export async function seedEvents() {
 	const events = [
@@ -23,7 +30,8 @@ export async function seedEvents() {
 			capacity: 250,
 			limitGuestCapacity: true,
 			currency: "AOA",
-			description: "Casamento civil e religioso com recepção no jardim do convento.",
+			description:
+				"Casamento civil e religioso com recepção no jardim do convento.",
 		},
 		// Event 2: Medium engagement, CONFIRMED, near future
 		{
@@ -43,7 +51,8 @@ export async function seedEvents() {
 			capacity: 120,
 			limitGuestCapacity: false,
 			currency: "AOA",
-			description: "Festa de noivado intimista com familiares e amigos próximos.",
+			description:
+				"Festa de noivado intimista com familiares e amigos próximos.",
 		},
 		// Event 3: Small birthday, CONFIRMED, today
 		{
@@ -143,7 +152,8 @@ export async function seedEvents() {
 			capacity: 80,
 			limitGuestCapacity: true,
 			currency: "AOA",
-			description: "Jantar de confraternização da empresa com colegas e parceiros.",
+			description:
+				"Jantar de confraternização da empresa com colegas e parceiros.",
 		},
 		// Event 8: Medium workshop, CONFIRMED, near future
 		{
@@ -183,7 +193,8 @@ export async function seedEvents() {
 			capacity: 30,
 			limitGuestCapacity: false,
 			currency: "AOA",
-			description: "Festa de embalar para a pequena Maria — tema rosa e branco.",
+			description:
+				"Festa de embalar para a pequena Maria — tema rosa e branco.",
 		},
 		// Event 10: Large ceremony, PLANNING, far future
 		{
@@ -203,7 +214,8 @@ export async function seedEvents() {
 			capacity: 300,
 			limitGuestCapacity: false,
 			currency: "AOA",
-			description: "Cerimónia religiosa solene com recepção no salão paroquial.",
+			description:
+				"Cerimónia religiosa solene com recepção no salão paroquial.",
 		},
 	];
 

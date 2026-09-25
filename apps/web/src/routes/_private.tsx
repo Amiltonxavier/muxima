@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
-import { LoadingState } from "@/shared/components/states/loading-state";
 import { Sidebar } from "@/shared/components/sidebar";
+import { LoadingState } from "@/shared/components/states/loading-state";
 import { Topbar } from "@/shared/components/topbar";
 
 export const Route = createFileRoute("/_private")({

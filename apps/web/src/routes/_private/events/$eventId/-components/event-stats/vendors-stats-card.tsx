@@ -1,14 +1,13 @@
-import { formatCurrency } from "@/utils/format-currency";
 import { Button } from "@muxima/ui/components/button";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
 } from "@muxima/ui/components/card";
 import { Link } from "@tanstack/react-router";
-
 import { ArrowRight, Package } from "lucide-react";
+import { formatCurrency } from "@/utils/format-currency";
 import { StatRow } from "./stat-row";
 
 interface VendorsStatsCardProps {
@@ -20,10 +19,7 @@ interface VendorsStatsCardProps {
 	};
 }
 
-export function VendorsStatsCard({
-	eventId,
-	stats,
-}: VendorsStatsCardProps) {
+export function VendorsStatsCard({ eventId, stats }: VendorsStatsCardProps) {
 	const total = stats?.total ?? 0;
 	const expenseCount = stats?.expenseCount ?? 0;
 	const totalExpenses = stats?.totalExpenses ?? 0;
@@ -50,16 +46,10 @@ export function VendorsStatsCard({
 					</p>
 				) : (
 					<>
-						<StatRow
-							label="Despesas"
-							value={expenseCount}
-						/>
+						<StatRow label="Despesas" value={expenseCount} />
 
 						{totalExpenses > 0 && (
-							<StatRow
-								label="Total"
-								value={formatCurrency(totalExpenses)}
-							/>
+							<StatRow label="Total" value={formatCurrency(totalExpenses)} />
 						)}
 					</>
 				)}
@@ -68,12 +58,7 @@ export function VendorsStatsCard({
 					variant="ghost"
 					size="sm"
 					className="mt-1 h-auto p-0"
-					render={
-						<Link
-							to="/events/$eventId/suppliers"
-							params={{ eventId }}
-						/>
-					}
+					render={<Link to="/events/$eventId/suppliers" params={{ eventId }} />}
 				>
 					Ver fornecedores <ArrowRight size={4} />
 				</Button>

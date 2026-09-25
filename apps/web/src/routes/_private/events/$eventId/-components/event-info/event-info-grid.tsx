@@ -1,12 +1,6 @@
-import {
-	Calendar,
-	Clock,
-	MapPin,
-	Users,
-} from "lucide-react";
-
-import { EventInfoItem } from "./event-info-item";
+import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import { dateHelper } from "@/shared/utils/date-helper";
+import { EventInfoItem } from "./event-info-item";
 
 interface EventInfoGridProps {
 	event: {
@@ -36,11 +30,7 @@ export function EventInfoGrid({ event }: EventInfoGridProps) {
 				}
 			/>
 
-			<EventInfoItem
-				icon={Clock}
-				label="Horário"
-				value={eventTime}
-			/>
+			<EventInfoItem icon={Clock} label="Horário" value={eventTime} />
 
 			<EventInfoItem
 				icon={MapPin}
@@ -51,11 +41,7 @@ export function EventInfoGrid({ event }: EventInfoGridProps) {
 			<EventInfoItem
 				icon={Users}
 				label="Capacidade"
-				value={
-					event.capacity
-						? `${event.capacity} convidados`
-						: "Não definida"
-				}
+				value={event.capacity ? `${event.capacity} convidados` : "Não definida"}
 			/>
 		</div>
 	);

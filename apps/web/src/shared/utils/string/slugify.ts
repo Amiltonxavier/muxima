@@ -7,5 +7,5 @@ import { StringHelper } from "./string-helper";
  * slugify("Relatório de Vendas — 2026"); // "relatorio-de-vendas-2026"
  */
 export function slugify(value: string): string {
-  return StringHelper.slug(value).replace(/-+/g, "-").replace(/^-|-$/g, "");
+	return StringHelper.slug(value).replace(/-+/g, "-").replace(/^-|-$/g, "");
 }

@@ -16,7 +16,11 @@ import {
 import type { InvitationItem } from "../-types/invitation.types";
 import { buildInvitationLink } from "../-utils/invitation.utils";
 
-export function InvitationTableRow({ invitation }: { invitation: InvitationItem }) {
+export function InvitationTableRow({
+	invitation,
+}: {
+	invitation: InvitationItem;
+}) {
 	const publish = usePublishInvitation();
 	const unpublish = useUnpublishInvitation();
 

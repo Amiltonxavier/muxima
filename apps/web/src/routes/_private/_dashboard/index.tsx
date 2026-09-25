@@ -11,10 +11,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Calendar, MapPin, Plus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { QueryState } from "@/shared/components/states";
+import { dateHelper } from "@/shared/utils/date-helper";
 import { orpc } from "@/utils/orpc";
 import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
 import { useEvents } from "../events/-queries/event-queries";
-import { dateHelper } from "@/shared/utils/date-helper";
 
 export const Route = createFileRoute("/_private/_dashboard/")({
 	component: DashboardPage,
@@ -111,11 +111,11 @@ function DashboardPage() {
 													<span>{String(event.venueName || "")}</span>
 												</div>
 											)}
-											
-												<div className="text-muted-foreground text-xs">
-													{dateHelper.formatRelativeToNow(event.eventDate)}
-												</div>
-											
+
+											<div className="text-muted-foreground text-xs">
+												{dateHelper.formatRelativeToNow(event.eventDate)}
+											</div>
+
 											<div className="pt-2">
 												<Button
 													className="w-full"

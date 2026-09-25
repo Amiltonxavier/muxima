@@ -5,7 +5,9 @@ import dotenv from "dotenv";
 import { PrismaClient } from "../../generated/client";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../../apps/server/.env") });
+dotenv.config({
+	path: path.resolve(__dirname, "../../../../apps/server/.env"),
+});
 
 const adapter = new PrismaPg({
 	connectionString: process.env.DATABASE_URL!,
@@ -16,7 +18,8 @@ export const prisma = new PrismaClient({ adapter });
 // ── Timestamps ──────────────────────────────────────────────────────
 export const now = new Date();
 export const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
-export const daysAhead = (d: number) => new Date(now.getTime() + d * 86_400_000);
+export const daysAhead = (d: number) =>
+	new Date(now.getTime() + d * 86_400_000);
 export const monthsAhead = (m: number) => {
 	const d = new Date(now);
 	d.setMonth(d.getMonth() + m);
@@ -27,7 +30,8 @@ export const monthsAgo = (m: number) => {
 	d.setMonth(d.getMonth() - m);
 	return d;
 };
-export const hoursAhead = (h: number) => new Date(now.getTime() + h * 3_600_000);
+export const hoursAhead = (h: number) =>
+	new Date(now.getTime() + h * 3_600_000);
 
 // ── User IDs ────────────────────────────────────────────────────────
 export const USER_OWNER = "usr_owner_001";
@@ -51,7 +55,11 @@ export const EVENTS = {
 } as const;
 
 // ── Helper: Date on event day at specific hour ──────────────────────
-export function eventDateTime(eventDate: Date, hours: number, minutes = 0): Date {
+export function eventDateTime(
+	eventDate: Date,
+	hours: number,
+	minutes = 0,
+): Date {
 	const d = new Date(eventDate);
 	d.setHours(hours, minutes, 0, 0);
 	return d;

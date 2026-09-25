@@ -1,5 +1,5 @@
-import { test as setup } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { test as setup } from "@playwright/test";
 
 const authFile = "e2e/.auth/user.json";
 

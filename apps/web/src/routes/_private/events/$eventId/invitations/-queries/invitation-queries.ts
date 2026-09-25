@@ -3,7 +3,8 @@ import { orpc } from "@/utils/orpc";
 
 export const invitationKeys = {
 	all: ["invitations"] as const,
-	stats: (eventId: string) => [...invitationKeys.all, "stats", eventId] as const,
+	stats: (eventId: string) =>
+		[...invitationKeys.all, "stats", eventId] as const,
 	list: (eventId: string, params: Record<string, unknown>) =>
 		[...invitationKeys.all, "list", eventId, params] as const,
 };
@@ -22,7 +23,14 @@ export type InvitationListParams = {
 	page: number;
 	limit: number;
 	search?: string;
-	response?: "ALL" | "CONFIRM" | "DECLINE" | "MAYBE" | "PENDING" | "EXPIRED" | "CANCELLED";
+	response?:
+		| "ALL"
+		| "CONFIRM"
+		| "DECLINE"
+		| "MAYBE"
+		| "PENDING"
+		| "EXPIRED"
+		| "CANCELLED";
 };
 
 export function useInvitations(

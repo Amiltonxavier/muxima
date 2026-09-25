@@ -73,7 +73,9 @@ function NotificationsPage() {
 						disabled={markAllAsRead.isPending}
 					>
 						<CheckCheck className="mr-2 h-4 w-4" />
-						{markAllAsRead.isPending ? "A marcar..." : "Marcar todas como lidas"}
+						{markAllAsRead.isPending
+							? "A marcar..."
+							: "Marcar todas como lidas"}
 					</Button>
 				)}
 			</div>

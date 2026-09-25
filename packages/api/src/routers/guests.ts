@@ -10,10 +10,7 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
-import {
-	guestListInput,
-	tableListInput,
-} from "../shared/schemas/filters";
+import { guestListInput, tableListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
 export const guestsRouter = {
@@ -545,28 +542,35 @@ export const guestsRouter = {
 				select: { capacity: true, limitGuestCapacity: true },
 			});
 
-			const [totalGuests, confirmed, pending, declined, waiting, maybe, cancelled] =
-				await Promise.all([
-					db.guest.count({ where: { eventId: input.eventId } }),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "CONFIRMED" },
-					}),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "PENDING" },
-					}),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "DECLINED" },
-					}),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "WAITING" },
-					}),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "MAYBE" },
-					}),
-					db.guest.count({
-						where: { eventId: input.eventId, status: "CANCELLED" },
-					}),
-				]);
+			const [
+				totalGuests,
+				confirmed,
+				pending,
+				declined,
+				waiting,
+				maybe,
+				cancelled,
+			] = await Promise.all([
+				db.guest.count({ where: { eventId: input.eventId } }),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "CONFIRMED" },
+				}),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "PENDING" },
+				}),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "DECLINED" },
+				}),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "WAITING" },
+				}),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "MAYBE" },
+				}),
+				db.guest.count({
+					where: { eventId: input.eventId, status: "CANCELLED" },
+				}),
+			]);
 
 			const totalCompanions = await db.guestCompanion.count({
 				where: { guest: { eventId: input.eventId } },
@@ -580,9 +584,7 @@ export const guestsRouter = {
 			const capacity = event?.capacity ?? 0;
 			const limitGuestCapacity = event?.limitGuestCapacity ?? false;
 			const confirmationRate =
-				totalGuests > 0
-					? Math.round((confirmed / totalGuests) * 100)
-					: 0;
+				totalGuests > 0 ? Math.round((confirmed / totalGuests) * 100) : 0;
 
 			const typeRows = await db.guest.groupBy({
 				by: ["type", "status"],

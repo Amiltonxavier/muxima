@@ -1,8 +1,7 @@
 // event-charts/queries/use-budget-chart.ts
 
-import { orpc } from "@/utils/orpc";
 import { useQuery } from "@tanstack/react-query";
-
+import { orpc } from "@/utils/orpc";
 
 export function useBudgetChart(eventId: string) {
 	return useQuery(

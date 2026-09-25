@@ -61,11 +61,9 @@ export async function documentRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("document", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Documento não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Documento não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		const data = updateDocumentSchema.parse(request.body);
 		const doc = await DocumentService.update(id, data);
@@ -81,11 +79,9 @@ export async function documentRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("document", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Documento não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Documento não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		await DocumentService.delete(id);
 		return reply.status(204).send();

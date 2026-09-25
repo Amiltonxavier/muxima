@@ -65,11 +65,9 @@ export async function guestRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("guest", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		const data = updateGuestSchema.parse(request.body);
 		const guest = await GuestService.update(id, data);
@@ -85,11 +83,9 @@ export async function guestRoutes(app: FastifyInstance) {
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("guest", id);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		await GuestService.delete(id);
 		return reply.status(204).send();
@@ -140,11 +136,9 @@ export async function guestRoutes(app: FastifyInstance) {
 		const { guestId } = assignTableSchema.parse(request.body);
 		const eventId = await getEventIdForResource("guest", guestId);
 		if (!eventId)
-			return reply
-				.status(404)
-				.send({
-					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
-				});
+			return reply.status(404).send({
+				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			});
 		await requireEventAccess(userId, eventId);
 		await GuestService.assignToTable(tableId, guestId);
 		return reply.status(201).send(successResponse({ success: true }));
@@ -164,11 +158,9 @@ export async function guestRoutes(app: FastifyInstance) {
 			};
 			const eventId = await getEventIdForResource("guest", guestId);
 			if (!eventId)
-				return reply
-					.status(404)
-					.send({
-						error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
-					});
+				return reply.status(404).send({
+					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+				});
 			await requireEventAccess(userId, eventId);
 			await GuestService.removeFromTable(tableId, guestId);
 			return reply.status(204).send();

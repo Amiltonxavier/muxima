@@ -1,4 +1,4 @@
-import { prisma, EVENTS, daysAgo, daysAhead, monthsAhead } from "./helpers";
+import { daysAgo, daysAhead, EVENTS, monthsAhead, prisma } from "./helpers";
 
 export async function seedVendors() {
 	// ── Vendors ────────────────────────────────────────────────────────
@@ -13,7 +13,8 @@ export async function seedVendors() {
 			email: "contato@jardimdasflores.ao",
 			address: "Rua da Resistência, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Empresa especializada em decoração floral e ambientação para casamentos.",
+			description:
+				"Empresa especializada em decoração floral e ambientação para casamentos.",
 			notes: "Contrato assinado — tema botânico aprovado.",
 			createdAt: daysAgo(60),
 		},
@@ -26,7 +27,8 @@ export async function seedVendors() {
 			email: "reservas@chefngola.ao",
 			address: "Rua Comandante Gika, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Chef renomado com experiência em catering para grandes eventos.",
+			description:
+				"Chef renomado com experiência em catering para grandes eventos.",
 			notes: "Menu angolano tradicional e internacional aprovado.",
 			createdAt: daysAgo(55),
 		},
@@ -52,7 +54,8 @@ export async function seedVendors() {
 			email: "info@olharfotografico.ao",
 			address: "Rua Major Kanhangulo, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Estúdio fotográfico com foco em casamentos e eventos especiais.",
+			description:
+				"Estúdio fotográfico com foco em casamentos e eventos especiais.",
 			notes: "Pacote completo: fotos + vídeo + drone.",
 			createdAt: daysAgo(50),
 		},
@@ -65,7 +68,8 @@ export async function seedVendors() {
 			email: "agendamentos@bellanoiva.ao",
 			address: "Rua 5 de Outubro, Luanda",
 			status: "CONTACTED" as const,
-			description: "Salão de beleza especializado em noivas — maquiagem, penteados e tratamentos.",
+			description:
+				"Salão de beleza especializado em noivas — maquiagem, penteados e tratamentos.",
 			notes: "Contactada — aguardando resposta.",
 			createdAt: daysAgo(30),
 		},
@@ -78,7 +82,8 @@ export async function seedVendors() {
 			email: "info@transportesreais.ao",
 			address: "Estrada de Catete, Luanda",
 			status: "PROSPECT" as const,
-			description: "Frota de veículos de luxo para transporte de convidados e noivos.",
+			description:
+				"Frota de veículos de luxo para transporte de convidados e noivos.",
 			notes: "Em fase de pesquisa de mercado.",
 			createdAt: daysAgo(20),
 		},
@@ -119,7 +124,8 @@ export async function seedVendors() {
 			email: "encomendas@docemomento.ao",
 			address: "Rua dos Enganos, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Pastelaria artesanal com bolos personalizados para noivados.",
+			description:
+				"Pastelaria artesanal com bolos personalizados para noivados.",
 			notes: "Bolo de 3 andares com tema floral confirmado.",
 			createdAt: daysAgo(40),
 		},
@@ -199,7 +205,8 @@ export async function seedVendors() {
 			email: "decoracao@decoracoesrapidas.ao",
 			address: "Rua 5 de Outubro, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Decoração temática para festas de aniversário com entregas rápidas.",
+			description:
+				"Decoração temática para festas de aniversário com entregas rápidas.",
 			notes: "Tema festa surpresa — cores verde e dourado.",
 			createdAt: daysAgo(6),
 		},
@@ -214,7 +221,8 @@ export async function seedVendors() {
 			email: "reservas@convencoes.ao",
 			address: "Marginal da Luanda, Luanda",
 			status: "COMPLETED" as const,
-			description: "Espaço amplo para conferências com equipamento AV integrado.",
+			description:
+				"Espaço amplo para conferências com equipamento AV integrado.",
 			notes: "Aluguer concluído — feedback positivo.",
 			createdAt: daysAgo(90),
 		},
@@ -227,7 +235,8 @@ export async function seedVendors() {
 			email: "catering@profissional.ao",
 			address: "Rua da Missão, Luanda",
 			status: "COMPLETED" as const,
-			description: "Serviço de catering corporativo para conferências e seminários.",
+			description:
+				"Serviço de catering corporativo para conferências e seminários.",
 			notes: "Coffee breaks e almoço buffet entregues com sucesso.",
 			createdAt: daysAgo(88),
 		},
@@ -240,7 +249,8 @@ export async function seedVendors() {
 			email: "solucoes@avtech.ao",
 			address: "Rua dos Enganos, Luanda",
 			status: "COMPLETED" as const,
-			description: "Aluguer de equipamento audiovisual para eventos profissionais.",
+			description:
+				"Aluguer de equipamento audiovisual para eventos profissionais.",
 			notes: "Projetores, ecrãs e sistema de som instalados.",
 			createdAt: daysAgo(85),
 		},
@@ -253,7 +263,8 @@ export async function seedVendors() {
 			email: "corporativo@fotocorp.ao",
 			address: "Rua Major Kanhangulo, Luanda",
 			status: "COMPLETED" as const,
-			description: "Cobertura fotográfica profissional para eventos corporativos.",
+			description:
+				"Cobertura fotográfica profissional para eventos corporativos.",
 			notes: "Entrega de fotos editadas concluída.",
 			createdAt: daysAgo(82),
 		},
@@ -266,7 +277,8 @@ export async function seedVendors() {
 			email: "seguranca@segurançatotal.ao",
 			address: "Rua 5 de Outubro, Luanda",
 			status: "COMPLETED" as const,
-			description: "Serviço de segurança profissional para eventos corporativos.",
+			description:
+				"Serviço de segurança profissional para eventos corporativos.",
 			notes: "Equipa de 8 vigilantes contratada — serviço concluído.",
 			createdAt: daysAgo(80),
 		},
@@ -320,7 +332,8 @@ export async function seedVendors() {
 			email: "eventos@chefpremium.ao",
 			address: "Rua dos Mártires, Luanda",
 			status: "CANCELLED" as const,
-			description: "Catering de alta gastronomia para casamentos e eventos de gala.",
+			description:
+				"Catering de alta gastronomia para casamentos e eventos de gala.",
 			notes: "Cancelado — multa de 20% aplicada.",
 			createdAt: daysAgo(110),
 		},
@@ -348,7 +361,8 @@ export async function seedVendors() {
 			email: "eventos@epicsana.ao",
 			address: "Rua da Missão, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Hotel de 5 estrelas com salão de eventos e serviço premium.",
+			description:
+				"Hotel de 5 estrelas com salão de eventos e serviço premium.",
 			notes: "Sala reservada — jantar corporativo para 80 pessoas.",
 			createdAt: daysAgo(20),
 		},
@@ -361,7 +375,8 @@ export async function seedVendors() {
 			email: "executivo@cateringexec.ao",
 			address: "Rua 5 de Outubro, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Catering executivo com menu gourmet para eventos corporativos.",
+			description:
+				"Catering executivo com menu gourmet para eventos corporativos.",
 			notes: "Menu internacional com opções vegetarianas confirmado.",
 			createdAt: daysAgo(18),
 		},
@@ -374,7 +389,8 @@ export async function seedVendors() {
 			email: "bandas@corporateband.ao",
 			address: "Rua dos Enganos, Luanda",
 			status: "NEGOTIATING" as const,
-			description: "Banda instrumental para eventos corporativos — jazz e bossa nova.",
+			description:
+				"Banda instrumental para eventos corporativos — jazz e bossa nova.",
 			notes: "Proposta recebida — aguardando aprovação do orçamento.",
 			createdAt: daysAgo(16),
 		},
@@ -402,7 +418,8 @@ export async function seedVendors() {
 			email: "encomendas@coffeebreak.ao",
 			address: "Rua dos Mártires, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Serviço de coffee break para workshops e eventos de formação.",
+			description:
+				"Serviço de coffee break para workshops e eventos de formação.",
 			notes: "Café, chá, pastéis e frutas para 40 pessoas.",
 			createdAt: daysAgo(22),
 		},
@@ -430,7 +447,8 @@ export async function seedVendors() {
 			email: "encomendas@docesebolos.ao",
 			address: "Rua da Resistência, Luanda",
 			status: "COMPLETED" as const,
-			description: "Confeitaria artesanal com bolos temáticos para baby showers.",
+			description:
+				"Confeitaria artesanal com bolos temáticos para baby showers.",
 			notes: "Bolo temático rosa e branco entregue no prazo.",
 			createdAt: daysAgo(48),
 		},
@@ -445,7 +463,8 @@ export async function seedVendors() {
 			email: "paroquia@sampaio.ao",
 			address: "Rua dos Mártires, Luanda",
 			status: "CONTRACTED" as const,
-			description: "Igreja histórica no centro da cidade — cerimónias religiosas.",
+			description:
+				"Igreja histórica no centro da cidade — cerimónias religiosas.",
 			notes: "Cerimónia reservada — horário confirmado com a paróquia.",
 			createdAt: daysAgo(70),
 		},
@@ -471,7 +490,8 @@ export async function seedVendors() {
 			email: "cerimonial@cerimonialeventos.ao",
 			address: "Rua dos Enganos, Luanda",
 			status: "NEGOTIATING" as const,
-			description: "Cerimonial profissional para cerimónias religiosas e civis.",
+			description:
+				"Cerimonial profissional para cerimónias religiosas e civis.",
 			notes: "Proposta em negociação — valores em revisão.",
 			createdAt: daysAgo(60),
 		},
@@ -497,7 +517,8 @@ export async function seedVendors() {
 			email: "catering@paroquial.ao",
 			address: "Rua da Missão, Luanda",
 			status: "NEGOTIATING" as const,
-			description: "Serviço de catering para recepções pós-cerimónia na sala paroquial.",
+			description:
+				"Serviço de catering para recepções pós-cerimónia na sala paroquial.",
 			notes: "Em negociação — a definir número de convidados.",
 			createdAt: daysAgo(50),
 		},
@@ -722,7 +743,9 @@ export async function seedVendors() {
 
 	console.log(`  ✅ Vendors (${vendors.length})`);
 	for (const [eventId, count] of Object.entries(counts)) {
-		console.log(`    • ${eventLabels[eventId] || eventId}: ${count} fornecedores`);
+		console.log(
+			`    • ${eventLabels[eventId] || eventId}: ${count} fornecedores`,
+		);
 	}
 	console.log(`  ✅ Vendor Contracts (${contracts.length})`);
 

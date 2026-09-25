@@ -1,13 +1,12 @@
 import { Button } from "@muxima/ui/components/button";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
 } from "@muxima/ui/components/card";
-import { ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Clock } from "lucide-react";
+import { ArrowRight, Clock } from "lucide-react";
 import { StatRow } from "./stat-row";
 
 interface ScheduleStatsCardProps {
@@ -20,10 +19,7 @@ interface ScheduleStatsCardProps {
 	};
 }
 
-export function ScheduleStatsCard({
-	eventId,
-	stats,
-}: ScheduleStatsCardProps) {
+export function ScheduleStatsCard({ eventId, stats }: ScheduleStatsCardProps) {
 	const total = stats?.total ?? 0;
 
 	if (total === 0) {
@@ -40,31 +36,17 @@ export function ScheduleStatsCard({
 			</CardHeader>
 
 			<CardContent className="space-y-3">
-				<StatRow
-					label="Pendentes"
-					value={stats?.pending ?? 0}
-				/>
+				<StatRow label="Pendentes" value={stats?.pending ?? 0} />
 
-				<StatRow
-					label="Em andamento"
-					value={stats?.inProgress ?? 0}
-				/>
+				<StatRow label="Em andamento" value={stats?.inProgress ?? 0} />
 
-				<StatRow
-					label="Concluídas"
-					value={stats?.completed ?? 0}
-				/>
+				<StatRow label="Concluídas" value={stats?.completed ?? 0} />
 
 				<Button
 					variant="ghost"
 					size="sm"
 					className="h-auto p-0"
-					render={
-						<Link
-							to="/events/$eventId/schedule"
-							params={{ eventId }}
-						/>
-					}
+					render={<Link to="/events/$eventId/schedule" params={{ eventId }} />}
 				>
 					Ver cronograma completo <ArrowRight size={4} />
 				</Button>

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@muxima/env/server", () => ({
 	env: {
@@ -13,9 +13,7 @@ vi.mock("@muxima/env/server", () => ({
 
 vi.mock("@muxima/auth", () => ({
 	auth: {
-		handler: vi.fn().mockResolvedValue(
-			new Response(null, { status: 404 }),
-		),
+		handler: vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
 	},
 }));
 

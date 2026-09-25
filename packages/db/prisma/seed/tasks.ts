@@ -1,4 +1,11 @@
-import { prisma, EVENTS, daysAgo, daysAhead, monthsAhead, monthsAgo } from "./helpers";
+import {
+	daysAgo,
+	daysAhead,
+	EVENTS,
+	monthsAgo,
+	monthsAhead,
+	prisma,
+} from "./helpers";
 
 const USER_OWNER = "usr_owner_001";
 const USER_PARTNER = "usr_partner_002";
@@ -51,8 +58,12 @@ function task(data: TaskInput) {
 			status: data.status,
 			assignedTo: data.assignedTo,
 			dueDate: data.dueDate,
-			completedAt: data.status === "COMPLETED" ? data.completedAt ?? now : null,
-			completedBy: data.status === "COMPLETED" ? data.completedBy ?? data.createdBy : null,
+			completedAt:
+				data.status === "COMPLETED" ? (data.completedAt ?? now) : null,
+			completedBy:
+				data.status === "COMPLETED"
+					? (data.completedBy ?? data.createdBy)
+					: null,
 			createdBy: data.createdBy,
 			createdAt: now,
 			updatedAt: now,

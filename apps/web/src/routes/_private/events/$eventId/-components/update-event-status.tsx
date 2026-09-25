@@ -1,5 +1,3 @@
-import { EVENT_STATUS_LABELS, getStatusColor } from "@/utils/status-helpers";
-import { useUpdateEvent } from "../../-queries/event-queries";
 import {
 	Select,
 	SelectContent,
@@ -7,6 +5,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@muxima/ui/components/select";
+import { EVENT_STATUS_LABELS, getStatusColor } from "@/utils/status-helpers";
+import { useUpdateEvent } from "../../-queries/event-queries";
 
 const EVENT_STATUSES = [
 	"DRAFT",
@@ -23,10 +23,7 @@ interface UpdateEventStatusProps {
 	status: EventStatus;
 }
 
-export function UpdateEventStatus({
-	eventId,
-	status,
-}: UpdateEventStatusProps) {
+export function UpdateEventStatus({ eventId, status }: UpdateEventStatusProps) {
 	const { mutateAsync } = useUpdateEvent();
 
 	const handleUpdateStatusEvent = async (newStatus: string | null) => {
@@ -46,12 +43,10 @@ export function UpdateEventStatus({
 
 	return (
 		<Select
-			items={Object.entries(EVENT_STATUS_LABELS).map(
-				([value, label]) => ({
-					value,
-					label,
-				}),
-			)}
+			items={Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => ({
+				value,
+				label,
+			}))}
 			value={status}
 			onValueChange={handleUpdateStatusEvent}
 		>

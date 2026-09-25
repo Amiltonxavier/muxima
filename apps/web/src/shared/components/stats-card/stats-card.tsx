@@ -20,9 +20,7 @@ export function StatsCard({ title, value, description, icon }: StatsCardProps) {
 				<CardTitle className="font-medium text-muted-foreground text-xs">
 					{title}
 				</CardTitle>
-				{icon && (
-					<div className="text-muted-foreground">{icon}</div>
-				)}
+				{icon && <div className="text-muted-foreground">{icon}</div>}
 			</CardHeader>
 
 			<CardContent>
