@@ -61,7 +61,8 @@ export function DonutChart({
 
 	return (
 		<div className="relative flex items-center justify-center">
-			<svg width={size} height={size} className="-rotate-90">
+			{/* Decorative progress ring: the value is already in the adjacent text. */}
+			<svg width={size} height={size} className="-rotate-90" aria-hidden="true">
 				{segments.map((segment) => {
 					const percentage = total > 0 ? (segment.value / total) * 100 : 0;
 					const dashLength = (percentage / 100) * circumference;
@@ -123,7 +124,8 @@ export function ProgressDonut({
 
 	return (
 		<div className="relative flex items-center justify-center">
-			<svg width={size} height={size} className="-rotate-90">
+			{/* Decorative progress ring: the value is already in the adjacent text. */}
+			<svg width={size} height={size} className="-rotate-90" aria-hidden="true">
 				<circle
 					cx={radius}
 					cy={radius}
