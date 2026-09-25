@@ -7,10 +7,13 @@ import { Button } from "@muxima/ui/components/button";
 import { BackButton } from "@/shared/components/back-to";
 
 import { UpdateEventStatus } from "./update-event-status";
+import { EventTypeBadge } from "./event-type-badge";
+import { EventType } from "@muxima/api/shared/types/entities";
 
 interface EventHeaderProps {
 	eventId: string;
 	name: string;
+	type: EventType
 	description?: string | null;
 	status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 	onEdit: () => void;
@@ -23,6 +26,7 @@ export function EventHeader({
 	description,
 	status,
 	onEdit,
+	type,
 	onDelete,
 }: EventHeaderProps) {
 	return (
@@ -32,11 +36,13 @@ export function EventHeader({
 
 				<div className="flex items-center gap-3">
 					<h1 className="font-semibold text-2xl">{name}</h1>
+					<EventTypeBadge type={type} />
 
 					<UpdateEventStatus
 						eventId={eventId}
 						status={status}
 					/>
+					
 				</div>
 
 				{description && (
@@ -44,6 +50,7 @@ export function EventHeader({
 						{description}
 					</p>
 				)}
+
 			</div>
 
 			<div className="flex gap-2">

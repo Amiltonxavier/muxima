@@ -1,2158 +1,2145 @@
 /**
  * Prisma Seed Script — Muxima
  *
- * Populates the database with realistic data for a wedding/engagement planning app.
+ * Populates the database with a deterministic, realistic dataset:
+ * exactly 40 events (30 weddings + 10 engagements) with full relational data
+ * across every module (members, budgets, vendors, guests, tables, tasks,
+ * schedules, inventory, expenses, payments, documents, notifications, audits).
+ *
+ * Idempotent: deletes the seeded rows and recreates them — safe to re-run
+ * without a `db reset` (or with `pnpm db:reset`, which forces a full wipe).
+ *
+ * Capacity invariants enforced:
+ *   - confirmedGuests + confirmedCompanions <= event.capacity
+ *   - sum(table.capacity) <= event.capacity
+ *   - DECLINED guests never get companions
+ *
  * Run: npx tsx packages/db/prisma/seed.ts
  */
 
+import { scrypt as nodeScrypt, randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
-import { PrismaClient } from "../prisma/generated/client";
+import { type Prisma, PrismaClient } from "../prisma/generated/client";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../apps/server/.env") });
 
-const adapter = new PrismaPg({
-	connectionString: process.env.DATABASE_URL!,
+dotenv.config({
+	// Overwrite nothing: allow an externally provided DATABASE_URL (CI/clean
+	// DB runs) to win over the one baked into apps/server/.env.
+	path: path.resolve(__dirname, "../../../apps/server/.env"),
+	override: false,
 });
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL não definida no ambiente.");
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
-
-// ── IDs (fixed so relations are deterministic) ──────────────────────
-const USER_OWNER = "usr_owner_001";
-const USER_PARTNER = "usr_partner_002";
-const USER_ADMIN = "usr_admin_003";
-
-const EVENT_WEDDING = "evt_wedding_001";
-const EVENT_ENGAGEMENT = "evt_engagement_002";
 
 // ── Timestamps ──────────────────────────────────────────────────────
 const now = new Date();
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
 const daysAhead = (d: number) => new Date(now.getTime() + d * 86_400_000);
+const monthsAgo = (m: number) => {
+	const d = new Date(now);
+	d.setMonth(d.getMonth() - m);
+	return d;
+};
 const monthsAhead = (m: number) => {
 	const d = new Date(now);
 	d.setMonth(d.getMonth() + m);
 	return d;
 };
+const pad = (n: number, len = 3) => String(n).padStart(len, "0");
+
+// Marker used in generated ids so seeded rows are recognizable.
+const SEED_PREFIX = "seed";
+
+// Password partilhada por todos os utilizadores de seed (Better Auth,
+// provider "credential"). O hash fica na tabela `account` (scrypt
+// `salt:key` hex) — formato usado pelo `verifyPassword` do better-auth.
+const SEED_PASSWORD = "Muxima@2024";
+
+function scryptAsync(password: string, salt: Buffer, keylen: number) {
+	return new Promise<Buffer>((resolve, reject) => {
+		nodeScrypt(
+			password,
+			salt,
+			keylen,
+			{ N: 16384, r: 16, p: 1, maxmem: 128 * 16384 * 16 * 2 },
+			(err, key) => (err ? reject(err) : resolve(key)),
+		);
+	});
+}
+
+async function hashSeedPassword(password: string) {
+	const salt = randomBytes(16).toString("hex");
+	const key = await scryptAsync(password.normalize("NFKC"), salt, 64);
+	return `${salt}:${key.toString("hex")}`;
+}
+
+// ── Deterministic PRNG (mulberry32) ────────────────────────────────
+type Rng = () => number;
+function mulberry32(seed: number): Rng {
+	let a = seed >>> 0;
+	return () => {
+		a |= 0;
+		a = (a + 0x6d2b79f5) | 0;
+		let t = Math.imul(a ^ (a >>> 15), 1 | a);
+		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
+const pick = <T>(rng: Rng, arr: readonly T[]): T =>
+	arr[Math.floor(rng() * arr.length)] as T;
+const randInt = (rng: Rng, min: number, max: number) =>
+	Math.floor(rng() * (max - min + 1)) + min;
+
+// ── Name pools (realistic PT / Angolan) ────────────────────────────
+const MALE_NAMES = [
+	"António",
+	"Carlos",
+	"João",
+	"José",
+	"Manuel",
+	"Francisco",
+	"Pedro",
+	"Miguel",
+	"Rui",
+	"Paulo",
+	"André",
+	"Tiago",
+	"Bruno",
+	"Ricardo",
+	"Jorge",
+	"Nuno",
+	"David",
+	"Diogo",
+	"Fábio",
+	"Hélder",
+	"Domingos",
+	"Eduardo",
+	"Wilson",
+	"Nelson",
+	"Valter",
+	"Adilson",
+	"Edson",
+	"Cláudio",
+	"Délcio",
+	"Katito",
+	"Mavungo",
+	"Samuel",
+	"Bernardo",
+	"Garcia",
+	"Nelo",
+] as const;
+
+const FEMALE_NAMES = [
+	"Ana",
+	"Maria",
+	"Beatriz",
+	"Carlota",
+	"Catarina",
+	"Inês",
+	"Sofia",
+	"Mariana",
+	"Leonor",
+	"Teresa",
+	"Madalena",
+	"Isabel",
+	"Joana",
+	"Rita",
+	"Marisa",
+	"Lúcia",
+	"Filomena",
+	"Esperança",
+	"Graça",
+	"Fátima",
+	"Amélia",
+	"Cecília",
+	"Domingas",
+	"Felismina",
+	"Lurdes",
+	"Neusa",
+	"Quissola",
+	"Rute",
+	"Telma",
+	"Verónica",
+	"Yolanda",
+	"Zulmira",
+	"Etelvina",
+	"Vera",
+] as const;
+
+const SURNAMES = [
+	"Fernandes",
+	"Mendes",
+	"Santos",
+	"Costa",
+	"Almeida",
+	"Silva",
+	"Ferreira",
+	"Oliveira",
+	"Rodrigues",
+	"Martins",
+	"Pereira",
+	"Lopes",
+	"Sousa",
+	"Nascimento",
+	"Tavares",
+	"Moreira",
+	"Correia",
+	"Miranda",
+	"Monteiro",
+	"Cardoso",
+	"Carvalho",
+	"Baptista",
+	"Gomes",
+	"Domingos",
+	"João",
+	"Manuel",
+	"Kiala",
+	"Luemba",
+	"Sousa Júnior",
+	"Ndala",
+	"Cahy",
+] as const;
+
+// ── Venues ─────────────────────────────────────────────────────────
+interface Venue {
+	name: string;
+	address: string;
+	province: string;
+	municipality: string;
+	neighborhood: string;
+	reference: string;
+	lat: number;
+	lng: number;
+}
+
+const VENUES: Venue[] = [
+	{
+		name: "Convento de São Francisco",
+		address: "Rua Major Kanhangulo",
+		province: "Luanda",
+		municipality: "Luanda",
+		neighborhood: "Maianga",
+		reference: "Próximo ao Hospital Central",
+		lat: -8.8399,
+		lng: 13.2894,
+	},
+	{
+		name: "Clube Mineiro",
+		address: "Rua dos Enganos",
+		province: "Luanda",
+		municipality: "Luanda",
+		neighborhood: "Miramar",
+		reference: "Vista para a Baía de Luanda",
+		lat: -8.8087,
+		lng: 13.2236,
+	},
+	{
+		name: "Quinta do Mussulo",
+		address: "Estrada da Samba",
+		province: "Luanda",
+		municipality: "Belas",
+		neighborhood: "Benfica",
+		reference: "Santuário São João Batista",
+		lat: -8.9187,
+		lng: 13.1331,
+	},
+	{
+		name: "Espaço Belas Clube",
+		address: "Avenida 21 de Janeiro",
+		province: "Luanda",
+		municipality: "Belas",
+		neighborhood: "Talatona",
+		reference: "Ao lado da Igreja N. S. da Paz",
+		lat: -8.9043,
+		lng: 13.2012,
+	},
+	{
+		name: "Palácio da Ferrovia",
+		address: "Rotunda do Maculusso",
+		province: "Luanda",
+		municipality: "Luanda",
+		neighborhood: "Maculusso",
+		reference: "Junto ao Kinaxixi",
+		lat: -8.8231,
+		lng: 13.2369,
+	},
+	{
+		name: "Jardim dos Namorados",
+		address: "Avenida Marginal",
+		province: "Luanda",
+		municipality: "Luanda",
+		neighborhood: "Ilha de Luanda",
+		reference: "Praia dos Namorados",
+		lat: -8.7983,
+		lng: 13.2263,
+	},
+	{
+		name: "Clube Ferroviário do Lobito",
+		address: "Rua do Comércio",
+		province: "Benguela",
+		municipality: "Lobito",
+		neighborhood: "Companhia",
+		reference: "Marginal do Lobito",
+		lat: -12.3644,
+		lng: 13.536,
+	},
+	{
+		name: "Hotel Tropical Benguela",
+		address: "Rua da Praia",
+		province: "Benguela",
+		municipality: "Benguela",
+		neighborhood: "Praia Morena",
+		reference: "Centro da cidade",
+		lat: -12.5763,
+		lng: 13.4056,
+	},
+	{
+		name: "Chotter Residence",
+		address: "Estrada da Caponte",
+		province: "Benguela",
+		municipality: "Benguela",
+		neighborhood: "Caponte",
+		reference: "Vila Paciência",
+		lat: -12.5661,
+		lng: 13.4101,
+	},
+	{
+		name: "Espaço Kwanza Sul",
+		address: "Rua da Canata",
+		province: "Huambo",
+		municipality: "Huambo",
+		neighborhood: "Calumbo",
+		reference: "Saída para o Bailundo",
+		lat: -12.7761,
+		lng: 15.7392,
+	},
+	{
+		name: "Quinta Vista Alegre",
+		address: "Bairro Cambiore",
+		province: "Huambo",
+		municipality: "Huambo",
+		neighborhood: "Cambiore",
+		reference: "Estrada do Aeroporto",
+		lat: -12.8111,
+		lng: 15.7314,
+	},
+	{
+		name: "Hotel Serra da Chela",
+		address: "Rua do Governo",
+		province: "Huíla",
+		municipality: "Lubango",
+		neighborhood: "Central",
+		reference: "Miradouro da Lua",
+		lat: -14.917,
+		lng: 13.492,
+	},
+	{
+		name: "Espaço Christo Rei",
+		address: "Estrada da Tundavala",
+		province: "Huíla",
+		municipality: "Lubango",
+		neighborhood: "Tundavala",
+		reference: "Miradouro da Tundavala",
+		lat: -14.837,
+		lng: 13.3793,
+	},
+	{
+		name: "Salão Cabinda",
+		address: "Rua das Margaridas",
+		province: "Cabinda",
+		municipality: "Cabinda",
+		neighborhood: "Chinganji",
+		reference: "Junto ao Estádio",
+		lat: -5.55,
+		lng: 12.2,
+	},
+	{
+		name: "Complexo da Praia Chiloango",
+		address: "Marginal de Cabinda",
+		province: "Cabinda",
+		municipality: "Cabinda",
+		neighborhood: "Fútila",
+		reference: "Vista para o mar",
+		lat: -5.5533,
+		lng: 12.1925,
+	},
+	{
+		name: "Quinta Ferrovia",
+		address: "Rua da Estação",
+		province: "Malange",
+		municipality: "Malange",
+		neighborhood: "Missão",
+		reference: "Centro de Malange",
+		lat: -9.5401,
+		lng: 16.341,
+	},
+	{
+		name: "Espaço do Rangel",
+		address: "Rua Amílcar Cabral",
+		province: "Luanda",
+		municipality: "Luanda",
+		neighborhood: "Rangel",
+		reference: "Próximo à Praça do Aeroporto",
+		lat: -8.8372,
+		lng: 13.2845,
+	},
+	{
+		name: "Quinta Sanguengue",
+		address: "Estrada da Catete",
+		province: "Luanda",
+		municipality: "Viana",
+		neighborhood: "Sanguengue",
+		reference: "Via Expressa",
+		lat: -8.8981,
+		lng: 13.4019,
+	},
+	{
+		name: "Espaço Vila N'Gola",
+		address: "Rua da Missão",
+		province: "Luanda",
+		municipality: "Cacuaco",
+		neighborhood: "Cacuaco Velho",
+		reference: "Junto ao Mercado",
+		lat: -8.7874,
+		lng: 13.3759,
+	},
+	{
+		name: "Complexo Kamati",
+		address: "Avenida Fidel Castro",
+		province: "Luanda",
+		municipality: "Talatona",
+		neighborhood: "Camama",
+		reference: "Cidade Universitária",
+		lat: -8.894,
+		lng: 13.2506,
+	},
+	{
+		name: "Salão do Namibe",
+		address: "Rua da Praia Amélia",
+		province: "Namibe",
+		municipality: "Moçâmedes",
+		neighborhood: "Central",
+		reference: "Beira-mar",
+		lat: -15.1961,
+		lng: 12.1522,
+	},
+	{
+		name: "Espaço Kuito",
+		address: "Rua da Circular",
+		province: "Bié",
+		municipality: "Kuito",
+		neighborhood: "Zona Baixa",
+		reference: "Centro do Kuito",
+		lat: -12.3842,
+		lng: 16.9397,
+	},
+] as const;
+
+// ── Vendor business names per category ─────────────────────────────
+const VENDOR_NAMES: Record<string, readonly string[]> = {
+	VENUE: [
+		"Jardim das Flores",
+		"Quinta do Mussulo",
+		"Espaço Belas",
+		"Palácio Central",
+		"Quinta Vista Alegre",
+		"Complexo Ferrovia",
+	],
+	DECORATION: [
+		"Arte & Flor",
+		"Decorações Kwanza",
+		"Flor de Lótus",
+		"Eventos Dourados",
+		"Atelier das Flores",
+		"Mãos Criativas",
+	],
+	MUSIC: [
+		"Som & Arte",
+		"Kizomba Hits",
+		"DJ Kamba",
+		"Banda Luar",
+		"Ritmo Vivo",
+		"Afro Fusion",
+	],
+	PHOTOGRAPHY: [
+		"Olhar Fotográfico",
+		"Luz & Sombra",
+		"Fotografia Horizonte",
+		"Kiss Glow",
+		"Lente Mágica",
+	],
+	VIDEO: ["CineMuxima", "Vídeo Nota", "Filmes do Mussulo", "Câmara & História"],
+	CATERING: [
+		"Chef Ngola",
+		"Sabores da Kanda",
+		"Cozinha de Luanda",
+		"Catering Kwanza Sul",
+		"Bom Gosto",
+	],
+	CAKE: [
+		"Doce Momento",
+		"Bolos & Sonhos",
+		"Casa do Bolo",
+		"Confeitaria Vivi",
+		"Doçaria Real",
+	],
+	DRINKS: [
+		"Bebidas Kwanza",
+		"Sommelier Luanda",
+		"Bar Central",
+		"Águas do Bengo",
+		"Vinho & Prosa",
+	],
+	TRANSPORT: [
+		"Transportes Reais",
+		"Reis da Estrada",
+		"Frota Kwanza",
+		"Excelência Rides",
+		"Carros de Luxo",
+	],
+	BEAUTY: [
+		"Beleza Noiva",
+		"Studio Kissange",
+		"Magia & Make",
+		"Cabelo & Glamour",
+		"Toque de Rainha",
+	],
+	SECURITY: [
+		"Segurança Total",
+		"Vigilância Kwanza",
+		"Guardiões VIP",
+		"Proteção Real",
+	],
+	ENTERTAINMENT: [
+		"Animação Total",
+		"Foguetes Reais",
+		"Entretenimento Kizomba",
+		"Show & Luzes",
+		"Djambo Animação",
+	],
+	OTHER: [
+		"Papelaria Muxima",
+		"Lembranças & Detalhes",
+		"Eventos & Cia",
+		"Serviços de Apoio",
+	],
+} as const;
+
+const CATEGORY_LABEL: Record<string, string> = {
+	VENUE: "Espaço",
+	DECORATION: "Decoração",
+	MUSIC: "Música",
+	PHOTOGRAPHY: "Fotografia",
+	VIDEO: "Vídeo",
+	CATERING: "Catering",
+	CAKE: "Bolo",
+	DRINKS: "Bebidas",
+	TRANSPORT: "Transportes",
+	BEAUTY: "Beleza",
+	SECURITY: "Segurança",
+	ENTERTAINMENT: "Animação",
+	OTHER: "Serviços",
+};
+
+// ── Seed users (Better Auth schema) ────────────────────────────────
+const SEED_USERS: Prisma.UserCreateManyInput[] = [
+	{
+		id: "usr_owner_001",
+		name: "Ana Fernandes",
+		email: "ana@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 001",
+	},
+	{
+		id: "usr_partner_002",
+		name: "Carlos Mendes",
+		email: "carlos@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 002",
+	},
+	{
+		id: "usr_admin_003",
+		name: "Sofia Neto",
+		email: "sofia@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 003",
+	},
+	{
+		id: "usr_editor_004",
+		name: "Miguel Tavares",
+		email: "miguel@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 004",
+	},
+	{
+		id: "usr_viewer_005",
+		name: "Laura Simões",
+		email: "laura@muxima.ao",
+		emailVerified: false,
+		image: null,
+		phone: "+244 923 100 005",
+	},
+	{
+		id: "usr_friend_006",
+		name: "Diogo Inocêncio",
+		email: "diogo@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 006",
+	},
+	{
+		id: "usr_friend_007",
+		name: "Marisa Cabral",
+		email: "marisa@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 007",
+	},
+	{
+		id: "usr_padrinho_008",
+		name: "Nuno Pires",
+		email: "nuno@muxima.ao",
+		emailVerified: true,
+		image: null,
+		phone: "+244 923 100 008",
+	},
+];
+
+const USER_IDS = SEED_USERS.map((u) => u.id);
+
+// ── Event distribution (exactly 40) ────────────────────────────────
+// 30 WEDDING (indices 0-29) + 10 ENGAGEMENT (indices 30-39).
+// PLANNING 14 · CONFIRMED 10 · COMPLETED 9 · DRAFT 4 · CANCELLED 3.
+const EVENT_STATUSES = [
+	// 0-9
+	"COMPLETED",
+	"PLANNING",
+	"CONFIRMED",
+	"COMPLETED",
+	"PLANNING",
+	"DRAFT",
+	"CONFIRMED",
+	"PLANNING",
+	"COMPLETED",
+	"CANCELLED",
+	// 10-19
+	"PLANNING",
+	"CONFIRMED",
+	"PLANNING",
+	"COMPLETED",
+	"PLANNING",
+	"DRAFT",
+	"CONFIRMED",
+	"COMPLETED",
+	"PLANNING",
+	"CONFIRMED",
+	// 20-29
+	"PLANNING",
+	"COMPLETED",
+	"CONFIRMED",
+	"PLANNING",
+	"CONFIRMED",
+	"DRAFT",
+	"COMPLETED",
+	"PLANNING",
+	"CONFIRMED",
+	"CANCELLED",
+	// 30-39 (engagements)
+	"PLANNING",
+	"CONFIRMED",
+	"COMPLETED",
+	"PLANNING",
+	"DRAFT",
+	"CONFIRMED",
+	"COMPLETED",
+	"PLANNING",
+	"PLANNING",
+	"CANCELLED",
+] as const;
+
+const WEDDING_CAPACITIES = [
+	250, 180, 320, 140, 220, 400, 150, 280, 90, 350, 200, 260, 120, 300, 170, 380,
+	230, 410, 160, 340, 250, 110, 290, 190, 420, 180, 320, 220, 260, 340,
+] as const;
+
+const ENGAGEMENT_CAPACITIES = [
+	120, 80, 150, 100, 90, 140, 110, 70, 160, 130,
+] as const;
+
+interface EventPlan {
+	index: number;
+	id: string;
+	type: "WEDDING" | "ENGAGEMENT";
+	status: (typeof EVENT_STATUSES)[number];
+	capacity: number;
+	limitGuestCapacity: boolean;
+	fillRatio: number;
+	ownerId: string;
+	partnerId: string;
+}
+
+function buildEventPlans(): EventPlan[] {
+	return EVENT_STATUSES.map((status, i) => {
+		const type = i < 30 ? "WEDDING" : "ENGAGEMENT";
+		const capacity =
+			type === "WEDDING"
+				? WEDDING_CAPACITIES[i]
+				: ENGAGEMENT_CAPACITIES[i - 30];
+		const rng = mulberry32(1337 + i * 977);
+
+		// fillRatio = confirmed guests / capacity. Confirmed must always fit.
+		let fillRatio: number;
+		switch (status) {
+			case "COMPLETED":
+				fillRatio = 0.9 + rng() * 0.1;
+				break;
+			case "CONFIRMED":
+				fillRatio = 0.75 + rng() * 0.22;
+				break;
+			case "PLANNING":
+				fillRatio = 0.4 + rng() * 0.35;
+				break;
+			case "DRAFT":
+				fillRatio = 0.05 + rng() * 0.15;
+				break;
+			case "CANCELLED":
+				fillRatio = 0.05 + rng() * 0.2;
+				break;
+		}
+
+		// Enforcement of real-world "near vs far from capacity" variety.
+		if (i === 0) fillRatio = 0.83; // hero wedding: slightly below cap for funnel headroom
+		if (i === 2) fillRatio = 0.99; // near-full
+		if (i === 21) fillRatio = 0.5; // far from capacity
+
+		const limitGuestCapacity = fillRatio >= 0.55 || type === "WEDDING";
+
+		const owner = pick(rng, USER_IDS);
+		let partner = pick(rng, USER_IDS);
+		while (partner === owner) partner = pick(rng, USER_IDS);
+
+		return {
+			index: i,
+			id:
+				i === 0
+					? "evt_wedding_001"
+					: i === 1
+						? "evt_engagement_002"
+						: `evt_${pad(i + 1, 3)}`,
+			type,
+			status,
+			capacity,
+			limitGuestCapacity,
+			fillRatio,
+			ownerId: owner,
+			partnerId: partner,
+		};
+	});
+}
+
+// ── Group labels ───────────────────────────────────────────────────
+const FAMILY_GROUPS = [
+	"Família da Noiva",
+	"Família do Noivo",
+	"Família dos Padrinhos",
+];
+const FRIEND_GROUPS = [
+	"Amigos da Universidade",
+	"Amigos da Infância",
+	"Amigos do Bairro",
+];
+const WORK_GROUPS = ["Trabalho — Empresa", "Colegas da Igreja", "Paróquia"];
+const VIP_GROUPS = [
+	"Padrinhos e Madrinhas",
+	"Convidados VIP",
+	"Bênçãos da Família",
+];
+const OTHER_GROUPS = ["Vizinhos", "Comunidade", "Amigos da Família"];
+
+interface GuestSeed {
+	record: Prisma.GuestCreateManyInput;
+	confirmed: boolean;
+	status:
+		| "CONFIRMED"
+		| "PENDING"
+		| "DECLINED"
+		| "WAITING"
+		| "MAYBE"
+		| "CANCELLED";
+	companionsLimit: number;
+}
+
+// ── Task templates per category ────────────────────────────────────
+const TASKS_BY_CATEGORY: Record<string, readonly string[]> = {
+	VENUE: [
+		"Confirmar contrato com o espaço",
+		"Visitar o salão e verificar acústica",
+		"Reservar mesa principal",
+		"Alinhar plano de evacuação",
+	],
+	DECORATION: [
+		"Escolher tema e cores",
+		"Confirmar arranjos florais",
+		"Montar corredor de flores",
+		"Definir iluminação e candeeiros",
+	],
+
+	GUESTS: [
+		"Enviar convites digitais",
+		"Confirmar presenças até à data limite",
+		"Definir lista de acompanhantes",
+		"Ligação de confirmação aos padrinhos",
+	],
+	FINANCE: [
+		"Fechar orçamento de fornecedores",
+		"Emitir pagamento de sinal",
+		"Reconciliar despesas",
+		"Abrir conta poupança para o evento",
+	],
+	FOOD: [
+		"Encomendar entradas e prato principal",
+		"Confirmar o bolo e os doces",
+		"Encomendar gelo e bebidas",
+		"Prova de menu com o chef",
+		"Confirmar número final de refeições",
+		"Alinhar dietas e alergias",
+		"Definir serviço de mesa",
+	],
+	DRINKS: [
+		"Fechar bar aberto",
+		"Encomendar água, sumos e refrigerantes",
+		"Escolher vinho e champanhe",
+	],
+	CEREMONY: [
+		"Marcar ensaio geral",
+		"Confirmar liturgia e música sacra",
+		"Alinhar o percurso da cerimónia",
+	],
+	DOCUMENTS: [
+		"Reunir documentação do casamento civil",
+		"Assinar contratos dos fornecedores",
+		"Autocarro e licenças do espaço",
+	],
+	CLOTHING: [
+		"Prova final do vestido",
+		"Ajuste do fato do noivo",
+		"Definir look dos padrinhos",
+	],
+	TRANSPORT: [
+		"Reservar carro decorado",
+		"Confirmar rotas do cortejo",
+		"Contratar transporte dos convidados",
+	],
+	OTHER: [
+		"Lembranças para convidados",
+		"Cuidados e tratamentos de beleza",
+		"Caixa de agradecimentos",
+	],
+};
+
+const SCHEDULES_WEDDING = [
+	{
+		title: "Montagem da decoração",
+		desc: "Equipa de decoração instala-se no espaço",
+		start: 8,
+		end: 12,
+		loc: "Salão principal",
+	},
+	{
+		title: "Preparação da noiva",
+		desc: "Maquilhagem, penteado e vestido",
+		start: 12,
+		end: 14,
+		loc: "Sala de preparação",
+	},
+	{
+		title: "Ensaio rápido",
+		desc: "Passo final com o celebrante",
+		start: 14,
+		end: 14.5,
+		loc: "Capela / altar",
+	},
+	{
+		title: "Cerimónia religiosa",
+		desc: "Casamento religioso",
+		start: 15,
+		end: 16,
+		loc: "Igreja",
+	},
+	{
+		title: "Receção de boas-vindas",
+		desc: "Cocktail de boas-vindas",
+		start: 16,
+		end: 17,
+		loc: "Entrada do salão",
+	},
+	{
+		title: "Sessão fotográfica",
+		desc: "Fotografias do casal e família",
+		start: 17,
+		end: 18,
+		loc: "Jardim",
+	},
+	{
+		title: "Jantar",
+		desc: "Serviço de jantar completo",
+		start: 18,
+		end: 21,
+		loc: "Salão principal",
+	},
+	{
+		title: "Corte do bolo",
+		desc: "Corte do bolo e brinde",
+		start: 21,
+		end: 21.5,
+		loc: "Mesa principal",
+	},
+	{
+		title: "Discurso dos padrinhos",
+		desc: "Brindes e palavra dos padrinhos",
+		start: 21.5,
+		end: 22,
+		loc: "Palco",
+	},
+	{
+		title: "Pista de dança",
+		desc: "DJ e banda ao vivo",
+		start: 22,
+		end: 25,
+		loc: "Pista de dança",
+	},
+];
+
+const SCHEDULES_ENGAGEMENT = [
+	{
+		title: "Montagem do espaço",
+		desc: "Decoração e som",
+		start: 14,
+		end: 17,
+		loc: "Jardim",
+	},
+	{
+		title: "Receção dos convidados",
+		desc: "Bem-vindos e fotos",
+		start: 17,
+		end: 18,
+		loc: "Entrada",
+	},
+	{
+		title: "Discurso do casal",
+		desc: "Brinde e declaração de noivado",
+		start: 18,
+		end: 18.5,
+		loc: "Palco",
+	},
+	{
+		title: "Jantar de gala",
+		desc: "Jantar servido",
+		start: 18.5,
+		end: 21,
+		loc: "Salão principal",
+	},
+	{
+		title: "Corte do bolo",
+		desc: "Bolo de noivado",
+		start: 21,
+		end: 21.5,
+		loc: "Mesa principal",
+	},
+	{
+		title: "Festa",
+		desc: "Música e dança",
+		start: 21.5,
+		end: 24,
+		loc: "Pista de dança",
+	},
+];
+
+const INVENTORY_WEDDING = [
+	{ name: "Vinho Tinto Reserva", cat: "DRINK", unit: "BOTTLE", price: 12000 },
+	{ name: "Champanhe Brut", cat: "DRINK", unit: "BOTTLE", price: 18000 },
+	{ name: "Água Mineral 500ml", cat: "DRINK", unit: "BOTTLE", price: 300 },
+	{ name: "Sumo Natural (Laranja)", cat: "DRINK", unit: "LITER", price: 2500 },
+	{ name: "Cerveja Eza", cat: "DRINK", unit: "CASE", price: 8000 },
+	{ name: "Barriga de Porco Assada", cat: "FOOD", unit: "KG", price: 6500 },
+	{ name: "Calulu de Frango", cat: "FOOD", unit: "KG", price: 4000 },
+	{ name: "Arroz com Tomate", cat: "FOOD", unit: "KG", price: 1500 },
+	{ name: "Salada Tropical", cat: "FOOD", unit: "KG", price: 3000 },
+	{
+		name: "Bolo de Casamento 4 Andares",
+		cat: "CAKE",
+		unit: "UNIT",
+		price: 250000,
+	},
+	{
+		name: "Rosas Brancas (centro de mesa)",
+		cat: "DECORATION",
+		unit: "UNIT",
+		price: 800,
+	},
+	{ name: "Velas Aromáticas", cat: "DECORATION", unit: "UNIT", price: 500 },
+	{
+		name: "Tecido Organza Branco",
+		cat: "DECORATION",
+		unit: "PACKAGE",
+		price: 15000,
+	},
+	{
+		name: "Caixa de Fogos de Artifício",
+		cat: "OTHER",
+		unit: "BOX",
+		price: 45000,
+	},
+] as const;
+
+const INVENTORY_ENGAGEMENT = [
+	{ name: "Espumante de Nuvem", cat: "DRINK", unit: "BOTTLE", price: 9000 },
+	{ name: "Água Mineral 500ml", cat: "DRINK", unit: "BOTTLE", price: 300 },
+	{ name: "Sangria de Frutas", cat: "DRINK", unit: "LITER", price: 3500 },
+	{
+		name: "Petiscos (Empadas e Folhados)",
+		cat: "FOOD",
+		unit: "KG",
+		price: 5500,
+	},
+	{ name: "Canapés de Queijo", cat: "FOOD", unit: "KG", price: 4800 },
+	{ name: "Bolo de Noivado", cat: "CAKE", unit: "UNIT", price: 120000 },
+	{ name: "Balões Dourados", cat: "DECORATION", unit: "UNIT", price: 1200 },
+] as const;
+
+const EXPENSE_TEMPLATES: Record<
+	string,
+	readonly { desc: string; share: number }[]
+> = {
+	VENUE: [
+		{ desc: "Aluguer do espaço", share: 1 },
+		{ desc: "Caução e licença do espaço", share: 0.12 },
+	],
+	DECORATION: [
+		{ desc: "Arranjos florais", share: 0.5 },
+		{ desc: "Decoração e iluminação", share: 0.5 },
+	],
+	MUSIC: [
+		{ desc: "DJ e som", share: 0.6 },
+		{ desc: "Banda ao vivo", share: 0.4 },
+	],
+	PHOTOGRAPHY: [{ desc: "Fotografia e vídeo", share: 1 }],
+	VIDEO: [{ desc: "Edição de vídeo", share: 1 }],
+	CATERING: [{ desc: "Catering completo", share: 1 }],
+	CAKE: [{ desc: "Bolo e doces", share: 1 }],
+	DRINKS: [{ desc: "Bebidas e bar", share: 1 }],
+	TRANSPORT: [{ desc: "Transporte e cortejo", share: 1 }],
+	BEAUTY: [{ desc: "Maquilhagem, penteado e cuidados", share: 1 }],
+	SECURITY: [{ desc: "Segurança do evento", share: 1 }],
+	ENTERTAINMENT: [{ desc: "Animação e efeitos", share: 1 }],
+	OTHER: [{ desc: "Papelaria e lembranças", share: 1 }],
+};
 
 async function main() {
 	console.log("🌱 Seeding database...");
 
-	// ================================================================
-	// 1. USERS (Better Auth schema)
-	// ================================================================
-	const users = [
-		{
-			id: USER_OWNER,
-			name: "Ana Fernandes",
-			email: "ana@muxima.ao",
-			emailVerified: true,
-			image: null,
-		},
-		{
-			id: USER_PARTNER,
-			name: "Carlos Mendes",
-			email: "carlos@muxima.ao",
-			emailVerified: true,
-			image: null,
-		},
-		{
-			id: USER_ADMIN,
-			name: "Sofia Neto",
-			email: "sofia@muxima.ao",
-			emailVerified: false,
-			image: null,
-		},
-	];
+	const plans = buildEventPlans();
 
-	for (const u of users) {
-		await prisma.user.upsert({
-			where: { id: u.id },
-			update: {},
-			create: u,
-		});
-	}
-	console.log("  ✅ Users");
+	// ── Idempotent cleanup (cascades from events) ─────────────────────
+	await prisma.guestInvitation.deleteMany({});
+	await prisma.eventInvitation.deleteMany({});
+	await prisma.invitationGuest.deleteMany({});
+	await prisma.guestCompanion.deleteMany({});
+	await prisma.tableGuest.deleteMany({});
+	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "payment", "expense", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "vendor_contract", "vendor", "budget_category", "budget", "table", "event_member", "event" CASCADE`;
+	await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
 
-	// ================================================================
-	// 2. EVENTS
-	// ================================================================
-	await prisma.event.upsert({
-		where: { id: EVENT_WEDDING },
-		update: {},
-		create: {
-			id: EVENT_WEDDING,
-			ownerId: USER_OWNER,
-			name: "Casamento Ana & Carlos",
-			type: "WEDDING",
-			status: "PLANNING",
-			eventDate: monthsAhead(4),
-			startTime: "15:00",
-			endTime: "02:00",
-			venueName: "Convento de São Francisco",
-			address: "Rua Major Kanhangulo",
-			province: "Luanda",
-			municipality: "Luanda",
-			neighborhood: "Maianga",
-			reference: "Próximo ao Hospital Central",
-			capacity: 250,
-			limitGuestCapacity: true,
+	// ── 1. USERS + CREDENTIALS ────────────────────────────────────────
+	await prisma.user.createMany({ data: SEED_USERS });
+	const passwordHash = await hashSeedPassword(SEED_PASSWORD);
+	await prisma.account.createMany({
+		data: SEED_USERS.map((user) => ({
+			id: `acct_credential_${user.id}`,
+			issuer: "local:credential",
+			accountId: user.id,
+			providerId: "credential",
+			userId: user.id,
+			password: passwordHash,
+		})),
+	});
+	console.log(
+		`  ✅ Users (${SEED_USERS.length}) / Credentials (${SEED_USERS.length})`,
+	);
+
+	// ── 2. EVENTS ──────────────────────────────────────────────────────
+	const eventRecords: Prisma.EventCreateManyInput[] = [];
+	for (const plan of plans) {
+		const rng = mulberry32(2024 + plan.index * 613);
+		const venue = pick(rng, VENUES);
+		let eventDate: Date;
+		switch (plan.status) {
+			case "COMPLETED":
+				eventDate = monthsAgo(randInt(rng, 1, 6));
+				break;
+			case "CONFIRMED":
+				eventDate = daysAhead(randInt(rng, 15, 60));
+				break;
+			case "PLANNING":
+				eventDate = monthsAhead(randInt(rng, 2, 12));
+				break;
+			case "CANCELLED":
+				eventDate = daysAhead(randInt(rng, 20, 200));
+				break;
+			case "DRAFT":
+				eventDate = monthsAhead(randInt(rng, 6, 18));
+				break;
+		}
+
+		const female = pick(rng, FEMALE_NAMES);
+		const male = pick(rng, MALE_NAMES);
+		const name =
+			plan.type === "WEDDING"
+				? `Casamento ${female} & ${male}`
+				: `Noivado ${female} & ${male}`;
+
+		eventRecords.push({
+			id: plan.id,
+			ownerId: plan.ownerId,
+			name,
+			type: plan.type,
+			status: plan.status,
+			eventDate,
+			startTime: plan.type === "WEDDING" ? "15:00" : "17:00",
+			endTime: plan.type === "WEDDING" ? "02:00" : "23:00",
+			venueName: venue.name,
+			address: venue.address,
+			province: venue.province,
+			municipality: venue.municipality,
+			neighborhood: venue.neighborhood,
+			reference: venue.reference,
+			latitude: venue.lat,
+			longitude: venue.lng,
+			capacity: plan.capacity,
+			limitGuestCapacity: plan.limitGuestCapacity,
 			currency: "AOA",
 			description:
-				"Casamento civil e religioso com recepção no jardim do convento.",
-		},
-	});
-
-	await prisma.event.upsert({
-		where: { id: EVENT_ENGAGEMENT },
-		update: {},
-		create: {
-			id: EVENT_ENGAGEMENT,
-			ownerId: USER_PARTNER,
-			name: "Noivado Beatriz & David",
-			type: "ENGAGEMENT",
-			status: "CONFIRMED",
-			eventDate: monthsAhead(1),
-			startTime: "18:00",
-			endTime: "23:00",
-			venueName: "Clube Mineiro",
-			address: "Rua dos Enganos",
-			province: "Luanda",
-			municipality: "Luanda",
-			neighborhood: "Miramar",
-			capacity: 120,
-			limitGuestCapacity: false,
-			currency: "AOA",
-			description:
-				"Festa de noivado intimista com familiares e amigos próximos.",
-		},
-	});
-	console.log("  ✅ Events");
-
-	// ================================================================
-	// 3. EVENT MEMBERS
-	// ================================================================
-	const memberData = [
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			role: "OWNER" as const,
-			status: "ACTIVE" as const,
-			joinedAt: daysAgo(90),
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_PARTNER,
-			role: "PARTNER" as const,
-			status: "ACTIVE" as const,
-			joinedAt: daysAgo(85),
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_ADMIN,
-			role: "ADMIN" as const,
-			status: "ACTIVE" as const,
-			joinedAt: daysAgo(80),
-		},
-		{
-			eventId: EVENT_ENGAGEMENT,
-			userId: USER_PARTNER,
-			role: "OWNER" as const,
-			status: "ACTIVE" as const,
-			joinedAt: daysAgo(45),
-		},
-		{
-			eventId: EVENT_ENGAGEMENT,
-			userId: USER_OWNER,
-			role: "PARTNER" as const,
-			status: "ACTIVE" as const,
-			joinedAt: daysAgo(40),
-		},
-	];
-
-	for (const m of memberData) {
-		await prisma.eventMember.upsert({
-			where: { eventId_userId: { eventId: m.eventId, userId: m.userId } },
-			update: {},
-			create: {
-				...m,
-				id: `mem_${m.userId}_${m.eventId}`,
-			},
+				plan.status === "CANCELLED"
+					? "Evento cancelado por motivos da família."
+					: plan.status === "DRAFT"
+						? "Rascunho do evento — detalhes a confirmar."
+						: `${plan.type === "WEDDING" ? "Casamento" : "Festa de noivado"} com receção e celebração no ${venue.name}.`,
 		});
 	}
-	console.log("  ✅ Event Members");
+	await prisma.event.createMany({ data: eventRecords });
+	console.log(`  ✅ Events (${eventRecords.length})`);
 
-	// ================================================================
-	// 4. BUDGETS
-	// ================================================================
-	await prisma.budget.upsert({
-		where: { eventId: EVENT_WEDDING },
-		update: {},
-		create: {
-			eventId: EVENT_WEDDING,
-			plannedAmount: 8_500_000,
-			reserveAmount: 500_000,
-			notes: "Orçamento baseado em cotações de 3 fornecedores.",
-		},
-	});
+	// ── 3. EVENT MEMBERS + MEMBER INVITATIONS ─────────────────────────
+	const memberRecords: Prisma.EventMemberCreateManyInput[] = [];
+	const eventInvitationRecords: Prisma.EventInvitationCreateManyInput[] = [];
 
-	await prisma.budget.upsert({
-		where: { eventId: EVENT_ENGAGEMENT },
-		update: {},
-		create: {
-			eventId: EVENT_ENGAGEMENT,
-			plannedAmount: 2_200_000,
-			reserveAmount: 200_000,
-			notes: "Evento mais reduzido — foco em experiência.",
-		},
-	});
-	console.log("  ✅ Budgets");
-
-	// ================================================================
-	// 5. BUDGET CATEGORIES
-	// ================================================================
-	const weddingCategories = [
-		{
-			name: "Espaço & Decoração",
-			description: "Aluguer do venue e enfeites",
-			plannedAmount: 2_500_000,
-		},
-		{
-			name: "Catering & Bebidas",
-			description: "Buffet e bar aberto",
-			plannedAmount: 2_200_000,
-		},
-		{
-			name: "Música & Entretenimento",
-			description: "DJ, banda e animação",
-			plannedAmount: 1_200_000,
-		},
-		{
-			name: "Fotografia & Vídeo",
-			description: "Cobertura completa do evento",
-			plannedAmount: 900_000,
-		},
-		{
-			name: "Vestuário & Beleza",
-			description: "Vestido, terno, maquilhagem",
-			plannedAmount: 1_000_000,
-		},
-		{
-			name: "Transporte & Logística",
-			description: "Decoração de carros e transportes",
-			plannedAmount: 400_000,
-		},
-		{
-			name: "Convites & Papelaria",
-			description: "Convites, menus, cartões",
-			plannedAmount: 300_000,
-		},
-	];
-
-	const budgetCatIds: Record<string, string> = {};
-
-	for (let i = 0; i < weddingCategories.length; i++) {
-		const cat = weddingCategories[i];
-		const id = `bcat_wed_${i + 1}`;
-		budgetCatIds[cat.name] = id;
-		await prisma.budgetCategory.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_WEDDING,
-				...cat,
+	for (const plan of plans) {
+		const rng = mulberry32(91 + plan.index * 149);
+		const members: {
+			user: string;
+			role: Prisma.MemberRole;
+			status: Prisma.MemberStatus;
+			joined: Date | null;
+		}[] = [
+			{
+				user: plan.ownerId,
+				role: "OWNER",
+				status: "ACTIVE",
+				joined: daysAgo(randInt(rng, 60, 200)),
 			},
-		});
-	}
-
-	const engagementCategories = [
-		{
-			name: "Espaço & Decoração",
-			description: "Decoração do jardim",
-			plannedAmount: 600_000,
-		},
-		{
-			name: "Catering",
-			description: "Petiscos e bebidas leves",
-			plannedAmount: 500_000,
-		},
-		{
-			name: "Música",
-			description: "DJ e som ambiente",
-			plannedAmount: 350_000,
-		},
-		{
-			name: "Fotografia",
-			description: "Sessão fotográfica do evento",
-			plannedAmount: 400_000,
-		},
-	];
-
-	for (let i = 0; i < engagementCategories.length; i++) {
-		const cat = engagementCategories[i];
-		const id = `bcat_eng_${i + 1}`;
-		await prisma.budgetCategory.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_ENGAGEMENT,
-				...cat,
+			{
+				user: plan.partnerId,
+				role: "PARTNER",
+				status: "ACTIVE",
+				joined: daysAgo(randInt(rng, 40, 180)),
 			},
-		});
-	}
-	console.log("  ✅ Budget Categories");
+		];
 
-	// ================================================================
-	// 6. VENDORS
-	// ================================================================
-	const vendorData = [
-		{
-			id: "vnd_001",
-			eventId: EVENT_WEDDING,
-			name: "Jardim das Flores — Decoração",
-			category: "DECORATION" as const,
-			phone: "+244 923 456 789",
-			email: "contato@jardimdasflores.ao",
-			address: "Rua da Missão, Luanda",
-			status: "CONTRACTED" as const,
-			description: "Empresas especializada em decoração de eventos casamentos.",
-			notes: "Preferência por flores naturais e tons pastel.",
-		},
-		{
-			id: "vnd_002",
-			eventId: EVENT_WEDDING,
-			name: "Chef Ngola — Catering",
-			category: "CATERING" as const,
-			phone: "+244 912 345 678",
-			email: "reservas@chefngola.ao",
-			address: "Via Fidelidade, Luanda",
-			status: "CONTRACTED" as const,
-			description: "Catering premium com cozinha angolana e internacional.",
-			notes: "Menu a confirmar: barriga de porco, calulu, bacalhau.",
-		},
-		{
-			id: "vnd_003",
-			eventId: EVENT_WEDDING,
-			name: "Som & Arte — DJ e Banda",
-			category: "MUSIC" as const,
-			phone: "+244 934 567 890",
-			email: "booking@somarte.ao",
-			address: "Viana, Luanda",
-			status: "NEGOTIATING" as const,
-			description: "DJ residencial e banda ao vivo de kizomba e semba.",
-			notes: "Orçamento pendente — pedir referências.",
-		},
-		{
-			id: "vnd_004",
-			eventId: EVENT_WEDDING,
-			name: "Olhar Fotográfico",
-			category: "PHOTOGRAPHY" as const,
-			phone: "+244 945 678 901",
-			email: "info@olharfotografico.ao",
-			address: "Talatona, Luanda",
-			status: "CONTRACTED" as const,
-			description: "Fotógrafo e videógrafo profissional.",
-			notes: "Pacote inclui drone e edited highlights.",
-		},
-		{
-			id: "vnd_005",
-			eventId: EVENT_WEDDING,
-			name: "Belleza Noiva — Beleza",
-			category: "BEAUTY" as const,
-			phone: "+244 956 789 012",
-			email: "agendamento@bellezanoiva.ao",
-			address: "Kinaxixi, Luanda",
-			status: "CONTACTED" as const,
-			description: "Maquilhagem, penteados e tratamentos para noivas.",
-			notes: "Agendar provas 2 meses antes.",
-		},
-		{
-			id: "vnd_006",
-			eventId: EVENT_WEDDING,
-			name: "Transportes Reais",
-			category: "TRANSPORT" as const,
-			phone: "+244 967 890 123",
-			email: "reservas@transportesreais.ao",
-			address: "Marginal, Luanda",
-			status: "PROSPECT" as const,
-			description: "Aluguer de veículos decorados para o cortejo.",
-			notes: "Verificar disponibilidade para a data.",
-		},
-		{
-			id: "vnd_007",
-			eventId: EVENT_ENGAGEMENT,
-			name: "Doce Momento — Pastelaria",
-			category: "CAKE" as const,
-			phone: "+244 978 901 234",
-			email: "encomendas@docemomento.ao",
-			address: "Miramar, Luanda",
-			status: "CONTRACTED" as const,
-			description: "Bolos de noivado, doces e sweet table.",
-			notes: "Tema: dourado e branco.",
-		},
-		{
-			id: "vnd_008",
-			eventId: EVENT_ENGAGEMENT,
-			name: "Som Ambiente — Eventos",
-			category: "ENTERTAINMENT" as const,
-			phone: "+244 989 012 345",
-			email: "eventos@sombiente.ao",
-			address: "Ilha de Luanda",
-			status: "CONTRACTED" as const,
-			description: "Som, iluminação e projectores para eventos.",
-			notes: "Inclui ecrã de projectação.",
-		},
-	];
+		if (rng() > 0.4) {
+			let third = pick(rng, USER_IDS);
+			while (members.some((m) => m.user === third)) third = pick(rng, USER_IDS);
+			members.push({
+				user: third,
+				role: "ADMIN",
+				status: "ACTIVE",
+				joined: daysAgo(randInt(rng, 20, 120)),
+			});
+		}
+		if (rng() > 0.75) {
+			let fourth = pick(rng, USER_IDS);
+			while (members.some((m) => m.user === fourth))
+				fourth = pick(rng, USER_IDS);
+			members.push({
+				user: fourth,
+				role: "EDITOR",
+				status: "ACTIVE",
+				joined: daysAgo(randInt(rng, 10, 60)),
+			});
+		}
+		// A pending invitation for realism.
+		if (rng() > 0.6) {
+			let invitee = pick(rng, USER_IDS);
+			while (members.some((m) => m.user === invitee))
+				invitee = pick(rng, USER_IDS);
+			if (
+				["CONFIRMED", "PLANNING"].includes(plan.status) &&
+				plan.type === "WEDDING"
+			) {
+				members.push({
+					user: invitee,
+					role: "VIEWER",
+					status: "PENDING",
+					joined: null,
+				});
+				eventInvitationRecords.push({
+					id: `evinv_${plan.index}_${invitee}`,
+					eventId: plan.id,
+					invitedBy: plan.ownerId,
+					email: `${invitee.replace("usr_", "")}@muxima.ao`,
+					role: "VIEWER",
+					token: `tok_${plan.index}_${invitee.slice(-4)}`,
+					status: "PENDING",
+					expiresAt: monthsAhead(1),
+				});
+			}
+		}
 
-	for (const v of vendorData) {
-		await prisma.vendor.upsert({
-			where: { id: v.id },
-			update: {},
-			create: v,
-		});
-	}
-	console.log("  ✅ Vendors");
-
-	// ================================================================
-	// 7. VENDOR CONTRACTS
-	// ================================================================
-	const contractData = [
-		{
-			id: "ctr_001",
-			eventId: EVENT_WEDDING,
-			vendorId: "vnd_001",
-			number: "CT-2026-001",
-			startDate: daysAgo(30),
-			endDate: monthsAhead(4),
-			amount: 1_800_000,
-			status: "ACTIVE" as const,
-			notes: "Pagamento: 50% adiantado, 50% no dia.",
-		},
-		{
-			id: "ctr_002",
-			eventId: EVENT_WEDDING,
-			vendorId: "vnd_002",
-			number: "CT-2026-002",
-			startDate: daysAgo(20),
-			endDate: monthsAhead(4),
-			amount: 2_200_000,
-			status: "ACTIVE" as const,
-			notes: "IncluiServiço de garçons e louça.",
-		},
-		{
-			id: "ctr_003",
-			eventId: EVENT_WEDDING,
-			vendorId: "vnd_004",
-			number: "CT-2026-003",
-			startDate: daysAgo(15),
-			endDate: monthsAhead(5),
-			amount: 850_000,
-			status: "DRAFT" as const,
-			notes: "Aguardar assinatura.",
-		},
-	];
-
-	for (const c of contractData) {
-		await prisma.vendorContract.upsert({
-			where: { id: c.id },
-			update: {},
-			create: c,
-		});
-	}
-	console.log("  ✅ Vendor Contracts");
-
-	// ================================================================
-	// 8. GUESTS (Wedding)
-	// ================================================================
-	const weddingGuests = [
-		{
-			name: "Dr. António Fernandes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 912 111 001",
-			group: "Família da Noiva",
-			companionsLimit: 1,
-		},
-		{
-			name: "D. Maria Fernandes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 912 111 002",
-			group: "Família da Noiva",
-			companionsLimit: 0,
-		},
-		{
-			name: "Pedro Fernandes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 912 111 003",
-			group: "Família da Noiva",
-			companionsLimit: 1,
-		},
-		{
-			name: "Inês Fernandes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 912 111 004",
-			group: "Família da Noiva",
-			companionsLimit: 1,
-		},
-		{
-			name: "Eng. Rui Mendes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 923 222 001",
-			group: "Família do Noivo",
-			companionsLimit: 1,
-		},
-		{
-			name: "D. Teresa Mendes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 923 222 002",
-			group: "Família do Noivo",
-			companionsLimit: 0,
-		},
-		{
-			name: "João Mendes",
-			type: "FAMILY" as const,
-			status: "PENDING" as const,
-			phone: "+244 923 222 003",
-			group: "Família do Noivo",
-			companionsLimit: 1,
-		},
-		{
-			name: "Ricardo Mendes",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 923 222 004",
-			group: "Família do Noivo",
-			companionsLimit: 2,
-		},
-		{
-			name: "Dr. Paulo Almeida",
-			type: "FRIEND" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 934 333 001",
-			group: "Amigos da Universidade",
-			companionsLimit: 1,
-		},
-		{
-			name: "Marta Santos",
-			type: "FRIEND" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 934 333 002",
-			group: "Amigos da Universidade",
-			companionsLimit: 1,
-		},
-		{
-			name: "Beatriz Costa",
-			type: "FRIEND" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 934 333 003",
-			group: "Amigos da Universidade",
-			companionsLimit: 0,
-		},
-		{
-			name: "Fernando Gomes",
-			type: "FRIEND" as const,
-			status: "DECLINED" as const,
-			phone: "+244 934 333 004",
-			group: "Amigos da Universidade",
-			companionsLimit: 1,
-		},
-		{
-			name: "Lucas Silva",
-			type: "COLLEAGUE" as const,
-			status: "PENDING" as const,
-			phone: "+244 945 444 001",
-			group: "Trabalho — Banco",
-			companionsLimit: 1,
-		},
-		{
-			name: "Raquel Tomás",
-			type: "COLLEAGUE" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 945 444 002",
-			group: "Trabalho — Banco",
-			companionsLimit: 0,
-		},
-		{
-			name: "D. Conceição",
-			type: "VIP" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 956 555 001",
-			group: "Padrinho e Madrinha",
-			companionsLimit: 1,
-		},
-		{
-			name: "Eng. Manuel Baptista",
-			type: "VIP" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 956 555 002",
-			group: "Padrinho e Madrinha",
-			companionsLimit: 1,
-		},
-		{
-			name: "Vizinha Dona Graça",
-			type: "OTHER" as const,
-			status: "PENDING" as const,
-			phone: "+244 967 666 001",
-			group: "Vizinhos",
-			companionsLimit: 1,
-		},
-		{
-			name: "Primo Sérgio",
-			type: "FAMILY" as const,
-			status: "WAITING" as const,
-			phone: "+244 978 777 001",
-			group: "Família da Noiva",
-			companionsLimit: 2,
-		},
-		{
-			name: "Tia Leonor",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			phone: "+244 989 888 001",
-			group: "Família do Noivo",
-			companionsLimit: 1,
-		},
-		{
-			name: "Amigo Carlos Neto",
-			type: "FRIEND" as const,
-			status: "PENDING" as const,
-			phone: "+244 990 999 001",
-			group: "Amigos da Universidade",
-			companionsLimit: 1,
-		},
-	];
-
-	const weddingGuestIds: string[] = [];
-	for (let i = 0; i < weddingGuests.length; i++) {
-		const id = `gst_wed_${String(i + 1).padStart(3, "0")}`;
-		weddingGuestIds.push(id);
-		await prisma.guest.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_WEDDING,
-				...weddingGuests[i],
-			},
-		});
-	}
-
-	// Engagement guests (fewer)
-	const engagementGuests = [
-		{
-			name: "Família Ribeiro",
-			type: "FAMILY" as const,
-			status: "CONFIRMED" as const,
-			group: "Família",
-			companionsLimit: 2,
-		},
-		{
-			name: "Amigos do Trabalho",
-			type: "COLLEAGUE" as const,
-			status: "CONFIRMED" as const,
-			group: "Trabalho",
-			companionsLimit: 0,
-		},
-		{
-			name: "Padrinho Tomás",
-			type: "VIP" as const,
-			status: "CONFIRMED" as const,
-			group: "Padrinho",
-			companionsLimit: 1,
-		},
-		{
-			name: "Madrinha Luísa",
-			type: "VIP" as const,
-			status: "CONFIRMED" as const,
-			group: "Madrinha",
-			companionsLimit: 1,
-		},
-		{
-			name: "Vizinhos do Miramar",
-			type: "OTHER" as const,
-			status: "PENDING" as const,
-			group: "Vizinhos",
-			companionsLimit: 1,
-		},
-	];
-
-	const engagementGuestIds: string[] = [];
-	for (let i = 0; i < engagementGuests.length; i++) {
-		const id = `gst_eng_${String(i + 1).padStart(3, "0")}`;
-		engagementGuestIds.push(id);
-		await prisma.guest.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_ENGAGEMENT,
-				...engagementGuests[i],
-			},
-		});
-	}
-	console.log("  ✅ Guests");
-
-	// ================================================================
-	// 9. GUEST COMPANIONS
-	// ================================================================
-	const companionData = [
-		{
-			guestId: "gst_wed_001",
-			name: "D. Ana Paula (esposa)",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_003",
-			name: "Filho Tiago",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_004",
-			name: "Filho Miguel",
-			status: "PENDING" as const,
-		},
-		{
-			guestId: "gst_wed_005",
-			name: "Esposa Dona Lurdes",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_007",
-			name: "Esposa Filipa",
-			status: "PENDING" as const,
-		},
-		{
-			guestId: "gst_wed_008",
-			name: "Esposa Carminda",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_008",
-			name: "Filho André",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_009",
-			name: "Esposa Diana",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_010",
-			name: "Esposa Teresa",
-			status: "DECLINED" as const,
-		},
-		{
-			guestId: "gst_wed_015",
-			name: "Marido Dr. Baptista",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_016",
-			name: "Esposa Dona Fátima",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_019",
-			name: "Esposa Dona Célia",
-			status: "CONFIRMED" as const,
-		},
-		{
-			guestId: "gst_wed_020",
-			name: "Filho Eduardo",
-			status: "PENDING" as const,
-		},
-	];
-
-	for (let i = 0; i < companionData.length; i++) {
-		await prisma.guestCompanion.upsert({
-			where: { id: `gc_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `gc_${String(i + 1).padStart(3, "0")}`,
-				...companionData[i],
-			},
-		});
-	}
-	console.log("  ✅ Guest Companions");
-
-	// ================================================================
-	// 10. GUEST INVITATIONS (uses InvitationGuest junction table)
-	// ================================================================
-	for (let i = 0; i < weddingGuestIds.length; i++) {
-		const statuses = [
-			"SENT",
-			"SENT",
-			"OPENED",
-			"RESPONDED",
-			"CREATED",
-		] as const;
-		const status = statuses[i % statuses.length];
-		const invId = `gi_wed_${String(i + 1).padStart(3, "0")}`;
-		await prisma.guestInvitation.upsert({
-			where: { id: invId },
-			update: {},
-			create: {
-				id: invId,
-				eventId: EVENT_WEDDING,
-				code: `MUX-${String(1000 + i)}`,
-				status,
-				sentAt: status !== "CREATED" ? daysAgo(60 - i * 2) : null,
-				openedAt:
-					status === "OPENED" || status === "RESPONDED"
-						? daysAgo(55 - i * 2)
-						: null,
-				respondedAt: status === "RESPONDED" ? daysAgo(50 - i * 2) : null,
-			},
-		});
-
-		// Create junction table record
-		await prisma.invitationGuest.upsert({
-			where: {
-				invitationId_guestId: {
-					invitationId: invId,
-					guestId: weddingGuestIds[i],
-				},
-			},
-			update: {},
-			create: {
-				id: `ig_${String(i + 1).padStart(3, "0")}`,
-				invitationId: invId,
-				guestId: weddingGuestIds[i],
-			},
-		});
-	}
-	console.log("  ✅ Guest Invitations");
-
-	// ================================================================
-	// 11. TABLES (Wedding)
-	// ================================================================
-	const weddingTables = [
-		{
-			name: "Mesa da Família Noiva",
-			number: 1,
-			capacity: 8,
-			location: "Ao lado do palco",
-		},
-		{
-			name: "Mesa da Família Noivo",
-			number: 2,
-			capacity: 8,
-			location: "Ao lado do palco",
-		},
-		{
-			name: "Mesa Padrinhos",
-			number: 3,
-			capacity: 6,
-			location: "Frente ao altar",
-		},
-		{
-			name: "Mesa Amigos da Universidade",
-			number: 4,
-			capacity: 10,
-			location: "Zona central",
-		},
-		{
-			name: "Mesa Trabalho Banco",
-			number: 5,
-			capacity: 8,
-			location: "Zona lateral",
-		},
-		{
-			name: "Mesa VIP",
-			number: 6,
-			capacity: 6,
-			location: "Ao lado da mesa principal",
-		},
-		{
-			name: "Mesa Vizinhos",
-			number: 7,
-			capacity: 8,
-			location: "Zona traseira",
-		},
-		{
-			name: "Mesa Reserva",
-			number: 8,
-			capacity: 10,
-			location: "Zona traseira",
-		},
-	];
-
-	const weddingTableIds: string[] = [];
-	for (let i = 0; i < weddingTables.length; i++) {
-		const id = `tbl_wed_${String(i + 1).padStart(3, "0")}`;
-		weddingTableIds.push(id);
-		await prisma.table.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_WEDDING,
-				...weddingTables[i],
-			},
-		});
-	}
-	console.log("  ✅ Tables");
-
-	// ================================================================
-	// 12. TABLE-GUEST ASSIGNMENTS
-	// ================================================================
-	const tableAssignments = [
-		// Mesa Família Noiva
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[0] }, // Dr. António
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[1] }, // D. Maria
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[2] }, // Pedro
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[3] }, // Inês
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[17] }, // Primo Sérgio
-		{ tableId: weddingTableIds[0], guestId: weddingGuestIds[18] }, // Tia Leonor
-		// Mesa Família Noivo
-		{ tableId: weddingTableIds[1], guestId: weddingGuestIds[4] }, // Eng. Rui
-		{ tableId: weddingTableIds[1], guestId: weddingGuestIds[5] }, // D. Teresa
-		{ tableId: weddingTableIds[1], guestId: weddingGuestIds[6] }, // João
-		{ tableId: weddingTableIds[1], guestId: weddingGuestIds[7] }, // Ricardo
-		// Mesa Padrinhos
-		{ tableId: weddingTableIds[2], guestId: weddingGuestIds[14] }, // D. Conceição
-		{ tableId: weddingTableIds[2], guestId: weddingGuestIds[15] }, // Eng. Manuel
-		// Mesa Amigos
-		{ tableId: weddingTableIds[3], guestId: weddingGuestIds[8] }, // Dr. Paulo
-		{ tableId: weddingTableIds[3], guestId: weddingGuestIds[9] }, // Marta
-		{ tableId: weddingTableIds[3], guestId: weddingGuestIds[10] }, // Beatriz
-		{ tableId: weddingTableIds[3], guestId: weddingGuestIds[11] }, // Fernando
-		{ tableId: weddingTableIds[3], guestId: weddingGuestIds[19] }, // Amigo Carlos
-		// Mesa Trabalho
-		{ tableId: weddingTableIds[4], guestId: weddingGuestIds[12] }, // Lucas
-		{ tableId: weddingTableIds[4], guestId: weddingGuestIds[13] }, // Raquel
-		// Mesa VIP
-		{ tableId: weddingTableIds[5], guestId: weddingGuestIds[14] },
-		// Mesa Vizinhos
-		{ tableId: weddingTableIds[6], guestId: weddingGuestIds[16] }, // Dona Graça
-	];
-
-	for (let i = 0; i < tableAssignments.length; i++) {
-		const assignment = tableAssignments[i];
-		if (weddingGuestIds.includes(assignment.guestId)) {
-			await prisma.tableGuest.upsert({
-				where: {
-					tableId_guestId: {
-						tableId: assignment.tableId,
-						guestId: assignment.guestId,
-					},
-				},
-				update: {},
-				create: {
-					id: `tg_${String(i + 1).padStart(3, "0")}`,
-					...assignment,
-				},
+		for (const m of members) {
+			memberRecords.push({
+				id: `mem_${m.user}_${plan.id}`,
+				eventId: plan.id,
+				userId: m.user,
+				role: m.role,
+				status: m.status,
+				joinedAt: m.joined,
 			});
 		}
 	}
-	console.log("  ✅ Table-Guest Assignments");
+	await prisma.eventMember.createMany({ data: memberRecords });
+	await prisma.eventInvitation.createMany({ data: eventInvitationRecords });
+	console.log(
+		`  ✅ Event Members (${memberRecords.length}) / Invitations (${eventInvitationRecords.length})`,
+	);
 
-	// ================================================================
-	// 13. TASKS (Wedding)
-	// ================================================================
-	const taskData = [
-		{
-			title: "Confirmar contrato com decoração",
-			category: "DECORATION" as const,
-			priority: "HIGH" as const,
-			status: "COMPLETED" as const,
-			dueDate: daysAgo(30),
-		},
-		{
-			title: "Envio de convites",
-			category: "DOCUMENTS" as const,
-			priority: "HIGH" as const,
-			status: "IN_PROGRESS" as const,
-			dueDate: daysAhead(15),
-		},
-		{
-			title: "Prova de menu com Chef Ngola",
-			category: "FOOD" as const,
-			priority: "MEDIUM" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(20),
-		},
-		{
-			title: "Escolher música de entrada da noiva",
-			category: "CEREMONY" as const,
-			priority: "HIGH" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(30),
-		},
-		{
-			title: "Reservar carro decorado",
-			category: "TRANSPORT" as const,
-			priority: "MEDIUM" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(45),
-		},
-		{
-			title: "Agendar maquilhagem de provas",
-			category: "OTHER" as const,
-			priority: "LOW" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(60),
-		},
-		{
-			title: "Confirmar lista de fornecedores",
-			category: "VENUE" as const,
-			priority: "MEDIUM" as const,
-			status: "COMPLETED" as const,
-			dueDate: daysAgo(45),
-		},
-		{
-			title: "Definir assentos dos convidados VIP",
-			category: "GUESTS" as const,
-			priority: "URGENT" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(10),
-		},
-		{
-			title: "Pagamento adiantado decoração — 50%",
-			category: "FINANCE" as const,
-			priority: "HIGH" as const,
-			status: "COMPLETED" as const,
-			dueDate: daysAgo(15),
-		},
-		{
-			title: "Verificar licenças e alvarás do venue",
-			category: "DOCUMENTS" as const,
-			priority: "URGENT" as const,
-			status: "IN_PROGRESS" as const,
-			dueDate: daysAhead(5),
-		},
-		{
-			title: "Ensaio geral da cerimónia",
-			category: "CEREMONY" as const,
-			priority: "HIGH" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(3),
-		},
-		{
-			title: "Fechar bar aberto — definir drinks",
-			category: "DRINKS" as const,
-			priority: "MEDIUM" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(25),
-		},
-		{
-			title: "Comprar lembranças para convidados",
-			category: "OTHER" as const,
-			priority: "LOW" as const,
-			status: "CANCELLED" as const,
-			dueDate: daysAgo(10),
-		},
-		{
-			title: "Ensaio deDJ e banda",
-			category: "OTHER" as const,
-			priority: "MEDIUM" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(35),
-		},
-		{
-			title: "Confirmar presença dos padrinhos",
-			category: "GUESTS" as const,
-			priority: "HIGH" as const,
-			status: "IN_PROGRESS" as const,
-			dueDate: daysAhead(7),
-		},
-	];
+	// ── 4. BUDGETS + CATEGORIES ────────────────────────────────────────
+	const budgetRecords: Prisma.BudgetCreateManyInput[] = [];
+	const budgetCatRecords: Prisma.BudgetCategoryCreateManyInput[] = [];
 
-	for (let i = 0; i < taskData.length; i++) {
-		const task = taskData[i];
-		await prisma.task.upsert({
-			where: { id: `tsk_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `tsk_${String(i + 1).padStart(3, "0")}`,
-				eventId: EVENT_WEDDING,
-				title: task.title,
-				category: task.category,
-				priority: task.priority,
-				status: task.status,
-				dueDate: task.dueDate,
-				createdBy: USER_OWNER,
-				completedAt: task.status === "COMPLETED" ? daysAgo(30 - i * 5) : null,
-				completedBy: task.status === "COMPLETED" ? USER_OWNER : null,
-			},
+	for (const plan of plans) {
+		const rng = mulberry32(311 + plan.index * 317);
+		const perPerson =
+			plan.type === "WEDDING"
+				? randInt(rng, 28000, 46000)
+				: randInt(rng, 14000, 22000);
+		const plannedAmount = plan.capacity * perPerson;
+		const reserveAmount = Math.round(plannedAmount * 0.08);
+		budgetRecords.push({
+			id: `bgt_${pad(plan.index + 1)}_${SEED_PREFIX}`,
+			eventId: plan.id,
+			plannedAmount,
+			reserveAmount,
+			notes:
+				plan.status === "DRAFT"
+					? "Orçamento preliminar — valores a confirmar."
+					: "Orçamento distribuído por categorias de fornecedores.",
+		});
+
+		const cats =
+			plan.type === "WEDDING"
+				? [
+						"Espaço & Decoração",
+						"Catering & Bebidas",
+						"Música & Entretenimento",
+						"Fotografia & Vídeo",
+						"Vestuário & Beleza",
+						"Transporte & Logística",
+						"Convites & Papelaria",
+					]
+				: [
+						"Espaço & Decoração",
+						"Catering & Bebidas",
+						"Música & Entretenimento",
+						"Fotografia & Vídeo",
+					];
+
+		let remaining = Math.round(plannedAmount * 0.92);
+		cats.forEach((cat, j) => {
+			const isLast = j === cats.length - 1;
+			const amount = isLast
+				? remaining
+				: Math.round(remaining * (0.08 + rng() * 0.22));
+			remaining -= amount;
+			budgetCatRecords.push({
+				id: `bcat_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+				eventId: plan.id,
+				name: cat,
+				description: `Despesas de ${cat.toLowerCase()}`,
+				plannedAmount: amount,
+			});
 		});
 	}
+	await prisma.budget.createMany({ data: budgetRecords });
+	await prisma.budgetCategory.createMany({ data: budgetCatRecords });
+	console.log(
+		`  ✅ Budgets (${budgetRecords.length}) / Categories (${budgetCatRecords.length})`,
+	);
 
-	// Engagement tasks
-	const engagementTasks = [
-		{
-			title: "Confirmar espaço no Clube Mineiro",
-			category: "VENUE" as const,
-			priority: "HIGH" as const,
-			status: "COMPLETED" as const,
-			dueDate: daysAgo(20),
-		},
-		{
-			title: "Enviar convites de noivado",
-			category: "GUESTS" as const,
-			priority: "HIGH" as const,
-			status: "IN_PROGRESS" as const,
-			dueDate: daysAhead(10),
-		},
-		{
-			title: "Encomendar bolo de noivado",
-			category: "FOOD" as const,
-			priority: "MEDIUM" as const,
-			status: "TODO" as const,
-			dueDate: daysAhead(25),
-		},
-		{
-			title: "Definir tema e cores do evento",
-			category: "DECORATION" as const,
-			priority: "MEDIUM" as const,
-			status: "COMPLETED" as const,
-			dueDate: daysAgo(15),
-		},
-	];
+	// ── 5. VENDORS + CONTRACTS ─────────────────────────────────────────
+	const vendorRecords: Prisma.VendorCreateManyInput[] = [];
+	const contractRecords: Prisma.VendorContractCreateManyInput[] = [];
 
-	for (let i = 0; i < engagementTasks.length; i++) {
-		const task = engagementTasks[i];
-		await prisma.task.upsert({
-			where: { id: `tsk_eng_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `tsk_eng_${String(i + 1).padStart(3, "0")}`,
-				eventId: EVENT_ENGAGEMENT,
-				title: task.title,
-				category: task.category,
-				priority: task.priority,
-				status: task.status,
-				dueDate: task.dueDate,
-				createdBy: USER_PARTNER,
-				completedAt: task.status === "COMPLETED" ? daysAgo(15) : null,
-				completedBy: task.status === "COMPLETED" ? USER_PARTNER : null,
-			},
-		});
+	const WEDDING_VENDOR_CATS = [
+		"VENUE",
+		"DECORATION",
+		"CATERING",
+		"MUSIC",
+		"PHOTOGRAPHY",
+		"TRANSPORT",
+		"BEAUTY",
+		"ENTERTAINMENT",
+	] as const;
+	const ENGAGEMENT_VENDOR_CATS = [
+		"VENUE",
+		"DECORATION",
+		"CATERING",
+		"MUSIC",
+		"PHOTOGRAPHY",
+		"CAKE",
+	] as const;
+
+	for (const plan of plans) {
+		const rng = mulberry32(503 + plan.index * 271);
+		const cats: readonly string[] =
+			plan.type === "WEDDING" ? WEDDING_VENDOR_CATS : ENGAGEMENT_VENDOR_CATS;
+
+		const count =
+			plan.status === "DRAFT"
+				? 2
+				: plan.status === "CANCELLED"
+					? 3
+					: Math.min(cats.length, randInt(rng, 5, cats.length));
+		const usedCats: string[] = [];
+
+		for (let j = 0; j < count; j++) {
+			let cat = pick(rng, cats);
+			if (usedCats.includes(cat))
+				cat = cats.find((c) => !usedCats.includes(c)) ?? cat;
+			usedCats.push(cat);
+			const rngV = mulberry32(607 + plan.index * 91 + j * 43);
+			const business = pick(
+				rngV,
+				VENDOR_NAMES[cat] ?? (["Muxima Serviços"] as const),
+			);
+			const status: Prisma.VendorStatus =
+				plan.status === "COMPLETED"
+					? "COMPLETED"
+					: plan.status === "CANCELLED"
+						? "CANCELLED"
+						: plan.status === "DRAFT"
+							? "PROSPECT"
+							: pick(rngV, ["CONTACTED", "NEGOTIATING", "CONTRACTED"] as const);
+
+			vendorRecords.push({
+				id: `vnd_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+				eventId: plan.id,
+				name: `${business} — ${CATEGORY_LABEL[cat] ?? "Serviços"}`,
+				category: cat as Prisma.VendorCategory,
+				phone: `+244 ${randInt(rngV, 910, 989)} ${pad(randInt(rngV, 0, 999))} ${pad(randInt(rngV, 0, 999))}`,
+				email: `${business.toLowerCase().replace(/[^a-z0-9]+/g, "")}@muxima.ao`,
+				address: `${pick(rngV, VENUES).neighborhood}, ${pick(rngV, VENUES).province}`,
+				status,
+				description: `Serviço de ${CATEGORY_LABEL[cat]?.toLowerCase() ?? "apoio"} para o evento.`,
+				notes:
+					status === "CONTRACTED"
+						? "Contrato assinado e confirmado."
+						: status === "COMPLETED"
+							? "Serviço concluído com sucesso."
+							: "Seguimento necessário.",
+			});
+
+			// Contract for contracted/completed vendors.
+			if (
+				(status === "CONTRACTED" || status === "COMPLETED") &&
+				rngV() > 0.35
+			) {
+				contractRecords.push({
+					id: `ctr_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+					eventId: plan.id,
+					vendorId: `vnd_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+					number: `CT-2026-${pad(plan.index + 1)}-${j + 1}`,
+					startDate: daysAgo(randInt(rngV, 5, 60)),
+					endDate: daysAhead(randInt(rngV, 30, 200)),
+					amount:
+						Math.round((plan.capacity * randInt(rngV, 4000, 12000)) / 500) *
+						500,
+					status: plan.status === "COMPLETED" ? "COMPLETED" : "ACTIVE",
+					notes: "Pagamento por etapas conforme contrato.",
+				});
+			}
+		}
 	}
-	console.log("  ✅ Tasks");
+	await prisma.vendor.createMany({ data: vendorRecords });
+	await prisma.vendorContract.createMany({ data: contractRecords });
+	console.log(
+		`  ✅ Vendors (${vendorRecords.length}) / Contracts (${contractRecords.length})`,
+	);
 
-	// ================================================================
-	// 14. SCHEDULES (Wedding Day)
-	// ================================================================
-	const scheduleData = [
-		{
-			title: "Montagem da decoração",
-			description: "Equipe de decoração instala-se no venue",
-			startAt: "09:00",
-			endAt: "13:00",
-			location: "Convento de São Francisco",
-		},
-		{
-			title: "Ensaio da cerimónia",
-			description: "Ensaiar entrada e discursos",
-			startAt: "13:00",
-			endAt: "14:00",
-			location: "Capela do Convento",
-		},
-		{
-			title: "Preparação da noiva",
-			description: "Maquilhagem, penteado e vestido",
-			startAt: "14:00",
-			endAt: "15:00",
-			location: "Sala de preparação",
-		},
-		{
-			title: "Cerimónia religiosa",
-			description: "Cerimónia de casamento",
-			startAt: "15:00",
-			endAt: "16:00",
-			location: "Capela do Convento",
-		},
-		{
-			title: "Sessão fotográfica",
-			description: "Fotos da família e casal no jardim",
-			startAt: "16:00",
-			endAt: "17:00",
-			location: "Jardim do Convento",
-		},
-		{
-			title: "Recepção — Cocktail",
-			description: "Aperitivos e drinks de boas-vindas",
-			startAt: "17:00",
-			endAt: "18:00",
-			location: "Salão Principal",
-		},
-		{
-			title: "Jantar",
-			description: "Serviço de buffet e discurso dos padrinhos",
-			startAt: "18:00",
-			endAt: "20:00",
-			location: "Salão Principal",
-		},
-		{
-			title: "Corte do bolo",
-			description: "Corte do bolo de casamento e brinde",
-			startAt: "20:00",
-			endAt: "20:30",
-			location: "Salão Principal",
-		},
-		{
-			title: "Pista de dança",
-			description: "DJ e banda ao vivo",
-			startAt: "20:30",
-			endAt: "01:30",
-			location: "Pista de Dança",
-		},
-		{
-			title: "Fogos de artifício",
-			description: "Show de fogos de artifício",
-			startAt: "01:30",
-			endAt: "01:45",
-			location: "Jardim",
-		},
-	];
+	// ── 6. GUESTS + COMPANIONS + INVITATIONS ──────────────────────────
+	const guestRecords: Prisma.GuestCreateManyInput[] = [];
+	const companionRecords: Prisma.GuestCompanionCreateManyInput[] = [];
+	const guestInvitationRecords: Prisma.GuestInvitationCreateManyInput[] = [];
+	const invitationGuestRecords: Prisma.InvitationGuestCreateManyInput[] = [];
 
-	for (let i = 0; i < scheduleData.length; i++) {
-		const s = scheduleData[i];
-		const baseDate = monthsAhead(4);
-		const [sh, sm] = s.startAt.split(":").map(Number);
-		const [eh, em] = s.endAt.split(":").map(Number);
-		const startDate = new Date(baseDate);
-		startDate.setHours(sh, sm, 0, 0);
-		const endDate = new Date(baseDate);
-		endDate.setHours(eh, em, 0, 0);
-		// Handle midnight wrap
-		if (eh < sh) endDate.setDate(endDate.getDate() + 1);
+	for (const plan of plans) {
+		const rng = mulberry32(719 + plan.index * 353);
+		const guests: GuestSeed[] = [];
 
-		await prisma.schedule.upsert({
-			where: { id: `sch_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `sch_${String(i + 1).padStart(3, "0")}`,
-				eventId: EVENT_WEDDING,
+		if (plan.status !== "CANCELLED" && plan.status !== "DRAFT") {
+			const confirmed = Math.floor(plan.capacity * plan.fillRatio);
+
+			// Confirmed guests (all fit — companions budget = remaining seats).
+			let companionBudget = plan.capacity - confirmed;
+			for (let g = 0; g < confirmed; g++) {
+				const companionsLimit = randInt(rng, 0, 2);
+				const type = pick(rng, [
+					"FAMILY",
+					"FAMILY",
+					"FRIEND",
+					"FRIEND",
+					"COLLEAGUE",
+					"VIP",
+					"OTHER",
+				] as const);
+				const group = pick(
+					rng,
+					type === "FAMILY"
+						? FAMILY_GROUPS
+						: type === "FRIEND"
+							? FRIEND_GROUPS
+							: type === "COLLEAGUE"
+								? WORK_GROUPS
+								: type === "VIP"
+									? VIP_GROUPS
+									: OTHER_GROUPS,
+				);
+				const isMale = rng() > 0.5;
+				const fullName = `${isMale ? pick(rng, MALE_NAMES) : pick(rng, FEMALE_NAMES)} ${pick(rng, SURNAMES)}`;
+				const guestSeed: GuestSeed = {
+					record: {
+						id: `gst_${pad(plan.index + 1)}_${pad(g + 1, 4)}`,
+						eventId: plan.id,
+						name: fullName,
+						phone: `+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`,
+						group,
+						type,
+						status: "CONFIRMED",
+						companionsLimit,
+					},
+					confirmed: true,
+					status: "CONFIRMED",
+					companionsLimit,
+				};
+				guests.push(guestSeed);
+				// Realistic companion assignment (some pending to feed capacity metrics).
+				if (companionsLimit > 0 && companionBudget > 0) {
+					const wantCompanions = Math.min(companionsLimit, companionBudget);
+					const pending = rng() > 0.7;
+					guestRecords.push(guestSeed.record);
+					for (let c = 0; c < wantCompanions; c++) {
+						const companionStatus: Prisma.CompanionStatus = pending
+							? "PENDING"
+							: "CONFIRMED";
+						const role =
+							c === 0 ? (isMale ? "Esposa" : "Marido") : "Acompanhante";
+						const cName = `${role} ${pick(rng, isMale ? FEMALE_NAMES : MALE_NAMES)}`;
+						companionRecords.push({
+							id: `gcp_${pad(plan.index + 1)}_${pad(g + 1, 4)}_${c + 1}`,
+							guestId: guestSeed.record.id,
+							name: cName,
+							status: companionStatus,
+						});
+						if (companionStatus === "CONFIRMED") companionBudget -= 1;
+					}
+				}
+			}
+
+			// Additional non-confirmed guests: pending/declined/waiting/maybe/cancelled.
+			const extras = Math.round(plan.capacity * (0.1 + rng() * 0.25));
+			for (let g = 0; g < extras; g++) {
+				const roll = rng();
+				const status: GuestSeed["status"] =
+					roll < 0.45
+						? "PENDING"
+						: roll < 0.68
+							? "DECLINED"
+							: roll < 0.82
+								? "WAITING"
+								: roll < 0.9
+									? "MAYBE"
+									: "CANCELLED";
+				const type = pick(rng, [
+					"FAMILY",
+					"FRIEND",
+					"COLLEAGUE",
+					"VIP",
+					"OTHER",
+				] as const);
+				const group = pick(
+					rng,
+					type === "FAMILY"
+						? FAMILY_GROUPS
+						: type === "FRIEND"
+							? FRIEND_GROUPS
+							: type === "COLLEAGUE"
+								? WORK_GROUPS
+								: type === "VIP"
+									? VIP_GROUPS
+									: OTHER_GROUPS,
+				);
+				const isMale = rng() > 0.5;
+				guests.push({
+					record: {
+						id: `gst_${pad(plan.index + 1)}_${pad(guestRecords.length + 1, 4)}_x`,
+						eventId: plan.id,
+						name: `${isMale ? pick(rng, MALE_NAMES) : pick(rng, FEMALE_NAMES)} ${pick(rng, SURNAMES)}`,
+						phone: `+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`,
+						group,
+						type,
+						status,
+						companionsLimit: status === "DECLINED" ? 0 : randInt(rng, 0, 1),
+					},
+					confirmed: false,
+					status,
+					companionsLimit: 0,
+				});
+			}
+		}
+
+		// DRAFT events: handful of pending guests.
+		if (plan.status === "DRAFT") {
+			for (let g = 0; g < randInt(rng, 3, 8); g++) {
+				guests.push({
+					record: {
+						id: `gst_${pad(plan.index + 1)}_${pad(guestRecords.length + 1, 4)}_d`,
+						eventId: plan.id,
+						name: `${pick(rng, MALE_NAMES)} ${pick(rng, SURNAMES)}`,
+						type: "FAMILY",
+						group: "Família",
+						status: "PENDING",
+						companionsLimit: 0,
+					},
+					confirmed: false,
+					status: "PENDING",
+					companionsLimit: 0,
+				});
+			}
+		}
+
+		// Persist guests (track ids already in records), invitations + junction.
+		for (const g of guests) {
+			if (!g.record.id.includes("_x") && !g.record.id.includes("_d")) {
+				continue; // already pushed for companions path
+			}
+			guestRecords.push(g.record);
+		}
+		// fix duplicate padding: recompute stable global guest ids now.
+		const guestIdMap = new Map<string, string>();
+		guests.forEach((g, gi) => {
+			const stable = `gst_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
+			guestIdMap.set(g.record.id, stable);
+			g.record.id = stable;
+		});
+		// Restore companion guest FKs to stable ids.
+		for (const c of companionRecords) {
+			const stable = guestIdMap.get(c.guestId);
+			if (stable) c.guestId = stable;
+		}
+
+		for (const [gi, g] of guests.entries()) {
+			const guestId = `gst_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
+			if (!guestRecords.some((r) => r.id === guestId))
+				guestRecords.push({ ...g.record, id: guestId });
+
+			const invStatus: Prisma.GuestInvitationStatus =
+				g.status === "CONFIRMED"
+					? "RESPONDED"
+					: g.status === "DECLINED"
+						? "RESPONDED"
+						: g.status === "MAYBE"
+							? "RESPONDED"
+							: g.status === "CANCELLED"
+								? "CANCELLED"
+								: g.status === "WAITING"
+									? "OPENED"
+									: randInt(rng, 0, 1) === 0
+										? "SENT"
+										: "OPENED";
+			const rsvp: Prisma.RsvpStatus =
+				g.status === "CONFIRMED"
+					? "CONFIRMED"
+					: g.status === "DECLINED"
+						? "DECLINED"
+						: g.status === "MAYBE"
+							? "MAYBE"
+							: "PENDING";
+			const invId = `gi_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
+			guestInvitationRecords.push({
+				id: invId,
+				eventId: plan.id,
+				code: `MUX-${pad(plan.index + 1)}-${pad(gi + 1, 3)}`,
+				status: invStatus,
+				rsvpStatus: rsvp,
+				sentAt: invStatus === "CREATED" ? null : daysAgo(randInt(rng, 20, 70)),
+				openedAt:
+					invStatus === "RESPONDED" || invStatus === "OPENED"
+						? daysAgo(randInt(rng, 15, 60))
+						: null,
+				respondedAt:
+					invStatus === "RESPONDED" ? daysAgo(randInt(rng, 10, 50)) : null,
+			});
+			invitationGuestRecords.push({
+				id: `ig_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`,
+				invitationId: invId,
+				guestId,
+			});
+		}
+	}
+	// De-duplicate pending guest records pushed twice.
+	const seen = new Set<string>();
+	const uniqueGuests: Prisma.GuestCreateManyInput[] = [];
+	for (const r of guestRecords) {
+		if (!seen.has(r.id)) {
+			seen.add(r.id);
+			uniqueGuests.push(r);
+		}
+	}
+
+	await prisma.guest.createMany({ data: uniqueGuests });
+	await prisma.guestCompanion.createMany({ data: companionRecords });
+	await prisma.guestInvitation.createMany({ data: guestInvitationRecords });
+	await prisma.invitationGuest.createMany({ data: invitationGuestRecords });
+	console.log(
+		`  ✅ Guests (${uniqueGuests.length}) / Companions (${companionRecords.length}) / Invitations (${guestInvitationRecords.length})`,
+	);
+
+	// ── 7. TABLES + SEATING ────────────────────────────────────────────
+	const tableRecords: Prisma.TableCreateManyInput[] = [];
+	const tableGuestRecords: Prisma.TableGuestCreateManyInput[] = [];
+
+	for (const plan of plans) {
+		if (plan.status === "CANCELLED" || plan.status === "DRAFT") continue;
+		const rng = mulberry32(823 + plan.index * 181);
+		const confirmedCount = Math.floor(plan.capacity * plan.fillRatio);
+		if (confirmedCount <= 0) continue;
+
+		// Table capacity pool must sum to <= event.capacity.
+		let tableCapacity = 0;
+		const caps: number[] = [];
+		while (tableCapacity + 10 <= plan.capacity) {
+			const size = randInt(rng, 6, 10);
+			caps.push(size);
+			tableCapacity += size;
+		}
+		// Remainder (0-9 seats) to reach capacity, only when it makes a usable table.
+		const rest = plan.capacity - tableCapacity;
+		if (rest > 0 && (rest >= 6 || caps.length >= 4)) {
+			caps.push(rest);
+			tableCapacity = plan.capacity;
+		}
+		// One spare empty table sometimes, kept within capacity.
+		const spare =
+			caps.length >= 4 && rng() > 0.6 && tableCapacity + 8 <= plan.capacity;
+		if (spare) {
+			caps.push(8);
+			tableCapacity += 8;
+		}
+
+		caps.forEach((cap, idx) => {
+			tableRecords.push({
+				id: `tbl_${pad(plan.index + 1)}_${idx + 1}`,
+				eventId: plan.id,
+				name: `Mesa ${idx + 1}`,
+				number: idx + 1,
+				capacity: cap,
+				location: pick(rng, [
+					"Frente ao palco",
+					"Zona central",
+					"Zona lateral",
+					"Zona traseira",
+					"Zona de janela",
+				]),
+			});
+		});
+
+		// Seat guests greedily; the spare table stays empty, and no table is
+		// over-subscribed beyond its capacity.
+		const seatableCaps = spare ? caps.slice(0, -1) : caps;
+		const seatsAvailable = seatableCaps.reduce((a, b) => a + b, 0);
+		const seatingCount = Math.min(confirmedCount, seatsAvailable);
+		const seats: { table: number; slot: number }[] = [];
+		seatableCaps.forEach((cap, ti) => {
+			for (let s = 0; s < cap; s++) seats.push({ table: ti, slot: s });
+		});
+		const placed = seats.slice(0, seatingCount);
+		for (const [p, guestId] of placed.map(
+			(s, k) => [s, `gst_${pad(plan.index + 1)}_${pad(k + 1, 4)}`] as const,
+		)) {
+			tableGuestRecords.push({
+				id: `tg_${pad(plan.index + 1)}_${p.slot + 1}_${p.table + 1}`,
+				tableId: `tbl_${pad(plan.index + 1)}_${p.table + 1}`,
+				guestId,
+			});
+		}
+	}
+	await prisma.table.createMany({ data: tableRecords });
+	await prisma.tableGuest.createMany({ data: tableGuestRecords });
+	console.log(
+		`  ✅ Tables (${tableRecords.length}) / Seats (${tableGuestRecords.length})`,
+	);
+
+	// ── 8. TASKS + SCHEDULES ───────────────────────────────────────────
+	const taskRecords: Prisma.TaskCreateManyInput[] = [];
+	const scheduleRecords: Prisma.ScheduleCreateManyInput[] = [];
+
+	for (const plan of plans) {
+		const rng = mulberry32(941 + plan.index * 271);
+		const cats = Object.keys(TASKS_BY_CATEGORY);
+		const count =
+			plan.status === "DRAFT"
+				? randInt(rng, 2, 4)
+				: plan.status === "CANCELLED"
+					? randInt(rng, 3, 6)
+					: randInt(rng, 10, 16);
+		const pickedCats = new Set<string>();
+
+		for (let j = 0; j < count; j++) {
+			let cat = pick(rng, cats);
+			if (pickedCats.has(cat))
+				cat = cats.find((c) => !pickedCats.has(c)) ?? cat;
+			pickedCats.add(cat);
+			const template = pick(
+				rng,
+				TASKS_BY_CATEGORY[cat] ?? TASKS_BY_CATEGORY.OTHER ?? [""],
+			);
+			const completed =
+				plan.status === "COMPLETED"
+					? rng() > 0.3
+					: plan.status === "CANCELLED"
+						? rng() > 0.6
+						: rng() > 0.65;
+			const overdue = !completed && plan.status === "PLANNING" && rng() > 0.7;
+			const dueDate = completed
+				? daysAgo(randInt(rng, 5, 60))
+				: overdue
+					? daysAgo(randInt(rng, 1, 7))
+					: daysAhead(randInt(rng, 5, 120));
+			const status: Prisma.TaskStatus = completed
+				? "COMPLETED"
+				: overdue
+					? "IN_PROGRESS"
+					: pick(rng, ["TODO", "IN_PROGRESS"] as const);
+
+			taskRecords.push({
+				id: `tsk_${pad(plan.index + 1)}_${j + 1}`,
+				eventId: plan.id,
+				title: template,
+				description: `Tarefa de ${cat.toLowerCase()} para o planeamento do evento.`,
+				category: cat as Prisma.TaskCategory,
+				priority: pick(rng, ["LOW", "MEDIUM", "HIGH", "URGENT"] as const),
+				status,
+				assignedTo: plan.partnerId,
+				dueDate,
+				completedAt: completed ? daysAgo(randInt(rng, 1, 40)) : null,
+				completedBy: completed ? plan.ownerId : null,
+				createdBy: plan.ownerId,
+			});
+		}
+
+		// Schedules
+		const template =
+			plan.type === "WEDDING" ? SCHEDULES_WEDDING : SCHEDULES_ENGAGEMENT;
+		const eventDate =
+			(budgetRecords.find((b) => b.eventId === plan.id)?.id
+				? eventRecords.find((e) => e.id === plan.id)?.eventDate
+				: null) ?? monthsAhead(2);
+		const baseDate = new Date(eventDate);
+		const scheduleStatus: Prisma.ScheduleStatus =
+			plan.status === "COMPLETED"
+				? "COMPLETED"
+				: plan.status === "CANCELLED"
+					? "CANCELLED"
+					: "PENDING";
+		template.forEach((s, si) => {
+			const start = new Date(baseDate);
+			start.setHours(Math.floor(s.start), Math.round((s.start % 1) * 60), 0, 0);
+			const end = new Date(baseDate);
+			end.setHours(Math.floor(s.end), Math.round((s.end % 1) * 60), 0, 0);
+			if (s.end < s.start) end.setDate(end.getDate() + 1);
+			scheduleRecords.push({
+				id: `sch_${pad(plan.index + 1)}_${si + 1}`,
+				eventId: plan.id,
 				title: s.title,
-				description: s.description,
-				startAt: startDate,
-				endAt: endDate,
-				location: s.location,
-				responsible:
-					i < 2
-						? "Equipe de montagem"
-						: i < 4
-							? "Coordenador"
-							: i < 6
-								? "Photographer"
-								: "DJ / Banda",
-				status: i < 3 ? "PENDING" : "PENDING",
-			},
+				description: s.desc,
+				startAt: start,
+				endAt: end,
+				location: s.loc,
+				responsible: plan.partnerId,
+				status: scheduleStatus,
+			});
 		});
 	}
+	await prisma.task.createMany({ data: taskRecords });
+	await prisma.schedule.createMany({ data: scheduleRecords });
+	console.log(
+		`  ✅ Tasks (${taskRecords.length}) / Schedules (${scheduleRecords.length})`,
+	);
 
-	// Engagement schedules
-	const engagementScheduleData = [
-		{
-			title: "Montagem do espaço",
-			description: "Instalar decoração e som",
-			startAt: "15:00",
-			endAt: "17:30",
-			location: "Clube Mineiro",
-		},
-		{
-			title: "Recepção dos convidados",
-			description: "Aperitivos e drinks",
-			startAt: "18:00",
-			endAt: "19:00",
-			location: "Jardim do Clube",
-		},
-		{
-			title: "Discurso do noivo",
-			description: "Declaração de amor e brinde",
-			startAt: "19:00",
-			endAt: "19:30",
-			location: "Palco",
-		},
-		{
-			title: "Corte do bolo",
-			description: "Bolo de noivado e fotografia",
-			startAt: "19:30",
-			endAt: "20:00",
-			location: "Mesa principal",
-		},
-		{
-			title: "Festa e dança",
-			description: "Música e convívio",
-			startAt: "20:00",
-			endAt: "23:00",
-			location: "Pista de dança",
-		},
-	];
+	// ── 9. INVENTORY + MOVEMENTS ───────────────────────────────────────
+	const inventoryRecords: Prisma.InventoryItemCreateManyInput[] = [];
+	const movementRecords: Prisma.InventoryMovementCreateManyInput[] = [];
 
-	for (let i = 0; i < engagementScheduleData.length; i++) {
-		const s = engagementScheduleData[i];
-		const baseDate = monthsAhead(1);
-		const [sh, sm] = s.startAt.split(":").map(Number);
-		const [eh, em] = s.endAt.split(":").map(Number);
-		const startDate = new Date(baseDate);
-		startDate.setHours(sh, sm, 0, 0);
-		const endDate = new Date(baseDate);
-		endDate.setHours(eh, em, 0, 0);
+	for (const plan of plans) {
+		const rng = mulberry32(1021 + plan.index * 149);
+		const pool =
+			plan.type === "WEDDING" ? INVENTORY_WEDDING : INVENTORY_ENGAGEMENT;
+		const count =
+			plan.status === "DRAFT"
+				? 2
+				: Math.min(pool.length, randInt(rng, 6, pool.length));
+		const selected = [...pool];
+		selected.sort(() => rng() - 0.5);
 
-		await prisma.schedule.upsert({
-			where: { id: `sch_eng_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `sch_eng_${String(i + 1).padStart(3, "0")}`,
-				eventId: EVENT_ENGAGEMENT,
-				title: s.title,
-				description: s.description,
-				startAt: startDate,
-				endAt: endDate,
-				location: s.location,
-				status: "PENDING",
-			},
-		});
+		for (const [j, item] of selected.slice(0, count).entries()) {
+			const plannedQuantity = randInt(rng, 5, 120);
+			const roll = rng();
+			// Some items full, some low, some zero — analytics friendly.
+			const currentQuantity =
+				roll < 0.2
+					? 0
+					: roll < 0.5
+						? Math.round(plannedQuantity * (0.1 + rng() * 0.4))
+						: plannedQuantity;
+			const status: Prisma.InventoryStatus =
+				plan.status === "COMPLETED"
+					? "COMPLETED"
+					: currentQuantity >= plannedQuantity
+						? "COMPLETED"
+						: currentQuantity > 0
+							? "IN_PROGRESS"
+							: "PENDING";
+			inventoryRecords.push({
+				id: `inv_${pad(plan.index + 1)}_${j + 1}`,
+				eventId: plan.id,
+				name: item.name,
+				category: item.cat as Prisma.InventoryCategory,
+				plannedQuantity,
+				currentQuantity,
+				venueQuantity:
+					status === "COMPLETED" ? plannedQuantity : currentQuantity,
+				status,
+				unit: item.unit as Prisma.InventoryUnit,
+				unitPrice: item.price,
+				notes:
+					status === "PENDING"
+						? "A aguardar entrega."
+						: status === "IN_PROGRESS" && currentQuantity < plannedQuantity / 2
+							? "Stock abaixo do esperado."
+							: null,
+			});
+
+			// Movements
+			if (currentQuantity > 0) {
+				movementRecords.push({
+					id: `mv_${pad(plan.index + 1)}_${j + 1}_1`,
+					inventoryItemId: `inv_${pad(plan.index + 1)}_${j + 1}`,
+					type: "PURCHASE",
+					quantity: currentQuantity,
+					unitPrice: item.price,
+					totalCost: Math.round(currentQuantity * item.price),
+					reason: "Compra inicial ao fornecedor",
+					createdBy: plan.ownerId,
+					createdAt: daysAgo(randInt(rng, 10, 90)),
+				});
+			}
+			if (rng() > 0.6) {
+				movementRecords.push({
+					id: `mv_${pad(plan.index + 1)}_${j + 1}_2`,
+					inventoryItemId: `inv_${pad(plan.index + 1)}_${j + 1}`,
+					type: "CONSUMPTION",
+					quantity: Math.max(
+						1,
+						Math.round(plannedQuantity * (0.05 + rng() * 0.3)),
+					),
+					unitPrice: item.price,
+					totalCost: 0,
+					reason: "Consumo em ensaio/reunião de planeamento",
+					createdBy: plan.partnerId,
+					createdAt: daysAgo(randInt(rng, 1, 30)),
+				});
+			}
+		}
 	}
-	console.log("  ✅ Schedules");
+	await prisma.inventoryItem.createMany({ data: inventoryRecords });
+	await prisma.inventoryMovement.createMany({ data: movementRecords });
+	console.log(
+		`  ✅ Inventory (${inventoryRecords.length}) / Movements (${movementRecords.length})`,
+	);
 
-	// ================================================================
-	// 15. INVENTORY ITEMS (Wedding)
-	// ================================================================
-	const inventoryData = [
-		{
-			name: "Vinho Tinto Reserva",
-			category: "DRINK" as const,
-			unit: "BOTTLE" as const,
-			plannedQuantity: 40,
-			currentQuantity: 29,
-			venueQuantity: 30,
-			status: "IN_PROGRESS" as const,
-			unitPrice: 12_000,
-			vendorId: null,
-		},
-		{
-			name: "Champanhe Brut",
-			category: "DRINK" as const,
-			unit: "BOTTLE" as const,
-			plannedQuantity: 20,
-			currentQuantity: 20,
-			unitPrice: 18_000,
-			venueQuantity: 20,
-			status: "COMPLETED" as const,
-			vendorId: null,
-		},
-		{
-			name: "Água Mineral 500ml",
-			category: "DRINK" as const,
-			unit: "BOTTLE" as const,
-			plannedQuantity: 100,
-			currentQuantity: 80,
-			unitPrice: 300,
-			venueQuantity: 80,
-			status: "IN_PROGRESS" as const,
-			vendorId: null,
-		},
-		{
-			name: "Sumo Natural (Laranja)",
-			category: "DRINK" as const,
-			unit: "LITER" as const,
-			plannedQuantity: 30,
-			currentQuantity: 0,
-			unitPrice: 2_500,
-			venueQuantity: 30,
-			status: "PENDING" as const,
-			vendorId: null,
-		},
-		{
-			name: "Cerveja Eza",
-			category: "DRINK" as const,
-			unit: "CASE" as const,
-			plannedQuantity: 15,
-			currentQuantity: 10,
-			unitPrice: 8_000,
-			venueQuantity: 15,
-			status: "IN_PROGRESS" as const,
-			vendorId: null,
-		},
-		{
-			name: "Barriga de Porco Assada",
-			category: "FOOD" as const,
-			unit: "KG" as const,
-			plannedQuantity: 50,
-			currentQuantity: 0,
-			unitPrice: 6_500,
-			venueQuantity: 50,
-			status: "PENDING" as const,
-			vendorId: "vnd_002",
-		},
-		{
-			name: "Calulu de Frango",
-			category: "FOOD" as const,
-			unit: "KG" as const,
-			plannedQuantity: 40,
-			currentQuantity: 0,
-			unitPrice: 4_000,
-			venueQuantity: 40,
-			status: "PENDING" as const,
-			vendorId: "vnd_002",
-		},
-		{
-			name: "Arroz com Tomate",
-			category: "FOOD" as const,
-			unit: "KG" as const,
-			plannedQuantity: 30,
-			currentQuantity: 0,
-			unitPrice: 1_500,
-			venueQuantity: 30,
-			status: "PENDING" as const,
-			vendorId: "vnd_002",
-		},
-		{
-			name: "Salada Tropical",
-			category: "FOOD" as const,
-			unit: "KG" as const,
-			plannedQuantity: 25,
-			currentQuantity: 0,
-			unitPrice: 3_000,
-			venueQuantity: 25,
-			status: "PENDING" as const,
-			vendorId: "vnd_002",
-		},
-		{
-			name: "Bolo de Casamento 4 Andares",
-			category: "CAKE" as const,
-			unit: "UNIT" as const,
-			plannedQuantity: 1,
-			currentQuantity: 0,
-			unitPrice: 250_000,
-			venueQuantity: 1,
-			status: "PENDING" as const,
-			vendorId: null,
-		},
-		{
-			name: "Rosas Brancas (centro de mesa)",
-			category: "DECORATION" as const,
-			unit: "UNIT" as const,
-			plannedQuantity: 80,
-			currentQuantity: 60,
-			unitPrice: 800,
-			venueQuantity: 80,
-			status: "IN_PROGRESS" as const,
-			vendorId: "vnd_001",
-		},
-		{
-			name: "Velas Aromáticas",
-			category: "DECORATION" as const,
-			unit: "UNIT" as const,
-			plannedQuantity: 50,
-			currentQuantity: 50,
-			unitPrice: 500,
-			venueQuantity: 50,
-			status: "COMPLETED" as const,
-			vendorId: "vnd_001",
-		},
-		{
-			name: "Tecido Organza Branco",
-			category: "DECORATION" as const,
-			unit: "PACKAGE" as const,
-			plannedQuantity: 10,
-			currentQuantity: 8,
-			unitPrice: 15_000,
-			venueQuantity: 10,
-			status: "IN_PROGRESS" as const,
-			vendorId: "vnd_001",
-		},
-		{
-			name: "Leteus de Mesa",
-			category: "DECORATION" as const,
-			unit: "UNIT" as const,
-			plannedQuantity: 30,
-			currentQuantity: 30,
-			unitPrice: 2_000,
-			venueQuantity: 30,
-			status: "COMPLETED" as const,
-			vendorId: "vnd_001",
-		},
-		{
-			name: "Caixa de Fogos de Artifício",
-			category: "OTHER" as const,
-			unit: "BOX" as const,
-			plannedQuantity: 3,
-			currentQuantity: 0,
-			unitPrice: 45_000,
-			venueQuantity: 3,
-			status: "PENDING" as const,
-			vendorId: null,
-		},
-	];
+	// ── 10. EXPENSES + PAYMENTS + DOCUMENTS ────────────────────────────
+	const expenseRecords: Prisma.ExpenseCreateManyInput[] = [];
+	const paymentRecords: Prisma.PaymentCreateManyInput[] = [];
+	const documentRecords: Prisma.DocumentCreateManyInput[] = [];
 
-	const inventoryItemIds: string[] = [];
-	for (let i = 0; i < inventoryData.length; i++) {
-		const id = `inv_${String(i + 1).padStart(3, "0")}`;
-		inventoryItemIds.push(id);
-		const item = inventoryData[i];
-		await prisma.inventoryItem.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_WEDDING,
-				...item,
-			},
-		});
-	}
-	console.log("  ✅ Inventory Items");
-
-	// ================================================================
-	// 16. INVENTORY MOVEMENTS
-	// ================================================================
-	const movementData = [
-		{
-			inventoryItemId: inventoryItemIds[0],
-			type: "PURCHASE" as const,
-			quantity: 20,
-			unitPrice: 12_000,
-			totalCost: 240_000,
-			reason: "Compra inicial ao fornecedor",
-			createdBy: USER_ADMIN,
-		},
-		{
-			inventoryItemId: inventoryItemIds[0],
-			type: "PURCHASE" as const,
-			quantity: 10,
-			unitPrice: 12_000,
-			totalCost: 120_000,
-			reason: "Segunda compra — completar stock",
-			createdBy: USER_ADMIN,
-		},
-		{
-			inventoryItemId: inventoryItemIds[1],
-			type: "PURCHASE" as const,
-			quantity: 20,
-			unitPrice: 18_000,
-			totalCost: 360_000,
-			reason: "Compra de champanhe para brinde",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[2],
-			type: "PURCHASE" as const,
-			quantity: 100,
-			unitPrice: 300,
-			totalCost: 30_000,
-			reason: "Compra de águas",
-			createdBy: USER_ADMIN,
-		},
-		{
-			inventoryItemId: inventoryItemIds[2],
-			type: "CONSUMPTION" as const,
-			quantity: 20,
-			unitPrice: 300,
-			totalCost: 6_000,
-			reason: "Teste de menu com fornecedor",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[4],
-			type: "PURCHASE" as const,
-			quantity: 15,
-			unitPrice: 8_000,
-			totalCost: 120_000,
-			reason: "Compra de cerveja Eza",
-			createdBy: USER_ADMIN,
-		},
-		{
-			inventoryItemId: inventoryItemIds[4],
-			type: "CONSUMPTION" as const,
-			quantity: 5,
-			unitPrice: 8_000,
-			totalCost: 40_000,
-			reason: "Reunião de planeamento",
-			createdBy: USER_PARTNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[10],
-			type: "PURCHASE" as const,
-			quantity: 60,
-			unitPrice: 800,
-			totalCost: 48_000,
-			reason: "Rosas para centros de mesa",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[11],
-			type: "PURCHASE" as const,
-			quantity: 50,
-			unitPrice: 500,
-			totalCost: 25_000,
-			reason: "Velas aromáticas para mesas",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[12],
-			type: "PURCHASE" as const,
-			quantity: 8,
-			unitPrice: 15_000,
-			totalCost: 120_000,
-			reason: "Tecido organza para decoração",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[13],
-			type: "PURCHASE" as const,
-			quantity: 30,
-			unitPrice: 2_000,
-			totalCost: 60_000,
-			reason: "Leteus para decoração de mesas",
-			createdBy: USER_OWNER,
-		},
-		{
-			inventoryItemId: inventoryItemIds[0],
-			type: "LOSS" as const,
-			quantity: 1,
-			unitPrice: 12_000,
-			totalCost: 12_000,
-			reason: "Garrafa quebrada durante transporte",
-			createdBy: USER_ADMIN,
-		},
-	];
-
-	for (let i = 0; i < movementData.length; i++) {
-		const m = movementData[i];
-		await prisma.inventoryMovement.upsert({
-			where: { id: `mov_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `mov_${String(i + 1).padStart(3, "0")}`,
-				...m,
-				createdAt: daysAgo(60 - i * 5),
-			},
-		});
-	}
-	console.log("  ✅ Inventory Movements");
-
-	// ================================================================
-	// 17. EXPENSES (Wedding)
-	// ================================================================
-	const expenseData = [
-		{
-			description: "Anticipo decoração — Jardim das Flores",
-			totalAmount: 900_000,
-			status: "PAID" as const,
-			vendorId: "vnd_001",
-			budgetCategoryId: budgetCatIds["Espaço & Decoração"],
-			dueDate: daysAgo(15),
-		},
-		{
-			description: "Anticipo catering — Chef Ngola",
-			totalAmount: 1_100_000,
-			status: "PAID" as const,
-			vendorId: "vnd_002",
-			budgetCategoryId: budgetCatIds["Catering & Bebidas"],
-			dueDate: daysAgo(10),
-		},
-		{
-			description: "Ensaio fotográfico — Olhar Fotográfico",
-			totalAmount: 200_000,
-			status: "PARTIALLY_PAID" as const,
-			vendorId: "vnd_004",
-			budgetCategoryId: budgetCatIds["Fotografia & Vídeo"],
-			dueDate: daysAhead(5),
-		},
-		{
-			description: "Compra de vinho e champanhe",
-			totalAmount: 780_000,
-			status: "PAID" as const,
-			vendorId: null,
-			budgetCategoryId: budgetCatIds["Catering & Bebidas"],
-			dueDate: daysAgo(5),
-		},
-		{
-			description: "Transporte — Aluguer de 3 carros",
-			totalAmount: 250_000,
-			status: "PLANNED" as const,
-			vendorId: "vnd_006",
-			budgetCategoryId: budgetCatIds["Transporte & Logística"],
-			dueDate: daysAhead(30),
-		},
-		{
-			description: "Fogos de artifício",
-			totalAmount: 135_000,
-			status: "PLANNED" as const,
-			vendorId: null,
-			budgetCategoryId: budgetCatIds["Transporte & Logística"],
-			dueDate: daysAhead(20),
-		},
-		{
-			description: "Vestido da noiva — Atelier",
-			totalAmount: 650_000,
-			status: "PAID" as const,
-			vendorId: null,
-			budgetCategoryId: budgetCatIds["Vestuário & Beleza"],
-			dueDate: daysAgo(45),
-		},
-		{
-			description: "Maquilhagem e penteados",
-			totalAmount: 180_000,
-			status: "PLANNED" as const,
-			vendorId: "vnd_005",
-			budgetCategoryId: budgetCatIds["Vestuário & Beleza"],
-			dueDate: daysAhead(25),
-		},
-		{
-			description: "Convites impressos — 200 unidades",
-			totalAmount: 85_000,
-			status: "PAID" as const,
-			vendorId: null,
-			budgetCategoryId: budgetCatIds["Convites & Papelaria"],
-			dueDate: daysAgo(30),
-		},
-		{
-			description: "DJ e som — Som & Arte",
-			totalAmount: 400_000,
-			status: "PLANNED" as const,
-			vendorId: "vnd_003",
-			budgetCategoryId: budgetCatIds["Música & Entretenimento"],
-			dueDate: daysAhead(35),
-		},
-		{
-			description: "Banda ao vivo — Som & Arte",
-			totalAmount: 500_000,
-			status: "PLANNED" as const,
-			vendorId: "vnd_003",
-			budgetCategoryId: budgetCatIds["Música & Entretenimento"],
-			dueDate: daysAhead(35),
-		},
-		{
-			description: "Aluguer do Convento de São Francisco",
-			totalAmount: 1_500_000,
-			status: "PAID" as const,
-			vendorId: null,
-			budgetCategoryId: budgetCatIds["Espaço & Decoração"],
-			dueDate: daysAgo(60),
-		},
-	];
-
-	const expenseIds: string[] = [];
-	for (let i = 0; i < expenseData.length; i++) {
-		const id = `exp_${String(i + 1).padStart(3, "0")}`;
-		expenseIds.push(id);
-		const e = expenseData[i];
-		await prisma.expense.upsert({
-			where: { id },
-			update: {},
-			create: {
-				id,
-				eventId: EVENT_WEDDING,
-				description: e.description,
-				totalAmount: e.totalAmount,
-				status: e.status,
-				vendorId: e.vendorId,
-				budgetCategoryId: e.budgetCategoryId,
-				dueDate: e.dueDate,
-				createdBy: i % 2 === 0 ? USER_OWNER : USER_ADMIN,
-			},
-		});
-	}
-	console.log("  ✅ Expenses");
-
-	// ── Expenses linked to inventory items (Dispensa ↔ Inventory) ──
-	await prisma.expense.update({
-		where: { id: "exp_004" },
-		data: { inventoryItemId: "inv_001" },
-	});
-	await prisma.expense.update({
-		where: { id: "exp_006" },
-		data: { inventoryItemId: "inv_015" },
+	const budgetCatIndex = new Map<string, number>();
+	budgetCatRecords.forEach((c, ci) => {
+		budgetCatIndex.set(c.eventId, ci);
 	});
 
-	// ================================================================
-	// 18. PAYMENTS
-	// ================================================================
-	const paymentData = [
-		{
-			expenseId: expenseIds[0],
-			amount: 900_000,
-			method: "BANK_TRANSFER" as const,
-			reference: "TRF-2026-001",
-			notes: "Anticipo 50% decoração",
-			paymentDate: daysAgo(15),
-		},
-		{
-			expenseId: expenseIds[1],
-			amount: 1_100_000,
-			method: "BANK_TRANSFER" as const,
-			reference: "TRF-2026-002",
-			notes: "Anticipo 50% catering",
-			paymentDate: daysAgo(10),
-		},
-		{
-			expenseId: expenseIds[2],
-			amount: 100_000,
-			method: "MOBILE_PAYMENT" as const,
-			reference: "MP-2026-001",
-			notes: "Adiantamento ensaio fotográfico",
-			paymentDate: daysAgo(7),
-		},
-		{
-			expenseId: expenseIds[3],
-			amount: 780_000,
-			method: "CASH" as const,
-			reference: null,
-			notes: "Pagamento em numerário",
-			paymentDate: daysAgo(5),
-		},
-		{
-			expenseId: expenseIds[6],
-			amount: 650_000,
-			method: "BANK_TRANSFER" as const,
-			reference: "TRF-2026-003",
-			notes: "Pagamento integral do vestido",
-			paymentDate: daysAgo(45),
-		},
-		{
-			expenseId: expenseIds[8],
-			amount: 85_000,
-			method: "CARD" as const,
-			reference: "CARD-2026-001",
-			notes: "Compra online de convites",
-			paymentDate: daysAgo(30),
-		},
-		{
-			expenseId: expenseIds[11],
-			amount: 1_500_000,
-			method: "BANK_TRANSFER" as const,
-			reference: "TRF-2026-004",
-			notes: "Pagamento integral venue",
-			paymentDate: daysAgo(60),
-		},
-	];
+	for (const plan of plans) {
+		const rng = mulberry32(1117 + plan.index * 211);
+		const cats = budgetCatRecords.filter((c) => c.eventId === plan.id);
+		const totalPlanned =
+			budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0;
+		// Utilization varies: completed ~ full, drafts near zero, others 30-75%.
+		const utilization =
+			plan.status === "COMPLETED"
+				? 0.9 + rng() * 0.18
+				: plan.status === "CANCELLED"
+					? 0.1 + rng() * 0.15
+					: plan.status === "DRAFT"
+						? 0 + rng() * 0.05
+						: plan.status === "CONFIRMED"
+							? 0.45 + rng() * 0.3
+							: randInt(rng, 25, 60) / 100;
+		const spendTarget = Math.round(Number(totalPlanned) * utilization);
 
-	for (let i = 0; i < paymentData.length; i++) {
-		const p = paymentData[i];
-		await prisma.payment.upsert({
-			where: { id: `pay_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `pay_${String(i + 1).padStart(3, "0")}`,
-				...p,
-				createdBy: i % 2 === 0 ? USER_OWNER : USER_ADMIN,
-			},
-		});
+		let spent = 0;
+		for (const [ci, cat] of cats.entries()) {
+			const share = 0.1 + rng() * 0.35;
+			const expCount = randInt(rng, 1, 2);
+			const templates =
+				EXPENSE_TEMPLATES[cat.name.split(" & ")[0] as string] ??
+				EXPENSE_TEMPLATES.OTHER ??
+				[];
+			for (let e = 0; e < expCount; e++) {
+				const expId = `exp_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`;
+				const isLast = ci === cats.length - 1 && e === expCount - 1;
+				const amount = isLast
+					? Math.max(0, spendTarget - spent)
+					: Math.round((spendTarget * share) / expCount / 500) * 500;
+				spent += amount;
+				const vendor = vendorRecords.find(
+					(v) =>
+						v.eventId === plan.id &&
+						(v.category as string) === (cat.name.split(" & ")[0] ?? ""),
+				);
+				const tpl = templates[e % templates.length] ??
+					templates[0] ?? { desc: "Serviço", share: 1 };
+				const paidShare =
+					plan.status === "COMPLETED"
+						? 1
+						: plan.status === "CANCELLED"
+							? 0
+							: rng();
+				const status: Prisma.ExpenseStatus =
+					plan.status === "CANCELLED"
+						? "CANCELLED"
+						: plan.status === "COMPLETED"
+							? "PAID"
+							: paidShare > 0.7
+								? "PAID"
+								: paidShare > 0.4
+									? "PARTIALLY_PAID"
+									: rng() > 0.5
+										? "PLANNED"
+										: "OVERDUE";
+				const paidPercentage =
+					status === "PAID"
+						? 100
+						: status === "PARTIALLY_PAID"
+							? randInt(rng, 30, 60)
+							: 0;
+
+				expenseRecords.push({
+					id: expId,
+					eventId: plan.id,
+					budgetCategoryId: cat.id,
+					vendorId: vendor?.id ?? null,
+					description: `${tpl.desc} — ${cat.name}`,
+					type: "EXPENSE",
+					totalAmount: amount,
+					dueDate:
+						status === "OVERDUE"
+							? daysAgo(randInt(rng, 1, 10))
+							: daysAhead(randInt(rng, 5, 90)),
+					status,
+					paidPercentage,
+					notes:
+						status === "PAID"
+							? "Pagamento concluído."
+							: status === "OVERDUE"
+								? "Pagamento em atraso."
+								: null,
+					createdBy: plan.ownerId,
+					inventoryItemId: null,
+				});
+
+				// Payments consistent with paidPercentage.
+				const paidAmount =
+					Math.round((Number(amount) * paidPercentage) / 100 / 500) * 500;
+				if (paidAmount > 0) {
+					paymentRecords.push({
+						id: `pay_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
+						expenseId: expId,
+						amount: paidAmount,
+						paymentDate: daysAgo(randInt(rng, 1, 40)),
+						method: pick(rng, [
+							"CASH",
+							"BANK_TRANSFER",
+							"ATM",
+							"CARD",
+							"MOBILE_PAYMENT",
+						] as const),
+						reference:
+							status === "PAID"
+								? `TRF-2026-${pad(plan.index + 1)}-${ci + 1}-${e + 1}`
+								: null,
+						notes: status === "PAID" ? "Pagamento integral" : "Adiantamento",
+						createdBy: plan.ownerId,
+					});
+				}
+
+				// Documents for major expenses (only when a payment row exists).
+				if (paidAmount > 0 && status === "PAID" && rng() > 0.6) {
+					documentRecords.push({
+						id: `doc_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
+						eventId: plan.id,
+						name: `Fatura — ${tpl.desc} (${cat.name})`,
+						type: "RECEIPT",
+						reference: `FAT-2026-${pad(plan.index + 1)}-${ci + 1}-${e + 1}`,
+						vendorId: vendor?.id ?? null,
+						expenseId: expId,
+						paymentId: `pay_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
+						status: "ACTIVE",
+						createdBy: plan.ownerId,
+					});
+				}
+			}
+		}
 	}
-	console.log("  ✅ Payments");
+	await prisma.expense.createMany({ data: expenseRecords });
+	await prisma.payment.createMany({ data: paymentRecords });
+	await prisma.document.createMany({ data: documentRecords });
+	console.log(
+		`  ✅ Expenses (${expenseRecords.length}) / Payments (${paymentRecords.length}) / Documents (${documentRecords.length})`,
+	);
 
-	// ================================================================
-	// 19. DOCUMENTS
-	// ================================================================
-	const documentData = [
-		{
-			eventId: EVENT_WEDDING,
-			name: "Contrato de Decoração — Jardim das Flores",
-			type: "CONTRACT" as const,
-			vendorId: "vnd_001",
-			reference: "CT-2026-001",
-			expenseId: expenseIds[0],
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Contrato de Catering — Chef Ngola",
-			type: "CONTRACT" as const,
-			vendorId: "vnd_002",
-			reference: "CT-2026-002",
-			expenseId: expenseIds[1],
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Fatura Vestido da Noiva",
-			type: "RECEIPT" as const,
-			vendorId: null,
-			reference: "FAT-2026-010",
-			expenseId: expenseIds[6],
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Orçamento — Som & Arte",
-			type: "QUOTE" as const,
-			vendorId: "vnd_003",
-			reference: "ORC-2026-001",
-			expenseId: null,
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Contrato de Fotografia — Olhar Fotográfico",
-			type: "CONTRACT" as const,
-			vendorId: "vnd_004",
-			reference: "CT-2026-003",
-			expenseId: expenseIds[2],
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Licença de Evento — Municipalidade",
-			type: "OTHER" as const,
-			vendorId: null,
-			reference: "LIC-2026-001",
-			expenseId: null,
-		},
-		{
-			eventId: EVENT_WEDDING,
-			name: "Comprovativo de Pagamento Venue",
-			type: "RECEIPT" as const,
-			vendorId: null,
-			reference: "TRF-2026-004",
-			expenseId: expenseIds[11],
-		},
-		{
-			eventId: EVENT_ENGAGEMENT,
-			name: "Orçamento — Doce Momento",
-			type: "QUOTE" as const,
-			vendorId: "vnd_007",
-			reference: "ORC-2026-002",
-			expenseId: null,
-		},
-	];
+	// ── 11. NOTIFICATIONS + AUDIT LOGS ─────────────────────────────────
+	const notificationRecords: Prisma.NotificationCreateManyInput[] = [];
+	const auditRecords: Prisma.AuditLogCreateManyInput[] = [];
 
-	for (let i = 0; i < documentData.length; i++) {
-		const d = documentData[i];
-		await prisma.document.upsert({
-			where: { id: `doc_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `doc_${String(i + 1).padStart(3, "0")}`,
-				...d,
-				createdBy: i < 5 ? USER_OWNER : USER_ADMIN,
-			},
-		});
+	for (const plan of plans) {
+		const rng = mulberry32(1307 + plan.index * 179);
+		const members = memberRecords.filter(
+			(m) => m.eventId === plan.id && m.status === "ACTIVE",
+		);
+		const target =
+			members[randInt(rng, 0, Math.max(0, members.length - 1))]?.userId ??
+			plan.ownerId;
+
+		const notificationTypes: Prisma.NotificationType[] = [
+			"FINANCE",
+			"TASKS",
+			"GUESTS",
+			"INVENTORY",
+			"EVENT",
+		];
+		const nCount = plan.status === "DRAFT" ? 0 : randInt(rng, 1, 3);
+		for (let n = 0; n < nCount; n++) {
+			const type = pick(rng, notificationTypes);
+			notificationRecords.push({
+				id: `ntf_${pad(plan.index + 1)}_${n + 1}`,
+				userId: target,
+				eventId: plan.id,
+				type,
+				title: `Atualização de ${type.toLowerCase()} — ${plan.id}`,
+				message: `Existem novidades no evento ${plan.id}: verifique a secção de ${type.toLowerCase()}.`,
+				priority: pick(rng, [
+					"INFO",
+					"INFO",
+					"WARNING",
+					"IMPORTANT",
+					"CRITICAL",
+				] as const),
+				readAt: rng() > 0.5 ? daysAgo(randInt(rng, 1, 20)) : null,
+				createdAt: daysAgo(randInt(rng, 1, 30)),
+			});
+		}
+
+		const entities = [
+			"Event",
+			"Budget",
+			"Vendor",
+			"Expense",
+			"Guest",
+			"Task",
+			"InventoryItem",
+		];
+		const aCount = plan.status === "DRAFT" ? 1 : 2;
+		for (let a = 0; a < aCount; a++) {
+			auditRecords.push({
+				id: `audit_${pad(plan.index + 1)}_${a + 1}`,
+				eventId: plan.id,
+				userId: target,
+				action: (["CREATE", "UPDATE"] as const)[a % 2] ?? "CREATE",
+				entity: pick(rng, entities),
+				entityId: `${pick(rng, ["evt", "bgt", "vnd", "exp", "gst", "tsk"])}_${plan.index + 1}`,
+				newData: { note: "atualizado no âmbito do seed" },
+				createdAt: daysAgo(randInt(rng, 1, 40)),
+			});
+		}
 	}
-	console.log("  ✅ Documents");
+	await prisma.notification.createMany({ data: notificationRecords });
+	await prisma.auditLog.createMany({ data: auditRecords });
+	console.log(
+		`  ✅ Notifications (${notificationRecords.length}) / Audit Logs (${auditRecords.length})`,
+	);
 
-	// ================================================================
-	// 20. NOTIFICATIONS
-	// ================================================================
-	const notificationData = [
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "FINANCE" as const,
-			title: "Pagamento confirmado",
-			message: "Anticipo de decoração de Kz 900.000 processado com sucesso.",
-			priority: "INFO" as const,
-			readAt: daysAgo(14),
-		},
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "TASKS" as const,
-			title: "Tarefa urgente pendente",
-			message: "Verificar licenças e alvarás do venue — prazo em 5 dias.",
-			priority: "CRITICAL" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "GUESTS" as const,
-			title: "12 convidados confirmaram presença",
-			message: "12 dos 20 convidados de casamento confirmaram.",
-			priority: "INFO" as const,
-			readAt: daysAgo(3),
-		},
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "INVENTORY" as const,
-			title: "Stock de vinho baixo",
-			message: "Restam 10 garrafas de cerveja Eza por reabastecer.",
-			priority: "WARNING" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_ADMIN,
-			eventId: EVENT_WEDDING,
-			type: "EVENT" as const,
-			title: "Novo evento criado",
-			message:
-				"O evento 'Casamento Ana & Carlos' foi criado e está em planeamento.",
-			priority: "INFO" as const,
-			readAt: daysAgo(90),
-		},
-		{
-			userId: USER_PARTNER,
-			eventId: EVENT_WEDDING,
-			type: "TASKS" as const,
-			title: "Ensaio da cerimónia amanhã",
-			message: "Lembrete: ensaio da cerimónia de casamento amanhã às 13:00.",
-			priority: "IMPORTANT" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "FINANCE" as const,
-			title: "Despesa próxima do vencimento",
-			message: "Ensaio fotográfico — Kz 100.000 restantes — vence em 5 dias.",
-			priority: "WARNING" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_PARTNER,
-			eventId: EVENT_ENGAGEMENT,
-			type: "GUESTS" as const,
-			title: "Convites de noivado em envio",
-			message: "5 convites de noivado estão a ser processados.",
-			priority: "INFO" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_OWNER,
-			eventId: EVENT_WEDDING,
-			type: "TASKS" as const,
-			title: "Confirmar presença dos padrinhos",
-			message: "Ainda aguardando confirmação de D. Conceição e Eng. Manuel.",
-			priority: "IMPORTANT" as const,
-			readAt: null,
-		},
-		{
-			userId: USER_ADMIN,
-			eventId: EVENT_WEDDING,
-			type: "INVENTORY" as const,
-			title: "Novo item de inventário",
-			message: "Caixa de fogos de artifício adicionada ao inventário.",
-			priority: "INFO" as const,
-			readAt: daysAgo(2),
-		},
-	];
-
-	for (let i = 0; i < notificationData.length; i++) {
-		await prisma.notification.upsert({
-			where: { id: `notif_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `notif_${String(i + 1).padStart(3, "0")}`,
-				...notificationData[i],
-				createdAt: daysAgo(15 - i),
-			},
-		});
-	}
-	console.log("  ✅ Notifications");
-
-	// ================================================================
-	// 21. AUDIT LOGS
-	// ================================================================
-	const auditData = [
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			action: "CREATE",
-			entity: "Event",
-			entityId: EVENT_WEDDING,
-			newData: { name: "Casamento Ana & Carlos" },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			action: "CREATE",
-			entity: "Budget",
-			newData: { plannedAmount: 8_500_000 },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_ADMIN,
-			action: "CREATE",
-			entity: "Vendor",
-			entityId: "vnd_001",
-			newData: { name: "Jardim das Flores", category: "DECORATION" },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			action: "UPDATE",
-			entity: "Event",
-			entityId: EVENT_WEDDING,
-			oldData: { status: "DRAFT" },
-			newData: { status: "PLANNING" },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			action: "CREATE",
-			entity: "Expense",
-			entityId: expenseIds[0],
-			newData: { description: "Anticipo decoração", totalAmount: 900_000 },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_ADMIN,
-			action: "CREATE",
-			entity: "Guest",
-			entityId: "gst_wed_001",
-			newData: { name: "Dr. António Fernandes", type: "FAMILY" },
-		},
-		{
-			eventId: EVENT_WEDDING,
-			userId: USER_OWNER,
-			action: "UPDATE",
-			entity: "Expense",
-			entityId: expenseIds[0],
-			oldData: { status: "PLANNED" },
-			newData: { status: "PAID" },
-		},
-		{
-			eventId: EVENT_ENGAGEMENT,
-			userId: USER_PARTNER,
-			action: "CREATE",
-			entity: "Event",
-			entityId: EVENT_ENGAGEMENT,
-			newData: { name: "Noivado Beatriz & David" },
-		},
-	];
-
-	for (let i = 0; i < auditData.length; i++) {
-		await prisma.auditLog.upsert({
-			where: { id: `audit_${String(i + 1).padStart(3, "0")}` },
-			update: {},
-			create: {
-				id: `audit_${String(i + 1).padStart(3, "0")}`,
-				...auditData[i],
-				createdAt: daysAgo(90 - i * 10),
-			},
-		});
-	}
-	console.log("  ✅ Audit Logs");
-
-	// ================================================================
-	// DONE
-	// ================================================================
+	// ── DONE ───────────────────────────────────────────────────────────
 	console.log("\n🎉 Seed completed successfully!");
-	console.log(`   Users:          ${users.length}`);
-	console.log("   Events:         2");
-	console.log(`   Event Members:  ${memberData.length}`);
-	console.log("   Budgets:        2");
-	console.log(
-		`   Categories:     ${weddingCategories.length + engagementCategories.length}`,
-	);
-	console.log(`   Vendors:        ${vendorData.length}`);
-	console.log(`   Contracts:      ${contractData.length}`);
-	console.log(
-		`   Guests:         ${weddingGuestIds.length + engagementGuestIds.length}`,
-	);
-	console.log(`   Companions:     ${companionData.length}`);
-	console.log(`   Invitations:    ${weddingGuestIds.length}`);
-	console.log(`   Tables:         ${weddingTables.length}`);
-	console.log(`   Tasks:          ${taskData.length + engagementTasks.length}`);
-	console.log(
-		`   Schedules:      ${scheduleData.length + engagementScheduleData.length}`,
-	);
-	console.log(`   Inventory:      ${inventoryData.length}`);
-	console.log(`   Movements:      ${movementData.length}`);
-	console.log(`   Expenses:       ${expenseData.length}`);
-	console.log(`   Payments:       ${paymentData.length}`);
-	console.log(`   Documents:      ${documentData.length}`);
-	console.log(`   Notifications:  ${notificationData.length}`);
-	console.log(`   Audit Logs:     ${auditData.length}`);
+	console.log(`   Users:          ${SEED_USERS.length}`);
+	console.log(`   Events:         ${eventRecords.length}`);
+	console.log(`   Event Members:  ${memberRecords.length}`);
+	console.log(`   Budgets:        ${budgetRecords.length}`);
+	console.log(`   Budget Cats:    ${budgetCatRecords.length}`);
+	console.log(`   Vendors:        ${vendorRecords.length}`);
+	console.log(`   Contracts:      ${contractRecords.length}`);
+	console.log(`   Guests:         ${uniqueGuests.length}`);
+	console.log(`   Companions:     ${companionRecords.length}`);
+	console.log(`   Invitations:    ${guestInvitationRecords.length}`);
+	console.log(`   Tables:         ${tableRecords.length}`);
+	console.log(`   Table Guests:   ${tableGuestRecords.length}`);
+	console.log(`   Tasks:          ${taskRecords.length}`);
+	console.log(`   Schedules:      ${scheduleRecords.length}`);
+	console.log(`   Inventory:      ${inventoryRecords.length}`);
+	console.log(`   Movements:      ${movementRecords.length}`);
+	console.log(`   Expenses:       ${expenseRecords.length}`);
+	console.log(`   Payments:       ${paymentRecords.length}`);
+	console.log(`   Documents:      ${documentRecords.length}`);
+	console.log(`   Notifications:  ${notificationRecords.length}`);
+	console.log(`   Audit Logs:     ${auditRecords.length}`);
+	console.log("\n🔐 Credenciais de acesso (email / senha):");
+	for (const u of SEED_USERS) console.log(`   ${u.email}  /  ${SEED_PASSWORD}`);
 }
 
 main()

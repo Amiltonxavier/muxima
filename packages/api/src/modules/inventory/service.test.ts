@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { InventoryDb } from "./repository";
+import { type InventoryDb, InventoryRepository } from "./repository";
 import {
 	computeCompletionPercentage,
 	computeMovementCost,
@@ -115,6 +115,16 @@ function createFakeDb(initialItems: FakeItem[]) {
 			}),
 		},
 		inventoryMovement: {
+			count: vi.fn(
+				async ({ where }: { where: { inventoryItem: { eventId: string } } }) =>
+					movements.filter((movement) =>
+						items.some(
+							(item) =>
+								item.id === movement.inventoryItemId &&
+								item.eventId === where.inventoryItem.eventId,
+						),
+					).length,
+			),
 			create: vi.fn(
 				async ({
 					data,
@@ -404,6 +414,73 @@ describe("InventoryService.update", () => {
 	});
 });
 
+describe("InventoryService.list", () => {
+	it("returns an empty page when there are no items", async () => {
+		const { fake } = createFakeDb([]);
+
+		const result = await InventoryService.list(fake, "evt_1", {
+			page: 1,
+			limit: 20,
+		});
+
+		expect(result.data).toEqual([]);
+		expect(result.total).toBe(0);
+	});
+
+	it("returns mapped items with pagination meta inputs", async () => {
+		const { fake } = createFakeDb([
+			makeItem({ id: "inv_1", name: "Vinho Tinto", plannedQuantity: 10 }),
+			makeItem({ id: "inv_2", name: "Champanhe", plannedQuantity: 5 }),
+		]);
+
+		const result = await InventoryService.list(fake, "evt_1", {
+			page: 1,
+			limit: 1,
+		});
+
+		// repository applies skip/take; the fake returns the store as-is,
+		// but the service must map DTO fields for whatever it receives.
+		expect(result.total).toBe(2);
+		expect(result.data[0]).toMatchObject({
+			id: "inv_1",
+			name: "Vinho Tinto",
+			status: "PENDING",
+		});
+		expect(result.data[0]).toHaveProperty("completionPercentage");
+		expect(result.data[0]).toHaveProperty("remainingQuantity");
+	});
+
+	it("forwards filters to the repository", async () => {
+		const findMany = vi
+			.spyOn(InventoryRepository, "findMany")
+			.mockResolvedValue([]);
+		const count = vi.spyOn(InventoryRepository, "count").mockResolvedValue(0);
+		const fake = {} as InventoryDb;
+
+		await InventoryService.list(
+			fake,
+			"evt_1",
+			{ page: 2, limit: 10 },
+			{ search: "vinho", category: "DRINK", status: "PENDING" },
+		);
+
+		expect(findMany).toHaveBeenCalledWith(
+			fake,
+			"evt_1",
+			{ page: 2, limit: 10 },
+			{ search: "vinho", category: "DRINK", status: "PENDING" },
+		);
+		expect(count).toHaveBeenCalledWith(fake, "evt_1", {
+			search: "vinho",
+			category: "DRINK",
+			status: "PENDING",
+		});
+
+		findMany.mockRestore();
+		count.mockRestore();
+	});
+});
+
 describe("InventoryService.getStats", () => {
 	it("aggregates quantities, values and progress on the backend", async () => {
 		const { fake } = createFakeDb([
@@ -448,6 +525,9 @@ describe("InventoryService.getStats", () => {
 			completedItems: 1,
 			inProgressItems: 1,
 			pendingItems: 1,
+			lowStockItems: 1,
+			outOfStockItems: 1,
+			movementCount: 0,
 		});
 	});
 

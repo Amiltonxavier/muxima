@@ -584,6 +584,29 @@ export const guestsRouter = {
 					? Math.round((confirmed / totalGuests) * 100)
 					: 0;
 
+			const typeRows = await db.guest.groupBy({
+				by: ["type", "status"],
+				where: { eventId: input.eventId },
+				_count: { _all: true },
+			});
+
+			const byType = {
+				FAMILY: { total: 0, confirmed: 0, pending: 0, declined: 0 },
+				FRIEND: { total: 0, confirmed: 0, pending: 0, declined: 0 },
+				COLLEAGUE: { total: 0, confirmed: 0, pending: 0, declined: 0 },
+				VIP: { total: 0, confirmed: 0, pending: 0, declined: 0 },
+				OTHER: { total: 0, confirmed: 0, pending: 0, declined: 0 },
+			};
+
+			for (const row of typeRows) {
+				const stats = byType[row.type];
+				const count = row._count._all;
+				stats.total += count;
+				if (row.status === "CONFIRMED") stats.confirmed += count;
+				else if (row.status === "PENDING") stats.pending += count;
+				else if (row.status === "DECLINED") stats.declined += count;
+			}
+
 			return {
 				totalGuests,
 				confirmed,
@@ -599,6 +622,7 @@ export const guestsRouter = {
 				capacity,
 				limitGuestCapacity,
 				atCapacity: capacity > 0 && totalConfirmedPeople >= capacity,
+				byType,
 			};
 		}),
 
@@ -631,6 +655,25 @@ export const guestsRouter = {
 				}),
 			]);
 
+			const tableRows = await db.table.findMany({
+				where: { eventId: input.eventId, deletedAt: null },
+				select: {
+					capacity: true,
+					_count: { select: { tableGuests: true } },
+				},
+			});
+
+			let fullTables = 0;
+			let partialTables = 0;
+			let emptyTables = 0;
+
+			for (const table of tableRows) {
+				const occupied = table._count.tableGuests;
+				if (occupied >= table.capacity) fullTables += 1;
+				else if (occupied > 0) partialTables += 1;
+				else emptyTables += 1;
+			}
+
 			const capacity = totalCapacity._sum.capacity ?? 0;
 			const available = capacity - totalOccupied;
 
@@ -639,6 +682,11 @@ export const guestsRouter = {
 				totalCapacity: capacity,
 				totalOccupied,
 				available: available > 0 ? available : 0,
+				fullTables,
+				partialTables,
+				emptyTables,
+				occupancyRate:
+					capacity > 0 ? Math.round((totalOccupied / capacity) * 100) : 0,
 			};
 		}),
 };

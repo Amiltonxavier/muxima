@@ -33,11 +33,17 @@ import {
 	TableHeader,
 	TableRow,
 } from "@muxima/ui/components/table";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@muxima/ui/components/tabs";
 import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChartColumn, Eye, List, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
@@ -70,6 +76,7 @@ import {
 	INVENTORY_UNIT_LABELS,
 	toSelectItems,
 } from "@/utils/status-helpers";
+import { BudgetAnalytics } from "./-components/budget-analytics";
 
 export const Route = createFileRoute("/_private/events/$eventId/budget/")({
 	component: BudgetPage,
@@ -137,6 +144,7 @@ function BudgetPage() {
 	const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
 		null,
 	);
+	const [activeTab, setActiveTab] = useState<string>("lista");
 
 	const budget = budgetQuery.data;
 	const expenses = expensesQuery.data?.data ?? [];
@@ -177,139 +185,171 @@ function BudgetPage() {
 				</div>
 			</div>
 
-			{budgetQuery.isLoading ? (
-				<div className="grid gap-4 sm:grid-cols-3">
-					{["card-1", "card-2", "card-3"].map((id) => (
-						<Card key={id}>
-							<CardHeader>
-								<div className="h-4 w-20 animate-pulse rounded bg-muted" />
-							</CardHeader>
-							<CardContent>
-								<div className="h-8 w-28 animate-pulse rounded bg-muted" />
-							</CardContent>
-						</Card>
-					))}
-				</div>
-			) : (
-				<div className="grid gap-4 sm:grid-cols-3">
-					<StatsCard
-						title="Planeado"
-						value={formatCurrency(plannedAmount)}
-						description={
-							(budgetStats?.reserveAmount ?? 0) > 0
-								? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}`
-								: undefined
-						}
-					/>
-					<StatsCard
-						title="Gasto"
-						value={
-							<span className="text-amber-600">
-								{formatCurrency(totalExpenses)}
-							</span>
-						}
-					/>
-					<StatsCard
-						title="Disponível"
-						value={
-							<span
-								className={remaining < 0 ? "text-red-600" : "text-green-600"}
-							>
-								{formatCurrency(remaining > 0 ? remaining : 0)}
-							</span>
-						}
-					/>
-				</div>
-			)}
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+				<TabsList>
+					<TabsTrigger value="lista">
+						<List className="mr-2 h-4 w-4" />
+						Lista
+					</TabsTrigger>
+					<TabsTrigger value="analytics">
+						<ChartColumn className="mr-2 h-4 w-4" />
+						Analytics
+					</TabsTrigger>
+				</TabsList>
 
-			<QueryState
-				state={{
-					isLoading: expensesQuery.isLoading,
-					isError: expensesQuery.isError,
-					isEmpty: expenses.length === 0,
-					hasData: expenses.length > 0,
-				}}
-			>
-				<Card>
-					<Table>
-						{" "}
-						<TableHeader>
-							<TableRow>
-								<TableHead>Descrição</TableHead>
-								<TableHead>Fornecedor</TableHead>
-								<TableHead>Valor</TableHead>
-								<TableHead>Estado</TableHead>
-								<TableHead>Data</TableHead>
-								<TableHead className="w-24" />
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{expenses.map((expense) => (
-								<TableRow key={expense.id}>
-									<TableCell className="font-medium">
-										{expense.description}
-									</TableCell>
-									<TableCell>{expense.vendor?.name || "—"}</TableCell>
-									<TableCell>
-										{formatCurrency(Number(expense.totalAmount))}
-									</TableCell>
-									<TableCell>
-										<Badge
-											className={getStatusColor(expense.status || "PLANNED")}
+				<TabsContent value="lista">
+					<div className="space-y-6">
+						{budgetQuery.isLoading ? (
+							<div className="grid gap-4 sm:grid-cols-3">
+								{["card-1", "card-2", "card-3"].map((id) => (
+									<Card key={id}>
+										<CardHeader>
+											<div className="h-4 w-20 animate-pulse rounded bg-muted" />
+										</CardHeader>
+										<CardContent>
+											<div className="h-8 w-28 animate-pulse rounded bg-muted" />
+										</CardContent>
+									</Card>
+								))}
+							</div>
+						) : (
+							<div className="grid gap-4 sm:grid-cols-3">
+								<StatsCard
+									title="Planeado"
+									value={formatCurrency(plannedAmount)}
+									description={
+										(budgetStats?.reserveAmount ?? 0) > 0
+											? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}`
+											: undefined
+									}
+								/>
+								<StatsCard
+									title="Gasto"
+									value={
+										<span className="text-amber-600">
+											{formatCurrency(totalExpenses)}
+										</span>
+									}
+								/>
+								<StatsCard
+									title="Disponível"
+									value={
+										<span
+											className={
+												remaining < 0 ? "text-red-600" : "text-green-600"
+											}
 										>
-											{getStatusLabel(expense.status || "PLANNED", "expense")}
-										</Badge>
-									</TableCell>
-									<TableCell>
-										{expense.dueDate ? formatDate(expense.dueDate) : "—"}
-									</TableCell>
-									<TableCell>
-										<div className="flex gap-1">
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												title="Ver detalhes"
-												onClick={() => setViewingExpense(expense)}
-											>
-												<Eye className="h-3.5 w-3.5" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												title="Editar"
-												onClick={() => setEditingExpense(expense)}
-											>
-												<Pencil className="h-3.5 w-3.5" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												className="text-destructive"
-												title="Eliminar"
-												onClick={() => setDeletingExpenseId(expense.id)}
-											>
-												<Trash2 className="h-3.5 w-3.5" />
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</Card>
-			</QueryState>
+											{formatCurrency(remaining > 0 ? remaining : 0)}
+										</span>
+									}
+								/>
+							</div>
+						)}
 
-			{expensesMeta && (
-				<Pagination
-					meta={expensesMeta}
-					onPageChange={setExpensePage}
-					onLimitChange={(l) => {
-						setExpenseLimit(l);
-						setExpensePage(1);
-					}}
-					disabled={expensesQuery.isLoading}
-				/>
-			)}
+						<QueryState
+							state={{
+								isLoading: expensesQuery.isLoading,
+								isError: expensesQuery.isError,
+								isEmpty: expenses.length === 0,
+								hasData: expenses.length > 0,
+							}}
+						>
+							<Card>
+								<Table>
+									{" "}
+									<TableHeader>
+										<TableRow>
+											<TableHead>Descrição</TableHead>
+											<TableHead>Fornecedor</TableHead>
+											<TableHead>Valor</TableHead>
+											<TableHead>Estado</TableHead>
+											<TableHead>Data</TableHead>
+											<TableHead className="w-24" />
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{expenses.map((expense) => (
+											<TableRow key={expense.id}>
+												<TableCell className="font-medium">
+													{expense.description}
+												</TableCell>
+												<TableCell>{expense.vendor?.name || "—"}</TableCell>
+												<TableCell>
+													{formatCurrency(Number(expense.totalAmount))}
+												</TableCell>
+												<TableCell>
+													<Badge
+														className={getStatusColor(
+															expense.status || "PLANNED",
+														)}
+													>
+														{getStatusLabel(
+															expense.status || "PLANNED",
+															"expense",
+														)}
+													</Badge>
+												</TableCell>
+												<TableCell>
+													{expense.dueDate ? formatDate(expense.dueDate) : "—"}
+												</TableCell>
+												<TableCell>
+													<div className="flex gap-1">
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															title="Ver detalhes"
+															onClick={() => setViewingExpense(expense)}
+														>
+															<Eye className="h-3.5 w-3.5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															title="Editar"
+															onClick={() => setEditingExpense(expense)}
+														>
+															<Pencil className="h-3.5 w-3.5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															className="text-destructive"
+															title="Eliminar"
+															onClick={() => setDeletingExpenseId(expense.id)}
+														>
+															<Trash2 className="h-3.5 w-3.5" />
+														</Button>
+													</div>
+												</TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+							</Card>
+						</QueryState>
+
+						{expensesMeta && (
+							<Pagination
+								meta={expensesMeta}
+								onPageChange={setExpensePage}
+								onLimitChange={(l) => {
+									setExpenseLimit(l);
+									setExpensePage(1);
+								}}
+								disabled={expensesQuery.isLoading}
+							/>
+						)}
+					</div>
+				</TabsContent>
+
+				<TabsContent value="analytics">
+					<BudgetAnalytics
+						stats={budgetStats}
+						isLoading={budgetStatsQuery.isLoading}
+						isError={budgetStatsQuery.isError}
+					/>
+				</TabsContent>
+			</Tabs>
 
 			{/* Edit Budget Dialog */}
 			<BudgetDialog

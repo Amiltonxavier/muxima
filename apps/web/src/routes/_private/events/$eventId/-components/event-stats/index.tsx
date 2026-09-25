@@ -16,24 +16,9 @@ export function EventStats({ eventId }: EventStatsProps) {
 
 	return (
 		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			<GuestsStatsCard
-				eventId={eventId}
-				stats={stats.guests.data}
-			/>
-
-			<BudgetStatsCard
-				eventId={eventId}
-				stats={stats.budget.data}
-			/>
-
 			<TasksStatsCard
 				eventId={eventId}
 				stats={stats.tasks.data}
-			/>
-
-			<VendorsStatsCard
-				eventId={eventId}
-				stats={stats.vendors.data}
 			/>
 
 			<PendingTasksCard

@@ -2,7 +2,7 @@
 
 import { cn } from "@muxima/ui/lib/utils";
 import { motion } from "motion/react";
-import { ShimmeringText } from "../components/shimmering-text";
+import { ShimmeringText } from "@/components/shimmering-text";
 import {
 	LINE_LOADING_PULSE_EASE,
 	LOADING_LABEL_EXIT_S,

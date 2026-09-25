@@ -1,6 +1,5 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import { Card, CardContent } from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -43,23 +42,26 @@ import { Textarea } from "@muxima/ui/components/textarea";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+	ChartColumn,
 	CheckCircle2,
 	Circle,
 	Clock,
 	Columns3,
 	GripVertical,
 	List,
+	Pencil,
 	Plus,
 	Search,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useCallback as useCB, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { QueryState } from "@/shared/components/states";
 import {
 	useCreateTask,
 	useDeleteTask,
+	useTaskStats,
 	useTasks,
 	useUpdateTask,
 } from "@/shared/queries/task-queries";
@@ -70,6 +72,7 @@ import {
 	TASK_STATUS_LABELS,
 } from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
+import { TaskAnalytics } from "./-components/task-analytics";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
 	component: TasksPage,
@@ -143,6 +146,9 @@ function TasksPage() {
 	const createTask = useCreateTask();
 	const updateTask = useUpdateTask();
 	const deleteTask = useDeleteTask();
+
+	const taskStatsQuery = useTaskStats(eventId);
+	const taskStats = taskStatsQuery.data;
 
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [editingTask, setEditingTask] = useState<KanbanTaskItem | null>(null);
@@ -302,31 +308,32 @@ function TasksPage() {
 				</Select>
 			</div>
 
-			<QueryState
-				state={{
-					isLoading: tasksQuery.isLoading,
-					isError: tasksQuery.isError,
-					isEmpty: tasks.length === 0,
-					hasData: tasks.length > 0,
-				}}
-			>
-				<Tabs
-					value={activeTab}
-					onValueChange={(v) => setActiveTab(v as string)}
-				>
-					<TabsList>
-						<TabsTrigger value="kanban">
-							<Columns3 className="mr-2 h-4 w-4" />
-							Kanban
-						</TabsTrigger>
-						<TabsTrigger value="list">
-							<List className="mr-2 h-4 w-4" />
-							Lista
-						</TabsTrigger>
-					</TabsList>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+				<TabsList>
+					<TabsTrigger value="kanban">
+						<Columns3 className="mr-2 h-4 w-4" />
+						Kanban
+					</TabsTrigger>
+					<TabsTrigger value="list">
+						<List className="mr-2 h-4 w-4" />
+						Lista
+					</TabsTrigger>
+					<TabsTrigger value="analytics">
+						<ChartColumn className="mr-2 h-4 w-4" />
+						Analytics
+					</TabsTrigger>
+				</TabsList>
 
-					{/* ── Kanban View ─────────────────────────────────── */}
-					<TabsContent value="kanban">
+				{/* ── Kanban View ─────────────────────────────────── */}
+				<TabsContent value="kanban">
+					<QueryState
+						state={{
+							isLoading: tasksQuery.isLoading,
+							isError: tasksQuery.isError,
+							isEmpty: tasks.length === 0,
+							hasData: tasks.length > 0,
+						}}
+					>
 						<KanbanProvider
 							columns={KANBAN_COLUMNS}
 							data={kanbanData}
@@ -397,19 +404,10 @@ function TasksPage() {
 																setEditingTask(item);
 															}}
 														>
-															<svg
+															<Pencil
 																className="h-3.5 w-3.5"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-																/>
-															</svg>
+																aria-label="Editar tarefa"
+															/>
 														</Button>
 														<Button
 															variant="ghost"
@@ -430,10 +428,19 @@ function TasksPage() {
 								</KanbanBoard>
 							)}
 						</KanbanProvider>
-					</TabsContent>
+					</QueryState>
+				</TabsContent>
 
-					{/* ── List View ───────────────────────────────────── */}
-					<TabsContent value="list">
+				{/* ── List View ───────────────────────────────────── */}
+				<TabsContent value="list">
+					<QueryState
+						state={{
+							isLoading: tasksQuery.isLoading,
+							isError: tasksQuery.isError,
+							isEmpty: tasks.length === 0,
+							hasData: tasks.length > 0,
+						}}
+					>
 						<ListProvider onDragEnd={() => {}}>
 							<div className="space-y-4">
 								{KANBAN_COLUMNS.map((col) => {
@@ -503,19 +510,10 @@ function TasksPage() {
 																		)
 																	}
 																>
-																	<svg
+																	<Pencil
 																		className="h-3.5 w-3.5"
-																		fill="none"
-																		stroke="currentColor"
-																		viewBox="0 0 24 24"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={2}
-																			d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-																		/>
-																	</svg>
+																		aria-label="Editar tarefa"
+																	/>
 																</Button>
 																<Button
 																	variant="ghost"
@@ -535,9 +533,18 @@ function TasksPage() {
 								})}
 							</div>
 						</ListProvider>
-					</TabsContent>
-				</Tabs>
-			</QueryState>
+					</QueryState>
+				</TabsContent>
+
+				{/* ── Analytics View ─────────────────────────────── */}
+				<TabsContent value="analytics">
+					<TaskAnalytics
+						stats={taskStats}
+						isLoading={taskStatsQuery.isLoading}
+						isError={taskStatsQuery.isError}
+					/>
+				</TabsContent>
+			</Tabs>
 
 			{meta && activeTab === "list" && (
 				<Pagination

@@ -1,17 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useDeleteEvent, useEvent } from "../-queries/event-queries";
+import { useEvent } from "../-queries/event-queries";
+import { EventPreparationAnalytics } from "./-components/analytics/event-preparation-analytics";
+import { DeleteEvent } from "./-components/delete-event";
 import { EditEventDialog } from "./-components/edit-event-dialog";
 import { EventCharts } from "./-components/event-charts";
 import { EventDetailSkeleton } from "./-components/event-detail-skeleton";
+import { EventHeader } from "./-components/event-header";
 import { EventInfoGrid } from "./-components/event-info/event-info-grid";
 import { EventLocation } from "./-components/event-location";
 import { EventMembers } from "./-components/event-members";
 import { EventNotFound } from "./-components/event-not-found";
 import { EventStats } from "./-components/event-stats";
-import { EventTypeCard } from "./-components/event-type-card";
-import { DeleteEvent } from "./-components/delete-event";
-import { EventHeader } from "./-components/event-header";
 
 export const Route = createFileRoute("/_private/events/$eventId/")({
 	component: EventDetailPage,
@@ -41,6 +41,7 @@ function EventDetailPage() {
 			<EventHeader
 				eventId={eventId}
 				name={event.name}
+				type={event.type}
 				description={event.description}
 				status={event.status}
 				onEdit={() => setShowEditDialog(true)}
@@ -61,24 +62,27 @@ function EventDetailPage() {
 
 			<EventCharts eventId={eventId} />
 
-			<EventTypeCard type={event.type} />
+			<EventPreparationAnalytics eventId={eventId} />
 
 			<EventMembers members={members} />
 
-			{showEditDialog &&
+			{showEditDialog && (
 				<EditEventDialog
 					open={showEditDialog}
 					onOpenChange={() => setShowEditDialog(false)}
 					event={event}
 					eventId={eventId}
-				/>}
+				/>
+			)}
 
-			{showDeleteDialog && <DeleteEvent
-				open={showDeleteDialog}
-				onOpenChange={() => setShowDeleteDialog(false)}
-				eventName={event.name}
-				eventId={eventId}
-			/>}
+			{showDeleteDialog && (
+				<DeleteEvent
+					open={showDeleteDialog}
+					onOpenChange={() => setShowDeleteDialog(false)}
+					eventName={event.name}
+					eventId={eventId}
+				/>
+			)}
 		</div>
 	);
 }

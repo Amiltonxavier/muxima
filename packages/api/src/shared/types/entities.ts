@@ -590,6 +590,9 @@ export type InventoryStats = {
 	completedItems: number;
 	inProgressItems: number;
 	pendingItems: number;
+	lowStockItems: number;
+	outOfStockItems: number;
+	movementCount: number;
 };
 
 // ── Document ─────────────────────────────────────────────────────
@@ -639,6 +642,13 @@ export type AuditLog = {
 };
 
 // ── Guest Stats ──────────────────────────────────────────────────
+export type GuestTypeStats = {
+	total: number;
+	confirmed: number;
+	pending: number;
+	declined: number;
+};
+
 export type GuestStats = {
 	totalGuests: number;
 	confirmed: number;
@@ -648,10 +658,69 @@ export type GuestStats = {
 	maybe: number;
 	cancelled: number;
 	totalCompanions: number;
+	confirmedCompanions: number;
 	totalConfirmedPeople: number;
+	confirmationRate: number;
 	capacity: number;
 	atCapacity: boolean;
 	limitGuestCapacity: boolean;
+	byType: Record<GuestType, GuestTypeStats>;
+};
+
+// ── Table Stats ──────────────────────────────────────────────────
+export type TableStats = {
+	total: number;
+	totalCapacity: number;
+	totalOccupied: number;
+	available: number;
+	fullTables: number;
+	partialTables: number;
+	emptyTables: number;
+	occupancyRate: number;
+};
+
+// ── Task Stats ───────────────────────────────────────────────────
+export type TaskStats = {
+	total: number;
+	todo: number;
+	inProgress: number;
+	completed: number;
+	cancelled: number;
+	completionRate: number;
+	overdue: number;
+};
+
+// ── Schedule Stats ───────────────────────────────────────────────
+export type ScheduleStats = {
+	total: number;
+	pending: number;
+	inProgress: number;
+	completed: number;
+	cancelled: number;
+};
+
+// ── Expense Stats ────────────────────────────────────────────────
+export type ExpenseStats = {
+	totalAmount: number;
+	totalPaid: number;
+	remaining: number;
+	paymentRate: number;
+	paymentCount: number;
+};
+
+// ── Budget Stats ─────────────────────────────────────────────────
+export type BudgetStats = {
+	plannedAmount: number;
+	reserveAmount: number;
+	totalSpent: number;
+	totalPaid: number;
+	available: number;
+	utilizationRate: number;
+	paymentRate: number;
+	categoryCount: number;
+	expenseCount: number;
+	paidExpenses: number;
+	pendingExpenses: number;
 };
 
 // ── API Response Types ───────────────────────────────────────────

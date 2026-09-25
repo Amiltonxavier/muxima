@@ -18,6 +18,9 @@ const stats: InventoryStatsDto = {
 	completedItems: 3,
 	inProgressItems: 4,
 	pendingItems: 1,
+	lowStockItems: 2,
+	outOfStockItems: 1,
+	movementCount: 5,
 };
 
 describe("InventoryStats", () => {

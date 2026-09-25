@@ -1,8 +1,16 @@
 import { Pagination } from "@muxima/ui/components/pagination";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@muxima/ui/components/tabs";
 import { createFileRoute } from "@tanstack/react-router";
+import { ChartColumn, List } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
 import { InventoryAddQuantityDialog } from "./-components/inventory-add-quantity-dialog";
+import { InventoryAnalytics } from "./-components/inventory-analytics";
 import { InventoryCreateDialog } from "./-components/inventory-create-dialog";
 import { InventoryDeleteDialog } from "./-components/inventory-delete-dialog";
 import { InventoryDetailsDialog } from "./-components/inventory-details-dialog";
@@ -47,6 +55,7 @@ function InventoryPage() {
 	const items = itemsQuery.data?.data ?? [];
 	const meta = itemsQuery.data?.meta;
 	const stats = statsQuery.data;
+	const [activeTab, setActiveTab] = useState<string>("lista");
 
 	return (
 		<div className="space-y-6">
@@ -58,37 +67,58 @@ function InventoryPage() {
 				onAddItem={() => setShowCreate(true)}
 			/>
 
-			<InventoryStats stats={stats} />
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+				<TabsList>
+					<TabsTrigger value="lista">
+						<List className="mr-2 h-4 w-4" />
+						Lista
+					</TabsTrigger>
+					<TabsTrigger value="analytics">
+						<ChartColumn className="mr-2 h-4 w-4" />
+						Analytics
+					</TabsTrigger>
+				</TabsList>
 
-			<InventoryFilters
-				search={filters.search}
-				status={filters.status}
-				category={filters.category}
-				onSearchChange={filters.setSearch}
-				onStatusChange={filters.setStatus}
-				onCategoryChange={filters.setCategory}
-			/>
+				<TabsContent value="lista">
+					<div className="space-y-6">
+						<InventoryStats stats={stats} />
 
-			<InventoryTable
-				items={items}
-				isLoading={itemsQuery.isLoading}
-				isError={itemsQuery.isError}
-				hasActiveFilters={filters.hasActiveFilters}
-				onViewItem={setViewing}
-				onEditItem={setEditing}
-				onAddQuantity={setAddingTo}
-				onViewHistory={setHistoryFor}
-				onDeleteItem={setDeleting}
-			/>
+						<InventoryFilters
+							search={filters.search}
+							status={filters.status}
+							category={filters.category}
+							onSearchChange={filters.setSearch}
+							onStatusChange={filters.setStatus}
+							onCategoryChange={filters.setCategory}
+						/>
 
-			{meta && (
-				<Pagination
-					meta={meta}
-					onPageChange={filters.setPage}
-					onLimitChange={filters.setLimit}
-					disabled={itemsQuery.isLoading}
-				/>
-			)}
+						<InventoryTable
+							items={items}
+							isLoading={itemsQuery.isLoading}
+							isError={itemsQuery.isError}
+							hasActiveFilters={filters.hasActiveFilters}
+							onViewItem={setViewing}
+							onEditItem={setEditing}
+							onAddQuantity={setAddingTo}
+							onViewHistory={setHistoryFor}
+							onDeleteItem={setDeleting}
+						/>
+
+						{meta && (
+							<Pagination
+								meta={meta}
+								onPageChange={filters.setPage}
+								onLimitChange={filters.setLimit}
+								disabled={itemsQuery.isLoading}
+							/>
+						)}
+					</div>
+				</TabsContent>
+
+				<TabsContent value="analytics">
+					<InventoryAnalytics stats={stats} />
+				</TabsContent>
+			</Tabs>
 
 			<InventoryCreateDialog
 				open={showCreate}

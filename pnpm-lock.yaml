@@ -347,6 +347,9 @@ importers:
       '@muxima/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@number-flow/react':
+        specifier: ^0.6.2
+        version: 0.6.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@orpc/client':
         specifier: 'catalog:'
         version: 1.15.0
@@ -368,9 +371,48 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.18
         version: 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/d3-array':
+        specifier: ^3.2.2
+        version: 3.2.2
+      '@types/d3-shape':
+        specifier: ^3.2.0
+        version: 3.2.0
+      '@visx/curve':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0
+      '@visx/event':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0
+      '@visx/grid':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/group':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/pattern':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/responsive':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/scale':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0
+      '@visx/shape':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@prisma/client@7.10.0(prisma@7.10.0(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3))(typescript@6.0.3))(mysql2@3.15.3)(pg@8.23.0)(prisma@7.10.0(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@26.4.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)))
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      d3-array:
+        specifier: ^3.2.4
+        version: 3.2.4
+      d3-shape:
+        specifier: ^3.2.0
+        version: 3.2.0
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
@@ -404,6 +446,9 @@ importers:
       sonner:
         specifier: 'catalog:'
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -628,6 +673,12 @@ importers:
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.2.8)
       '@visx/grid':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/group':
+        specifier: 4.0.1-alpha.0
+        version: 4.0.1-alpha.0(react@19.2.8)
+      '@visx/pattern':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.2.8)
       '@visx/responsive':
@@ -3071,6 +3122,9 @@ packages:
   '@types/d3-array@3.0.3':
     resolution: {integrity: sha512-Reoy+pKnvsksN0lQUlcH6dOGjRZ/3WRwXR//m+/8lt1BXeI4xyaUZoqULNjyXXRuh0Mj4LNpkCvhUpQlY3X5xQ==}
 
+  '@types/d3-array@3.2.2':
+    resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
+
   '@types/d3-color@3.1.0':
     resolution: {integrity: sha512-HKuicPHJuvPgCD+np6Se9MQvS6OCbJmOjGvylzMJRlDwUXjKTTXs6Pwgk79O09Vj/ho3u1ofXnhFOaEWWPrlwA==}
 
@@ -3097,6 +3151,9 @@ packages:
 
   '@types/d3-shape@3.1.7':
     resolution: {integrity: sha512-VLvUQ33C+3J+8p+Daf+nYSOsjB4GXp19/S/aGo60m9h1v6XaxjiT82lKVWJCfzhtuZ3yD7i/TPeC/fuKLLOSmg==}
+
+  '@types/d3-shape@3.2.0':
+    resolution: {integrity: sha512-kVd74ta9eof3eJOvbNd1vGKS/XERRyQbT26Og63hIsvDO84cjD5gEOhsXf26w3FSoNlPVz84DOFcKv/oou+fMw==}
 
   '@types/d3-time-format@2.1.0':
     resolution: {integrity: sha512-/myT3I7EwlukNOX2xVdMzb8FRgNzRMpsZddwst9Ld/VFe6LyJyRp0s32l/V9XoUzk+Gqu56F/oGk6507+8BxrA==}
@@ -3194,6 +3251,11 @@ packages:
 
   '@visx/group@4.0.1-alpha.0':
     resolution: {integrity: sha512-V19l7iQ7jccBv8kao/EByuI6o4xtxzzLV9nqVI1hRvmdzTVsuLpqlwzYCZUXJaTVvUWf8s4D2SQFjGkj/Nw+0w==}
+    peerDependencies:
+      react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
+
+  '@visx/pattern@4.0.1-alpha.0':
+    resolution: {integrity: sha512-KCqHpjtHdu95uqamc5PIYG55Xp0w+7/Zz63k4eeZErwK1o0PN2rZiBiuodNtENL8NqIU2b5AP+XI/xXaUH0M4Q==}
     peerDependencies:
       react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
 
@@ -10378,6 +10440,8 @@ snapshots:
 
   '@types/d3-array@3.0.3': {}
 
+  '@types/d3-array@3.2.2': {}
+
   '@types/d3-color@3.1.0': {}
 
   '@types/d3-delaunay@6.0.1': {}
@@ -10401,6 +10465,10 @@ snapshots:
       '@types/d3-time': 3.0.0
 
   '@types/d3-shape@3.1.7':
+    dependencies:
+      '@types/d3-path': 3.1.1
+
+  '@types/d3-shape@3.2.0':
     dependencies:
       '@types/d3-path': 3.1.1
 
@@ -10520,6 +10588,12 @@ snapshots:
     optional: true
 
   '@visx/group@4.0.1-alpha.0(react@19.2.8)':
+    dependencies:
+      '@types/react': 19.2.18
+      classnames: 2.5.1
+      react: 19.2.8
+
+  '@visx/pattern@4.0.1-alpha.0(react@19.2.8)':
     dependencies:
       '@types/react': 19.2.18
       classnames: 2.5.1
@@ -14737,11 +14811,11 @@ snapshots:
 
   victory-vendor@37.3.6:
     dependencies:
-      '@types/d3-array': 3.0.3
+      '@types/d3-array': 3.2.2
       '@types/d3-ease': 3.0.2
       '@types/d3-interpolate': 3.0.1
       '@types/d3-scale': 4.0.2
-      '@types/d3-shape': 3.1.7
+      '@types/d3-shape': 3.2.0
       '@types/d3-time': 3.0.0
       '@types/d3-timer': 3.0.2
       d3-array: 3.2.4

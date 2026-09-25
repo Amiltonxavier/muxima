@@ -219,7 +219,12 @@ export const InventoryService = {
 	},
 
 	async getStats(db: InventoryDb, eventId: string): Promise<InventoryStats> {
-		const rows = await InventoryRepository.findMetricsRows(db, eventId);
+		const [rows, movementCount] = await Promise.all([
+			InventoryRepository.findMetricsRows(db, eventId),
+			db.inventoryMovement.count({
+				where: { inventoryItem: { eventId } },
+			}),
+		]);
 
 		let totalQuantity = 0;
 		let totalCurrent = 0;
@@ -229,6 +234,8 @@ export const InventoryService = {
 		let completedItems = 0;
 		let inProgressItems = 0;
 		let pendingItems = 0;
+		let lowStockItems = 0;
+		let outOfStockItems = 0;
 
 		for (const row of rows) {
 			const planned = toNumber(row.plannedQuantity);
@@ -247,6 +254,9 @@ export const InventoryService = {
 			if (row.status === "COMPLETED") completedItems += 1;
 			else if (row.status === "IN_PROGRESS") inProgressItems += 1;
 			else pendingItems += 1;
+
+			if (current > 0 && current < planned) lowStockItems += 1;
+			else if (current === 0) outOfStockItems += 1;
 		}
 
 		const totalRemaining = Math.max(0, totalQuantity - totalCurrent);
@@ -267,6 +277,9 @@ export const InventoryService = {
 			completedItems,
 			inProgressItems,
 			pendingItems,
+			lowStockItems,
+			outOfStockItems,
+			movementCount,
 		};
 	},
 

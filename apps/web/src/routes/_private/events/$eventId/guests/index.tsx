@@ -1,9 +1,17 @@
 import { Pagination } from "@muxima/ui/components/pagination";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@muxima/ui/components/tabs";
 import { createFileRoute } from "@tanstack/react-router";
+import { List, Radar } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
 import { CompanionManagerDialog } from "./-components/companion-manager-dialog";
 import { DeleteGuestDialog } from "./-components/delete-guest-dialog";
+import { GuestAnalytics } from "./-components/guest-analytics";
 import { GuestDialog } from "./-components/guest-dialog";
 import { GuestsCapacityAlert } from "./-components/guests-capacity-alert";
 import { GuestsFilters } from "./-components/guests-filters";
@@ -37,6 +45,7 @@ function GuestsPage() {
 		string | null
 	>(null);
 	const [sharingGuest, setSharingGuest] = useState<GuestItem | null>(null);
+	const [activeTab, setActiveTab] = useState("lista");
 
 	const guestsQuery = useGuests(eventId, {
 		page: filters.page,
@@ -64,38 +73,65 @@ function GuestsPage() {
 				onAddGuest={guestDialog.openCreateDialog}
 			/>
 
-			<GuestsCapacityAlert stats={stats} />
+			<Tabs
+				value={activeTab}
+				onValueChange={(value) => setActiveTab(value)}
+				className="space-y-6"
+			>
+				<TabsList>
+					<TabsTrigger value="lista">
+						<List className="mr-2 h-4 w-4" />
+						Lista
+					</TabsTrigger>
+					<TabsTrigger value="analytics">
+						<Radar className="mr-2 h-4 w-4" />
+						Analytics
+					</TabsTrigger>
+				</TabsList>
 
-			<GuestsStats stats={stats} />
+				<TabsContent value="lista" className="space-y-6">
+					<GuestsCapacityAlert stats={stats} />
 
-			<GuestsFilters
-				search={filters.search}
-				status={filters.status}
-				type={filters.type}
-				onSearchChange={filters.setSearch}
-				onStatusChange={filters.setStatus}
-				onTypeChange={filters.setType}
-			/>
+					<GuestsStats stats={stats} />
 
-			<GuestsTable
-				guests={guests}
-				isLoading={guestsQuery.isLoading}
-				isError={guestsQuery.isError}
-				onViewInvitation={setViewingInvitationGuestId}
-				onShareInvitation={setSharingGuest}
-				onEditGuest={guestDialog.openEditDialog}
-				onDeleteGuest={setDeleteGuest}
-				onManageCompanions={setManagingCompanionGuest}
-			/>
+					<GuestsFilters
+						search={filters.search}
+						status={filters.status}
+						type={filters.type}
+						onSearchChange={filters.setSearch}
+						onStatusChange={filters.setStatus}
+						onTypeChange={filters.setType}
+					/>
 
-			{meta && (
-				<Pagination
-					meta={meta}
-					onPageChange={filters.setPage}
-					onLimitChange={filters.setLimit}
-					disabled={guestsQuery.isLoading}
-				/>
-			)}
+					<GuestsTable
+						guests={guests}
+						isLoading={guestsQuery.isLoading}
+						isError={guestsQuery.isError}
+						onViewInvitation={setViewingInvitationGuestId}
+						onShareInvitation={setSharingGuest}
+						onEditGuest={guestDialog.openEditDialog}
+						onDeleteGuest={setDeleteGuest}
+						onManageCompanions={setManagingCompanionGuest}
+					/>
+
+					{meta && (
+						<Pagination
+							meta={meta}
+							onPageChange={filters.setPage}
+							onLimitChange={filters.setLimit}
+							disabled={guestsQuery.isLoading}
+						/>
+					)}
+				</TabsContent>
+
+				<TabsContent value="analytics">
+					<GuestAnalytics
+						stats={stats}
+						isLoading={statsQuery.isLoading}
+						isError={statsQuery.isError}
+					/>
+				</TabsContent>
+			</Tabs>
 
 			<GuestDialog
 				open={guestDialog.showCreateDialog}
