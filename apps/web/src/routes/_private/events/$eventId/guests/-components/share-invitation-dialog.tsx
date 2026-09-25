@@ -73,7 +73,7 @@ export function ShareInvitationDialog({
 					</div>
 				) : invitationLink ? (
 					<div className="space-y-4">
-						<div className="rounded-md border p-3">
+						<div className="border p-3">
 							<p className="mb-1 text-muted-foreground text-xs">
 								Link de convite
 							</p>

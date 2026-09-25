@@ -84,7 +84,7 @@ export function InventoryAnalytics({
 								{alerts.map((alert) => (
 									<div
 										key={alert}
-										className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50/60 px-3 py-2 text-red-700 text-sm"
+										className="flex items-center gap-2 border border-red-200 bg-red-50/60 px-3 py-2 text-red-700 text-sm"
 									>
 										<AlertTriangle className="h-4 w-4 shrink-0" />
 										{alert}
@@ -104,16 +104,16 @@ export function InventoryAnalytics({
 					</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					<div className="rounded-md border p-3 text-center">
+					<div className="border p-3 text-center">
 						<p className="text-muted-foreground text-xs">Qtd. de movimentos</p>
 						<p className="font-semibold text-2xl">{stats.movementCount}</p>
 					</div>
 					<div className="grid grid-cols-2 gap-2">
-						<div className="rounded-md border p-3 text-center">
+						<div className="border p-3 text-center">
 							<p className="text-muted-foreground text-xs">Stock baixo</p>
 							<p className="font-semibold">{stats.lowStockItems}</p>
 						</div>
-						<div className="rounded-md border p-3 text-center">
+						<div className="border p-3 text-center">
 							<p className="text-muted-foreground text-xs">Sem stock</p>
 							<p className="font-semibold">{stats.outOfStockItems}</p>
 						</div>

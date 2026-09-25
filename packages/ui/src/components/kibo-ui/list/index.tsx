@@ -113,7 +113,7 @@ export const ListItem = ({
 	return (
 		<div
 			className={cn(
-				"flex cursor-grab items-center gap-2 rounded-md border bg-background p-2 shadow-sm",
+				"flex cursor-grab items-center gap-2 border bg-background p-2 shadow-sm",
 				isDragging && "cursor-grabbing",
 				className,
 			)}

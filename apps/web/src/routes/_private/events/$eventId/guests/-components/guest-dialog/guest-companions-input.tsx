@@ -67,7 +67,7 @@ export function GuestCompanionsInput({
 					{names.map((name, idx) => (
 						<div
 							key={`${name}-${idx}`}
-							className="flex items-center justify-between rounded-md border px-3 py-1.5"
+							className="flex items-center justify-between border px-3 py-1.5"
 						>
 							<span className="text-sm">{name}</span>
 							<Button

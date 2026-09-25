@@ -91,15 +91,15 @@ export function TableAnalyticsDialog({
 					</div>
 
 					<div className="grid grid-cols-3 gap-2 text-center">
-						<div className="rounded-md border p-3">
+						<div className="border p-3">
 							<p className="text-muted-foreground text-xs">Lugares</p>
 							<p className="font-semibold">{stats?.totalCapacity ?? 0}</p>
 						</div>
-						<div className="rounded-md border p-3">
+						<div className="border p-3">
 							<p className="text-muted-foreground text-xs">Ocupados</p>
 							<p className="font-semibold">{stats?.totalOccupied ?? 0}</p>
 						</div>
-						<div className="rounded-md border p-3">
+						<div className="border p-3">
 							<p className="text-muted-foreground text-xs">Disponíveis</p>
 							<p className="font-semibold">{stats?.available ?? 0}</p>
 						</div>

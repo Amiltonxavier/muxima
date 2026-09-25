@@ -1,17 +1,16 @@
 import { Button } from "@muxima/ui/components/button";
 import { Pagination } from "@muxima/ui/components/pagination";
-import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Link2, MailPlus } from "lucide-react";
+import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
 import { InvitationsFilters } from "./-components/invitations-filters";
 import { InvitationsStats } from "./-components/invitations-stats";
 import { InvitationsTable } from "./-components/invitations-table";
 import type { InvitationResponseFilter } from "./-constants/invitation.constants";
 import {
-	useInvitations,
 	useInvitationStats,
+	useInvitations,
 } from "./-queries/invitation-queries";
 
 export const Route = createFileRoute("/_private/events/$eventId/invitations/")({
@@ -42,7 +41,7 @@ function InvitationsPage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div>
-					<h1 className="text-2xl font-semibold">Convites</h1>
+					<h1 className="font-semibold text-2xl">Convites</h1>
 					<p className="text-muted-foreground text-sm">
 						Gere os convites e acompanha as respostas dos teus convidados.
 					</p>
@@ -81,12 +80,12 @@ function InvitationsPage() {
 				/>
 			)}
 
-			<div className="flex items-start gap-2 rounded-md bg-muted p-3 text-muted-foreground text-xs">
+			<div className="flex items-start gap-2 bg-muted p-3 text-muted-foreground text-xs">
 				<Link2 className="mt-0.5 h-4 w-4 shrink-0" />
 				<p>
 					Um convite só pode ser acedido pelo convidado depois de{" "}
-					<strong>publicado</strong> (botão de globo). O link público é
-					único e não é indexado por motores de busca.
+					<strong>publicado</strong> (botão de globo). O link público é único e
+					não é indexado por motores de busca.
 				</p>
 			</div>
 		</div>

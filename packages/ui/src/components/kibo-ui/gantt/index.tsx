@@ -620,7 +620,7 @@ export const GanttAddFeatureHelper: FC<GanttAddFeatureHelperProps> = ({
 			}}
 		>
 			<button
-				className="flex h-full w-full items-center justify-center rounded-md border border-dashed p-2"
+				className="flex h-full w-full items-center justify-center border border-dashed p-2"
 				onClick={handleClick}
 				type="button"
 			>
@@ -659,8 +659,7 @@ export const GanttColumn: FC<GanttColumnProps> = ({
 	);
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: "This is a clickable column"
-		// biome-ignore lint/nursery/noNoninteractiveElementInteractions: "This is a clickable column"
+		// biome-ignore lint/a11y/noStaticElementInteractions: hover-only column highlight; the interactive cells inside carry their own handlers
 		<div
 			className={cn(
 				"group relative h-full overflow-hidden",
@@ -779,7 +778,7 @@ export const GanttFeatureDragHelper: FC<GanttFeatureDragHelperProps> = ({
 	return (
 		<div
 			className={cn(
-				"group !cursor-col-resize absolute top-1/2 z-[3] h-full w-6 -translate-y-1/2 rounded-md outline-none",
+				"group !cursor-col-resize absolute top-1/2 z-[3] h-full w-6 -translate-y-1/2 outline-none",
 				direction === "left" ? "-left-2.5" : "-right-2.5",
 			)}
 			ref={setNodeRef}
@@ -825,7 +824,7 @@ export const GanttFeatureItemCard: FC<GanttFeatureItemCardProps> = ({
 	useEffect(() => setDragging(isPressed), [isPressed, setDragging]);
 
 	return (
-		<Card className="h-full w-full rounded-md bg-background p-2 text-xs shadow-sm">
+		<Card className="h-full w-full bg-background p-2 text-xs shadow-sm">
 			<div
 				className={cn(
 					"flex h-full w-full items-center justify-between gap-2 text-left",

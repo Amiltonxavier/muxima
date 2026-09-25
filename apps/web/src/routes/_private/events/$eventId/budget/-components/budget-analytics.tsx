@@ -112,15 +112,15 @@ export function BudgetAnalytics({
 						</div>
 
 						<div className="grid grid-cols-3 gap-2 text-center">
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Pago</p>
 								<p className="font-semibold">{paymentRate}%</p>
 							</div>
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Despesas</p>
 								<p className="font-semibold">{stats?.expenseCount ?? 0}</p>
 							</div>
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Pendentes</p>
 								<p className="font-semibold">{stats?.pendingExpenses ?? 0}</p>
 							</div>

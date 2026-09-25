@@ -72,23 +72,23 @@ export function TaskAnalytics({
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-2 gap-2">
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Total</p>
 								<p className="font-semibold text-2xl">{stats?.total ?? 0}</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Concluídas</p>
 								<p className="font-semibold text-2xl">
 									{stats?.completed ?? 0}
 								</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Taxa</p>
 								<p className="font-semibold text-2xl">
 									{stats?.completionRate ?? 0}%
 								</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Atrasadas</p>
 								<p className="font-semibold text-2xl">{stats?.overdue ?? 0}</p>
 							</div>

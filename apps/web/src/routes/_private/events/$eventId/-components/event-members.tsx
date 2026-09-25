@@ -1,7 +1,5 @@
 // -components/event-members.tsx
 
-import { Users } from "lucide-react";
-
 import { Badge } from "@muxima/ui/components/badge";
 import {
 	Card,
@@ -9,6 +7,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@muxima/ui/components/card";
+import { Users } from "lucide-react";
 
 import { initials } from "@/shared/utils/string";
 import { getStatusLabel } from "@/utils/status-helpers";
@@ -43,19 +42,16 @@ export function EventMembers({ members }: EventMembersProps) {
 			<CardContent>
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{members.map((member) => (
-						<div
-							key={member.id}
-							className="flex items-center gap-3 rounded-md border p-3"
-						>
-							{member.user.name && <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-medium text-xs">
-								{initials(member.user.name)}
-							</div>}
+						<div key={member.id} className="flex items-center gap-3 border p-3">
+							{member.user.name && (
+								<div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-medium text-xs">
+									{initials(member.user.name)}
+								</div>
+							)}
 
 							<div className="min-w-0 flex-1">
 								<p className="truncate font-medium text-sm">
-									{member.user.name
-										? String(member.user.name)
-										: "Utilizador"}
+									{member.user.name ? String(member.user.name) : "Utilizador"}
 								</p>
 
 								<p className="text-muted-foreground text-xs">
@@ -70,9 +66,7 @@ export function EventMembers({ members }: EventMembersProps) {
 										: "bg-amber-50 text-amber-700"
 								}
 							>
-								{member.status === "ACTIVE"
-									? "Ativo"
-									: "Pendente"}
+								{member.status === "ACTIVE" ? "Ativo" : "Pendente"}
 							</Badge>
 						</div>
 					))}

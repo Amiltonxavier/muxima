@@ -127,7 +127,7 @@ export function CompanionManagerDialog({
 							{companions.map((companion) => (
 								<div
 									key={companion.id}
-									className="flex items-center justify-between rounded-md border p-3"
+									className="flex items-center justify-between border p-3"
 								>
 									<div className="flex items-center gap-3">
 										<span className="text-sm">{companion.name}</span>

@@ -21,7 +21,7 @@ export function InvitationGuests({
 					{guests.map((ig) => {
 						const g = ig.guest;
 						return (
-							<div key={ig.id} className="rounded-md border p-3">
+							<div key={ig.id} className="border p-3">
 								<p className="font-medium text-sm">{String(g?.name)}</p>
 								{g?.email || g?.phone ? (
 									<div className="mt-1 space-y-0.5 text-muted-foreground text-xs">

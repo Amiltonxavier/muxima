@@ -33,7 +33,8 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
-import { QueryState } from "@/shared/components/states";	import {
+import { QueryState } from "@/shared/components/states";
+import {
 	useCreateVendor,
 	useDeleteVendor,
 	useUpdateVendor,
@@ -113,14 +114,13 @@ function SuppliersPage() {
 								<TableHead>Fornecedor</TableHead>
 								<TableHead>Categoria</TableHead>
 								<TableHead>Contacto</TableHead>
-								<TableHead>Despesas</TableHead>
 								<TableHead>Estado</TableHead>
 								<TableHead className="w-24" />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-						{vendors.map((v) => {
-							return (
+							{vendors.map((v) => {
+								return (
 									<TableRow key={v.id}>
 										<TableCell className="font-medium">{v.name}</TableCell>
 										<TableCell>
@@ -136,11 +136,7 @@ function SuppliersPage() {
 													</p>
 												)}
 											</div>
-										</TableCell>								<TableCell>
-									<span className="text-muted-foreground text-sm">
-										{vendorsStats?.expenseCount ?? 0} despesas
-									</span>
-								</TableCell>
+										</TableCell>
 										<TableCell>
 											<Badge
 												className={getStatusColor(

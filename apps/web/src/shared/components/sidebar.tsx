@@ -125,10 +125,7 @@ const globalNavGroups: NavGroup[] = [
 	{
 		label: "",
 		items: [
-			{						label: "Dashboard",
-						icon: <Home className="h-4 w-4" />,
-						to: "/",
-			},
+			{ label: "Dashboard", icon: <Home className="h-4 w-4" />, to: "/" },
 			{
 				label: "Eventos",
 				icon: <Gift className="h-4 w-4" />,
@@ -176,9 +173,10 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 						<span className="text-lg">MUXIMA</span>
 					</Link>
 				) : (
-					<Link							to="/"
-							className="flex items-center gap-2 font-semibold"
-							onClick={onNavigate}
+					<Link
+						to="/"
+						className="flex items-center gap-2 font-semibold"
+						onClick={onNavigate}
 					>
 						<Gift className="h-5 w-5" />
 						<span className="text-lg">MUXIMA</span>
@@ -190,7 +188,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 				<div className="px-3 pb-2">
 					<Link
 						to="/events"
-						className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-xs hover:text-foreground"
+						className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground text-xs hover:text-foreground"
 						onClick={onNavigate}
 					>
 						← Trocar evento
@@ -213,16 +211,17 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 										params: { eventId: eventId || "" },
 									})
 								: matchRoute({
-										to: item.to,								fuzzy: item.to !== "/",
-							});
-						return (
+										to: item.to,
+										fuzzy: item.to !== "/",
+									});
+							return (
 								<Link
 									key={item.to}
 									to={item.to}
 									params={isEventContext && eventId ? { eventId } : undefined}
 									onClick={onNavigate}
 									className={cn(
-										"flex items-center gap-3 rounded-md px-2 py-1.5 font-medium text-sm transition-colors",
+										"flex items-center gap-3 px-2 py-1.5 font-medium text-sm transition-colors",
 										isActive
 											? "bg-accent text-accent-foreground"
 											: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -277,15 +276,16 @@ function CollapsedNav() {
 					const isActive = isEventContext
 						? matchRoute({ to: item.to, params: { eventId: eventId || "" } })
 						: matchRoute({
-								to: item.to,										fuzzy: item.to !== "/",
-								});
-						return (
-								<Link
-									key={item.to}
-									to={item.to}
-									params={isEventContext && eventId ? { eventId } : undefined}
-									className={cn(
-								"flex h-9 w-9 items-center justify-center rounded-md transition-colors",
+								to: item.to,
+								fuzzy: item.to !== "/",
+							});
+					return (
+						<Link
+							key={item.to}
+							to={item.to}
+							params={isEventContext && eventId ? { eventId } : undefined}
+							className={cn(
+								"flex h-9 w-9 items-center justify-center transition-colors",
 								isActive
 									? "bg-accent text-accent-foreground"
 									: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",

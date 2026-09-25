@@ -40,7 +40,7 @@ const DropdownMenuSubContent = React.forwardRef<
 			<MenuPrimitive.Popup
 				ref={ref}
 				className={cn(
-					"data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-starting-style:fade-in-0 data-ending-style:fade-out-0 data-starting-style:zoom-in-95 data-ending-style:zoom-out-95 z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-closed:animate-out data-ending-style:animate-out data-open:animate-in data-starting-style:animate-in",
+					"data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-starting-style:fade-in-0 data-ending-style:fade-out-0 data-starting-style:zoom-in-95 data-ending-style:zoom-out-95 z-50 min-w-[8rem] overflow-hidden border bg-popover p-1 text-popover-foreground shadow-lg data-closed:animate-out data-ending-style:animate-out data-open:animate-in data-starting-style:animate-in",
 					className,
 				)}
 				{...props}
@@ -62,7 +62,7 @@ const DropdownMenuContent = React.forwardRef<
 			<MenuPrimitive.Popup
 				ref={ref}
 				className={cn(
-					"data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-starting-style:fade-in-0 data-ending-style:fade-out-0 data-starting-style:zoom-in-95 data-ending-style:zoom-out-95 z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-closed:animate-out data-ending-style:animate-out data-open:animate-in data-starting-style:animate-in",
+					"data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-starting-style:fade-in-0 data-ending-style:fade-out-0 data-starting-style:zoom-in-95 data-ending-style:zoom-out-95 z-50 min-w-[8rem] overflow-hidden border bg-popover p-1 text-popover-foreground shadow-md data-closed:animate-out data-ending-style:animate-out data-open:animate-in data-starting-style:animate-in",
 					className,
 				)}
 				{...props}

@@ -54,7 +54,7 @@ export function GuestAnalytics({
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-3 gap-3">
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">
 									Taxa de confirmação
 								</p>
@@ -62,13 +62,13 @@ export function GuestAnalytics({
 									{stats?.confirmationRate ?? 0}%
 								</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Confirmados</p>
 								<p className="font-semibold text-lg">
 									{stats?.totalConfirmedPeople ?? 0}
 								</p>
 							</div>
-							<div className="rounded-md border p-3 text-center">
+							<div className="border p-3 text-center">
 								<p className="text-muted-foreground text-xs">Pendentes</p>
 								<p className="font-semibold text-lg">{stats?.pending ?? 0}</p>
 							</div>

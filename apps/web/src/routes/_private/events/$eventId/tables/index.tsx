@@ -93,10 +93,6 @@ function TablesPage() {
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<h1 className="font-semibold text-2xl">Mesas</h1>
-					<p className="text-muted-foreground text-sm">
-						{tableStats?.total ?? 0} mesas · {tableStats?.totalCapacity ?? 0}{" "}
-						lugares · {tableStats?.totalOccupied ?? 0} ocupados
-					</p>
 				</div>
 				<div className="flex gap-2">
 					<Button
@@ -159,7 +155,6 @@ function TablesPage() {
 								<TableHead>Capacidade</TableHead>
 								<TableHead>Ocupados</TableHead>
 								<TableHead>Disponíveis</TableHead>
-								<TableHead>Notas</TableHead>
 								<TableHead className="w-28" />
 							</TableRow>
 						</TableHeader>
@@ -188,9 +183,7 @@ function TablesPage() {
 										</TableCell>
 										<TableCell>{capacity}</TableCell>
 										<TableCell>
-											<Badge className="bg-blue-50 text-blue-700">
-												{occupied}
-											</Badge>
+											<Badge>{occupied}</Badge>
 										</TableCell>
 										<TableCell>
 											<Badge
@@ -200,11 +193,8 @@ function TablesPage() {
 														: "bg-green-50 text-green-700"
 												}
 											>
-												{available}
+												{available <= 0 ? "Esgotado" : available}
 											</Badge>
-										</TableCell>
-										<TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">
-											{table.notes || "—"}
 										</TableCell>
 										<TableCell>
 											<div className="flex gap-1">

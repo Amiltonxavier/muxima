@@ -225,11 +225,7 @@ function BudgetPage() {
 								/>
 								<StatsCard
 									title="Gasto"
-									value={
-										<span className="text-amber-600">
-											{formatCurrency(totalExpenses)}
-										</span>
-									}
+									value={formatCurrency(totalExpenses)}
 								/>
 								<StatsCard
 									title="Disponível"
@@ -949,7 +945,7 @@ function ExpenseDialog({
 											)
 										}
 										disabled={isLoading}
-										className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+										className="flex h-10 w-full items-center justify-between border border-input bg-background px-3 py-2 text-sm"
 									>
 										{toSelectItems(EXPENSE_STATUS_LABELS).map((item) => (
 											<option key={item.value} value={item.value}>

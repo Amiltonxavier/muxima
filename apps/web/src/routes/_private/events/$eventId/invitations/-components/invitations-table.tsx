@@ -9,8 +9,8 @@ import {
 import { EmptyState } from "@/shared/components/states/empty-state";
 import { ErrorState } from "@/shared/components/states/error-state";
 import { LoadingState } from "@/shared/components/states/loading-state";
-import { InvitationTableRow } from "./invitation-table-row";
 import type { InvitationItem } from "../-types/invitation.types";
+import { InvitationTableRow } from "./invitation-table-row";
 
 export function InvitationsTable({
 	invitations,
@@ -30,7 +30,7 @@ export function InvitationsTable({
 	}
 
 	return (
-		<div className="overflow-x-auto rounded-md border">
+		<div className="overflow-x-auto border">
 			<Table>
 				<TableHeader>
 					<TableRow>

@@ -14,11 +14,6 @@ export function GuestsStats({ stats }: { stats?: GuestStats | null }) {
 			<StatsCard title="Talvez" value={stats.maybe} />
 			<StatsCard title="Recusados" value={stats.declined} />
 			<StatsCard title="Acompanhantes" value={stats.totalCompanions} />
-			<StatsCard
-				title="Pessoas confirmadas"
-				value={stats.totalConfirmedPeople}
-				description={stats.capacity > 0 ? `/ ${stats.capacity}` : undefined}
-			/>
 		</div>
 	);
 }

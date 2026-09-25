@@ -37,17 +37,17 @@ export function ViewTableDialog({ table, onClose }: ViewTableDialogProps) {
 
 				<div className="space-y-4">
 					<div className="grid grid-cols-2 gap-4">
-						<div className="rounded-md border p-3 text-center">
+						<div className="border p-3 text-center">
 							<p className="text-muted-foreground text-xs">Capacidade</p>
 							<p className="font-semibold text-2xl">{capacity}</p>
 						</div>
-						<div className="rounded-md border p-3 text-center">
+						<div className="border p-3 text-center">
 							<p className="text-muted-foreground text-xs">Ocupados</p>
 							<p className="font-semibold text-2xl">{occupied}</p>
 						</div>
 					</div>
 
-					<div className="rounded-md border p-3 text-center">
+					<div className="border p-3 text-center">
 						<p className="text-muted-foreground text-xs">Disponíveis</p>
 						<p
 							className={`font-semibold text-2xl ${capacity - occupied <= 0 ? "text-red-600" : "text-green-600"}`}
@@ -77,7 +77,7 @@ export function ViewTableDialog({ table, onClose }: ViewTableDialogProps) {
 					) : null}
 
 					{table.notes ? (
-						<div className="rounded-md bg-muted/50 p-3 text-sm">
+						<div className="bg-muted/50 p-3 text-sm">
 							<p className="text-muted-foreground text-xs">Notas</p>
 							<p className="mt-1">{table.notes}</p>
 						</div>
@@ -97,7 +97,7 @@ export function ViewTableDialog({ table, onClose }: ViewTableDialogProps) {
 								{guests.map((tg) => (
 									<div
 										key={tg.id}
-										className="flex items-center justify-between rounded-md border px-3 py-2"
+										className="flex items-center justify-between border px-3 py-2"
 									>
 										<span className="text-sm">
 											{tg.guest?.name || "Convidado"}

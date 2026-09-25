@@ -3,13 +3,13 @@ import { Toaster } from "@muxima/ui/components/sonner";
 import { createORPCClient } from "@orpc/client";
 import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import {
 	createRootRouteWithContext,
 	ErrorComponent,
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
-import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -50,7 +50,7 @@ function RootError({ error, reset }: ErrorComponentProps) {
 			<ErrorComponent error={error} />
 			<button
 				type="button"
-				className="rounded-md bg-primary px-4 py-2 text-primary-foreground text-sm"
+				className="bg-primary px-4 py-2 text-primary-foreground text-sm"
 				onClick={() => reset()}
 			>
 				Tentar novamente

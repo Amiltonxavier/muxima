@@ -72,15 +72,15 @@ export function EventPreparationAnalytics({
 						</div>
 
 						<div className="grid grid-cols-3 gap-2 text-center">
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Mesas</p>
 								<p className="font-semibold">{tables?.total ?? 0}</p>
 							</div>
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Lugares</p>
 								<p className="font-semibold">{tables?.totalCapacity ?? 0}</p>
 							</div>
-							<div className="rounded-md border p-2">
+							<div className="border p-2">
 								<p className="text-muted-foreground text-xs">Taxa</p>
 								<p className="font-semibold">{occupancyRate}%</p>
 							</div>
