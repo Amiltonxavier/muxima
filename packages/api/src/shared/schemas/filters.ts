@@ -189,3 +189,18 @@ export type MemberFilters = z.infer<typeof memberFiltersSchema>;
 
 export const memberListInput = paginationInput.merge(memberFiltersSchema);
 export type MemberListInput = z.infer<typeof memberListInput>;
+
+// ── Dedications ──────────────────────────────────────────────────
+export const dedicationFiltersSchema = z.object({
+	search: z.string().trim().optional(),
+	type: z.enum(["WEDDING_VOW", "ENGAGEMENT_VOW", "DEDICATION"]).optional(),
+	status: z.enum(["NOT_STARTED", "DRAFT", "IN_PROGRESS", "READY"]).optional(),
+	visibility: z.enum(["PRIVATE", "SHARED"]).optional(),
+});
+
+export type DedicationFilters = z.infer<typeof dedicationFiltersSchema>;
+
+export const dedicationListInput = paginationInput.merge(
+	dedicationFiltersSchema,
+);
+export type DedicationListInput = z.infer<typeof dedicationListInput>;

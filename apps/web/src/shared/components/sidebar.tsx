@@ -8,6 +8,7 @@ import {
 	ChevronLeft,
 	ChevronRight,
 	CreditCard,
+	Feather,
 	FileText,
 	Gift,
 	Home,
@@ -86,6 +87,16 @@ const eventNavGroups: NavGroup[] = [
 				label: "Convites",
 				icon: <Mail className="h-4 w-4" />,
 				to: "/events/$eventId/invitations",
+			},
+		],
+	},
+	{
+		label: "Memoráveis",
+		items: [
+			{
+				label: "Dedicatórias & Votos",
+				icon: <Feather className="h-4 w-4" />,
+				to: "/events/$eventId/dedications",
 			},
 		],
 	},

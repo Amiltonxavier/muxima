@@ -22,6 +22,7 @@ model User {
   createdDocuments  Document[]
   notifications     Notification[]
   auditLogs         AuditLog[]
+  ownedDedications  Dedication[]   @relation("DedicationOwner")
 
   @@unique([email])
   @@map("user")

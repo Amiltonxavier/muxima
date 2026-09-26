@@ -159,6 +159,24 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 	OTHER: "Outro",
 };
 
+export const DEDICATION_TYPE_LABELS: Record<string, string> = {
+	WEDDING_VOW: "Votos de casamento",
+	ENGAGEMENT_VOW: "Votos de noivado",
+	DEDICATION: "Dedicatória",
+};
+
+export const DEDICATION_STATUS_LABELS: Record<string, string> = {
+	NOT_STARTED: "Por escrever",
+	DRAFT: "Rascunho",
+	IN_PROGRESS: "Em progresso",
+	READY: "Pronto",
+};
+
+export const DEDICATION_VISIBILITY_LABELS: Record<string, string> = {
+	PRIVATE: "Privada",
+	SHARED: "Partilhada",
+};
+
 export function getStatusColor(status: string): string {
 	const colors: Record<string, string> = {
 		DRAFT: "bg-neutral-100 text-neutral-700",
@@ -185,6 +203,10 @@ export function getStatusColor(status: string): string {
 		CONTACTED: "bg-blue-50 text-blue-700",
 		NEGOTIATING: "bg-amber-50 text-amber-700",
 		CONTRACTED: "bg-green-50 text-green-700",
+		NOT_STARTED: "bg-neutral-100 text-neutral-700",
+		READY: "bg-emerald-50 text-emerald-700",
+		PRIVATE: "bg-neutral-100 text-neutral-700",
+		SHARED: "bg-blue-50 text-blue-700",
 	};
 	return colors[status] || "bg-neutral-100 text-neutral-700";
 }
@@ -199,7 +221,8 @@ export function getStatusLabel(
 		| "vendor"
 		| "role"
 		| "document"
-		| "inventory",
+		| "inventory"
+		| "dedication",
 ): string {
 	const labels: Record<string, Record<string, string>> = {
 		event: EVENT_STATUS_LABELS,
@@ -210,6 +233,7 @@ export function getStatusLabel(
 		role: MEMBER_ROLE_LABELS,
 		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
 		inventory: INVENTORY_STATUS_LABELS,
+		dedication: DEDICATION_STATUS_LABELS,
 	};
 	return labels[type]?.[status] || status;
 }

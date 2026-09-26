@@ -247,6 +247,24 @@ enum NotificationPriority {
   CRITICAL
 }
 
+// Extensible list of personal message kinds. New kinds (BIRTHDAY_MESSAGE,
+// ANNIVERSARY_MESSAGE, SPECIAL_MESSAGE, THANK_YOU, OTHER…) are added here
+// only — no feature code branches on a specific member.
+enum DedicationType {
+  WEDDING_VOW
+  ENGAGEMENT_VOW
+  DEDICATION
+}
+
+// Writing phase of a dedication. Kept as an enum (never a boolean) so the
+// owner can tell at a glance how far along the text is.
+enum DedicationStatus {
+  NOT_STARTED
+  DRAFT
+  IN_PROGRESS
+  READY
+}
+
 // ============================================================
 // Models
 // ============================================================
@@ -292,6 +310,7 @@ model Event {
   documents       Document[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  dedications     Dedication[]
 
   @@index([ownerId])
   @@map("event")
@@ -309,6 +328,7 @@ model EventMember {
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
+  dedicationViews DedicationViewer[]
 
   @@unique([eventId, userId])
   @@index([eventId])
@@ -734,4 +754,52 @@ model AuditLog {
   @@index([eventId])
   @@index([userId])
   @@map("audit_log")
+}
+
+// Private personal writing (vows, dedications, messages) owned by one event
+// member. Content is Tiptap JSON — never raw HTML — and is never exposed to
+// anyone outside the explicit viewer list.
+model Dedication {
+  id           String           @id @default(uuid())
+  eventId      String
+  ownerId      String
+  title        String
+  type         DedicationType
+  status       DedicationStatus @default(NOT_STARTED)
+  content      Json
+  // true  → only the owner can read it.
+  // false → only the members listed in `viewers` can read it. It NEVER means
+  //         public, and it is never widened to "all members of the event".
+  isLocked     Boolean          @default(true)
+  lastOpenedAt DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  event   Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  owner   User               @relation("DedicationOwner", fields: [ownerId], references: [id])
+  viewers DedicationViewer[]
+
+  @@index([eventId])
+  @@index([ownerId])
+  @@map("dedication")
+}
+
+// Explicit read grant for a single event member. Because the row is
+// cascade-deleted with the EventMember, a member who leaves the event loses
+// access automatically, and (dedicationId, eventMemberId) cannot be duplicated.
+model DedicationViewer {
+  id            String    @id @default(uuid())
+  dedicationId  String
+  eventMemberId String
+  lastOpenedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  dedication  Dedication  @relation(fields: [dedicationId], references: [id], onDelete: Cascade)
+  eventMember EventMember @relation(fields: [eventMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([dedicationId, eventMemberId])
+  @@index([dedicationId])
+  @@index([eventMemberId])
+  @@map("dedication_viewer")
 }

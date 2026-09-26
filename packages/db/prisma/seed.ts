@@ -1057,7 +1057,7 @@ async function main() {
 	await prisma.invitationGuest.deleteMany({});
 	await prisma.guestCompanion.deleteMany({});
 	await prisma.tableGuest.deleteMany({});
-	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "payment", "expense", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "vendor_contract", "vendor", "budget_category", "budget", "table", "event_member", "event" CASCADE`;
+	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "payment", "expense", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "vendor_contract", "vendor", "budget_category", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
 	await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
 
 	// ── 1. USERS + CREDENTIALS ────────────────────────────────────────
@@ -2115,6 +2115,181 @@ async function main() {
 		`  ✅ Notifications (${notificationRecords.length}) / Audit Logs (${auditRecords.length})`,
 	);
 
+	// ── 12. DEDICATIONS ────────────────────────────────────────────────
+	// Three examples that exercise every visible state of the module, so the
+	// list, the stats cards and the access rules can all be checked in dev:
+	//   1. locked + NOT_STARTED → owner only, nothing written yet
+	//   2. locked + DRAFT       → owner only, text in progress
+	//   3. shared + READY       → explicit member grants, already opened once
+	const dedicationRecords: Prisma.DedicationCreateManyInput[] = [];
+	const dedicationViewerRecords: Prisma.DedicationViewerCreateManyInput[] = [];
+
+	/** Active members of a plan, so a grant never points at a stale membership. */
+	const activeMembersOf = (plan: EventPlan) =>
+		memberRecords.filter(
+			(m): m is typeof m & { id: string } =>
+				m.eventId === plan.id &&
+				m.status === "ACTIVE" &&
+				typeof m.id === "string",
+		);
+
+	/**
+	 * Tiptap-shaped document, mirroring what the editor actually stores. An
+	 * empty document is `{ doc, [paragraph] }` — the same canonical shape the
+	 * backend's `EMPTY_RICH_TEXT` uses, never `{ doc, content: [] }`.
+	 */
+	const doc = (...paragraphs: string[]): Prisma.InputJsonValue => ({
+		type: "doc",
+		content:
+			paragraphs.length > 0
+				? paragraphs.map((text) => ({
+						type: "paragraph",
+						content: [{ type: "text", text }],
+					}))
+				: [{ type: "paragraph" }],
+	});
+
+	// The partner always exists and is always ACTIVE, which makes them the safe
+	// viewer to grant. The owner is deliberately never granted.
+	const wedding: EventPlan = plans[0] as EventPlan;
+	const engagement: EventPlan = plans[1] as EventPlan;
+	const partnerMember = (plan: EventPlan) => `mem_${plan.partnerId}_${plan.id}`;
+
+	dedicationRecords.push(
+		{
+			id: `ded_vow_${SEED_PREFIX}`,
+			eventId: wedding.id,
+			ownerId: wedding.ownerId,
+			title: "Os nossos votos",
+			type: "WEDDING_VOW",
+			status: "NOT_STARTED",
+			content: doc(),
+			isLocked: true,
+			lastOpenedAt: null,
+		},
+		{
+			id: `ded_vow_${SEED_PREFIX}_2`,
+			eventId: wedding.id,
+			ownerId: wedding.ownerId,
+			title: "Carta à minha noiva",
+			type: "DEDICATION",
+			status: "DRAFT",
+			content: doc(
+				"Amor, ainda não sei escrever isto sem te rir de mim a meio.",
+				"Prometo-te todos os pequenos gestos de todos os dias.",
+			),
+			isLocked: true,
+			lastOpenedAt: daysAgo(6),
+		},
+		{
+			id: `ded_vow_${SEED_PREFIX}_3`,
+			eventId: engagement.id,
+			ownerId: engagement.ownerId,
+			title: "Votos de noivado",
+			type: "ENGAGEMENT_VOW",
+			status: "READY",
+			content: doc(
+				"Escolhi-te num café cheio de gente e não voltei a olhar para outra.",
+				"Obrigado por me fazeres rir primeiro.",
+			),
+			// Shared: access is only ever granted through explicit membership.
+			isLocked: false,
+			lastOpenedAt: daysAgo(2),
+		},
+	);
+
+	// Grant the partner on the shared one, plus an admin/editor when the plan
+	// happens to have one, so the "who can see this" column has >1 row.
+	const sharedPlanMembers = activeMembersOf(engagement).filter(
+		(m) => m.userId !== engagement.ownerId,
+	);
+	for (const [index, member] of sharedPlanMembers.entries()) {
+		dedicationViewerRecords.push({
+			id: `ddv_${SEED_PREFIX}_${index + 1}`,
+			dedicationId: `ded_vow_${SEED_PREFIX}_3`,
+			eventMemberId: member.id,
+			// The first viewer has already read it; the rest have not.
+			lastOpenedAt: index === 0 ? daysAgo(2) : null,
+		});
+	}
+
+	await prisma.dedication.createMany({ data: dedicationRecords });
+	await prisma.dedicationViewer.createMany({ data: dedicationViewerRecords });
+	console.log(
+		`  ✅ Dedications (${dedicationRecords.length}) / Viewers (${dedicationViewerRecords.length})`,
+	);
+
+	// A short history for the shared dedication, so the audit tab has content.
+	// `oldData`/`newData` are nullable Json columns: leaving them out of the
+	// input is how a SQL NULL is written, so only real snapshots are listed.
+	const historyPlan: EventPlan = engagement;
+	const historyEntityId = `ded_vow_${SEED_PREFIX}_3`;
+	const historyViewerMember = partnerMember(historyPlan);
+
+	type DedicationAuditInput = {
+		action: string;
+		oldData?: Prisma.InputJsonValue;
+		newData?: Prisma.InputJsonValue;
+		createdAt: Date;
+		userId?: string;
+	};
+
+	const historySeed: Prisma.AuditLogCreateManyInput[] = (
+		[
+			{
+				action: "CREATED",
+				newData: {
+					title: "Votos de noivado",
+					type: "ENGAGEMENT_VOW",
+					status: "NOT_STARTED",
+				},
+				createdAt: daysAgo(9),
+			},
+			{
+				action: "UPDATED",
+				newData: { note: "revisão do texto" },
+				createdAt: daysAgo(5),
+			},
+			{
+				action: "STATUS_CHANGED",
+				oldData: { status: "DRAFT" },
+				newData: { status: "READY" },
+				createdAt: daysAgo(4),
+			},
+			{
+				action: "UNLOCKED",
+				oldData: { isLocked: true },
+				newData: { isLocked: false },
+				createdAt: daysAgo(3),
+			},
+			{
+				action: "VIEWER_ADDED",
+				newData: { eventMemberId: historyViewerMember },
+				createdAt: daysAgo(3),
+			},
+			// Attributed to the partner, so the history shows a viewer action and
+			// the "opened by me" stat has something to count.
+			{
+				action: "OPENED",
+				createdAt: daysAgo(2),
+				userId: historyPlan.partnerId,
+			},
+		] satisfies DedicationAuditInput[]
+	).map((row, index) => ({
+		id: `audit_ded_${SEED_PREFIX}_${index + 1}`,
+		eventId: historyPlan.id,
+		userId: row.userId ?? historyPlan.ownerId,
+		action: row.action,
+		entity: "Dedication",
+		entityId: historyEntityId,
+		oldData: row.oldData,
+		newData: row.newData,
+		createdAt: row.createdAt,
+	}));
+
+	await prisma.auditLog.createMany({ data: historySeed });
+	console.log(`  ✅ Dedication Audit Logs (${historySeed.length})`);
+
 	// ── DONE ───────────────────────────────────────────────────────────
 	console.log("\n🎉 Seed completed successfully!");
 	console.log(`   Users:          ${SEED_USERS.length}`);
@@ -2138,6 +2313,8 @@ async function main() {
 	console.log(`   Documents:      ${documentRecords.length}`);
 	console.log(`   Notifications:  ${notificationRecords.length}`);
 	console.log(`   Audit Logs:     ${auditRecords.length}`);
+	console.log(`   Dedications:    ${dedicationRecords.length}`);
+	console.log(`   Ded. Viewers:   ${dedicationViewerRecords.length}`);
 	console.log("\n🔐 Credenciais de acesso (email / senha):");
 	for (const u of SEED_USERS) console.log(`   ${u.email}  /  ${SEED_PASSWORD}`);
 }
