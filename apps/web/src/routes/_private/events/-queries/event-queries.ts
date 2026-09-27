@@ -8,7 +8,13 @@ export interface PaginationParams {
 
 export interface EventFilters {
 	search?: string;
-	status?: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+	status?:
+		| "DRAFT"
+		| "PLANNING"
+		| "CONFIRMED"
+		| "ONGOING"
+		| "COMPLETED"
+		| "CANCELLED";
 	type?: "ENGAGEMENT" | "WEDDING";
 }
 

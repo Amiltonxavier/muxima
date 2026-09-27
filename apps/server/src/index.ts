@@ -1,5 +1,6 @@
 import { buildApp } from "@muxima/api/app";
 import { createContext } from "@muxima/api/context";
+import { startEventLifecycleWorker } from "@muxima/api/jobs/event-lifecycle";
 import { appRouter } from "@muxima/api/routers/index";
 import { OpenAPIHandler } from "@orpc/openapi/fastify";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
@@ -53,6 +54,10 @@ async function main() {
 			if (!matched) reply.status(404).send();
 		});
 	});
+
+	// Coarse background worker for the event lifecycle + proximity
+	// notifications (15 min interval, unref'd — never per-second work).
+	startEventLifecycleWorker();
 
 	await fastify.listen({ port: 3000, host: "0.0.0.0" });
 	console.log("Server running on port 3000");

@@ -55,7 +55,13 @@ function EventsPage() {
 	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [filterStatus, setFilterStatus] = useState<
-		"ALL" | "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
+		| "ALL"
+		| "DRAFT"
+		| "PLANNING"
+		| "CONFIRMED"
+		| "ONGOING"
+		| "COMPLETED"
+		| "CANCELLED"
 	>("ALL");
 	const [filterType, setFilterType] = useState<
 		"ALL" | "ENGAGEMENT" | "WEDDING"

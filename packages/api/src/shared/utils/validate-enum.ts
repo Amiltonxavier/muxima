@@ -18,6 +18,7 @@ export const VALID_EVENT_STATUSES = [
 	"DRAFT",
 	"PLANNING",
 	"CONFIRMED",
+	"ONGOING",
 	"COMPLETED",
 	"CANCELLED",
 ] as const;

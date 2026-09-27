@@ -8,6 +8,7 @@ export type EventStatus =
 	| "DRAFT"
 	| "PLANNING"
 	| "CONFIRMED"
+	| "ONGOING"
 	| "COMPLETED"
 	| "CANCELLED";
 export type MemberRole = "OWNER" | "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER";
@@ -880,13 +881,13 @@ export type CreateEventInput = {
 export type UpdateEventInput = {
 	name?: string;
 	type?: EventType;
-	status?: EventStatus;
 	eventDate?: string;
 	venueName?: string;
 	description?: string;
 	capacity?: number;
 	startTime?: string;
 	endTime?: string;
+	status?: EventStatus;
 };
 
 export type CreateTaskInput = {

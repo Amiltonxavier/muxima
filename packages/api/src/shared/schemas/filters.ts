@@ -12,7 +12,14 @@ export type PaginationInput = z.infer<typeof paginationInput>;
 export const eventFiltersSchema = z.object({
 	search: z.string().trim().optional(),
 	status: z
-		.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])
+		.enum([
+			"DRAFT",
+			"PLANNING",
+			"CONFIRMED",
+			"ONGOING",
+			"COMPLETED",
+			"CANCELLED",
+		])
 		.optional(),
 	type: z.enum(["ENGAGEMENT", "WEDDING"]).optional(),
 });

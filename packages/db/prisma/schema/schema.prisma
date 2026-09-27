@@ -31,6 +31,7 @@ enum EventStatus {
   DRAFT
   PLANNING
   CONFIRMED
+  ONGOING
   COMPLETED
   CANCELLED
 }

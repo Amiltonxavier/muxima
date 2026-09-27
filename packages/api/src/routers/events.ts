@@ -2,6 +2,8 @@ import db from "@muxima/db";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { syncEventLifecycle } from "../modules/events/lifecycle";
+import { notifyEventMilestone } from "../modules/events/proximity-notifier";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -56,7 +58,18 @@ export const eventsRouter = {
 				db.event.count({ where }),
 			]);
 
-			return { data: events, meta: getPaginationMeta(total, page, limit) };
+			// Lazy lifecycle sync for the page of events being returned.
+			const syncedEvents = await Promise.all(
+				events.map(async (event) => {
+					const status = await syncEventLifecycle(event);
+					return status === event.status ? event : { ...event, status };
+				}),
+			);
+
+			return {
+				data: syncedEvents,
+				meta: getPaginationMeta(total, page, limit),
+			};
 		}),
 
 	getById: protectedProcedure
@@ -86,7 +99,19 @@ export const eventsRouter = {
 				throw new Error("Não tem permissão para aceder a este evento");
 			}
 
-			return event;
+			// Lazy lifecycle sync: derive CONFIRMED→ONGOING→COMPLETED from the
+			// calendar and persist the transition when the stored status lags
+			// behind. The backend is the only authority for status changes.
+			const status = await syncEventLifecycle(event);
+
+			// Proximity notification milestone (idempotent, cheap on reads).
+			try {
+				await notifyEventMilestone(event);
+			} catch {
+				// Notifications must never break event reads.
+			}
+
+			return status === event.status ? event : { ...event, status };
 		}),
 
 	create: protectedProcedure
@@ -196,7 +221,14 @@ export const eventsRouter = {
 				limitGuestCapacity: z.boolean().optional(),
 				description: z.string().optional(),
 				status: z
-					.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])
+					.enum([
+						"DRAFT",
+						"PLANNING",
+						"CONFIRMED",
+						"ONGOING",
+						"COMPLETED",
+						"CANCELLED",
+					])
 					.optional(),
 			}),
 		)

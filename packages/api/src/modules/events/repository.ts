@@ -93,7 +93,13 @@ export const EventRepository = {
 			capacity: number;
 			limitGuestCapacity: boolean;
 			description: string;
-			status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+			status:
+				| "DRAFT"
+				| "PLANNING"
+				| "CONFIRMED"
+				| "ONGOING"
+				| "COMPLETED"
+				| "CANCELLED";
 		}>,
 	) {
 		return db.event.update({ where: { id }, data });

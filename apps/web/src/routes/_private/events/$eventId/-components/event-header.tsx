@@ -13,7 +13,13 @@ interface EventHeaderProps {
 	name: string;
 	type: EventType;
 	description?: string | null;
-	status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+	status:
+		| "DRAFT"
+		| "PLANNING"
+		| "CONFIRMED"
+		| "ONGOING"
+		| "COMPLETED"
+		| "CANCELLED";
 	onEdit: () => void;
 	onDelete: () => void;
 }

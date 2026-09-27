@@ -1,7 +1,8 @@
 export const EVENT_STATUS_LABELS: Record<string, string> = {
 	DRAFT: "Rascunho",
-	PLANNING: "Em preparação",
+	PLANNING: "Planeamento",
 	CONFIRMED: "Confirmado",
+	ONGOING: "A decorrer",
 	COMPLETED: "Concluído",
 	CANCELLED: "Cancelado",
 };
@@ -182,6 +183,7 @@ export function getStatusColor(status: string): string {
 		DRAFT: "bg-neutral-100 text-neutral-700",
 		PLANNING: "bg-blue-50 text-blue-700",
 		CONFIRMED: "bg-green-50 text-green-700",
+		ONGOING: "bg-amber-50 text-amber-700",
 		COMPLETED: "bg-emerald-50 text-emerald-700",
 		CANCELLED: "bg-red-50 text-red-700",
 		PLANNED: "bg-neutral-100 text-neutral-700",

@@ -1,4 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { syncEventLifecycle } from "./lifecycle";
 import { type EventFilterParams, EventRepository } from "./repository";
 
 export const EventService = {
@@ -37,7 +38,9 @@ export const EventService = {
 		const isMember = event.members.some((m) => m.userId === userId);
 		if (!isMember) throw new ForbiddenError("Não tem acesso a este evento");
 
-		return event;
+		// Lazy lifecycle sync (backend is the authority for status changes).
+		const status = await syncEventLifecycle(event);
+		return status === event.status ? event : { ...event, status };
 	},
 
 	async findByUserId(
@@ -69,7 +72,13 @@ export const EventService = {
 			capacity: number;
 			limitGuestCapacity: boolean;
 			description: string;
-			status: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+			status:
+				| "DRAFT"
+				| "PLANNING"
+				| "CONFIRMED"
+				| "ONGOING"
+				| "COMPLETED"
+				| "CANCELLED";
 		}>,
 	) {
 		const event = await EventRepository.findById(id);

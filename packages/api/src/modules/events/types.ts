@@ -6,5 +6,11 @@ export type CreateEventInput = {
 };
 
 export type UpdateEventInput = Partial<CreateEventInput> & {
-	status?: "DRAFT" | "PLANNING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+	status?:
+		| "DRAFT"
+		| "PLANNING"
+		| "CONFIRMED"
+		| "ONGOING"
+		| "COMPLETED"
+		| "CANCELLED";
 };

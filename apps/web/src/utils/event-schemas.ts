@@ -55,7 +55,14 @@ export const updateEventSchema = z.object({
 	limitGuestCapacity: z.boolean().optional(),
 	description: z.string().optional(),
 	status: z
-		.enum(["DRAFT", "PLANNING", "CONFIRMED", "COMPLETED", "CANCELLED"])
+		.enum([
+			"DRAFT",
+			"PLANNING",
+			"CONFIRMED",
+			"ONGOING",
+			"COMPLETED",
+			"CANCELLED",
+		])
 		.optional(),
 });
 
