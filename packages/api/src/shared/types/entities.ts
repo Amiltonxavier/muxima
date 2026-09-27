@@ -13,32 +13,68 @@ export type EventStatus =
 	| "CANCELLED";
 export type MemberRole = "OWNER" | "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER";
 export type MemberStatus = "PENDING" | "ACTIVE" | "DECLINED";
-export type ExpenseType = "EXPENSE" | "INCOME";
-export type ExpenseStatus =
-	| "PLANNED"
-	| "PARTIALLY_PAID"
-	| "PAID"
-	| "OVERDUE"
-	| "CANCELLED";
-export type VendorCategory =
+export type SupplierCategory =
 	| "VENUE"
-	| "DECORATION"
-	| "MUSIC"
-	| "PHOTOGRAPHY"
-	| "VIDEO"
 	| "CATERING"
 	| "CAKE"
-	| "DRINKS"
+	| "SWEETS_AND_SAVOURIES"
+	| "DECORATION"
+	| "FLORIST"
+	| "PHOTOGRAPHER"
+	| "VIDEOGRAPHER"
+	| "DJ"
+	| "BAND"
+	| "MUSIC"
+	| "ENTERTAINMENT"
 	| "TRANSPORT"
 	| "BEAUTY"
+	| "BRIDE_ATTIRE"
+	| "GROOM_ATTIRE"
+	| "RINGS"
+	| "WEDDING_PLANNER"
+	| "OFFICIANT"
+	| "FAVOURS"
+	| "ACCOMMODATION"
 	| "SECURITY"
-	| "ENTERTAINMENT"
 	| "OTHER";
-export type VendorStatus =
+export type SupplierStatus =
 	| "PROSPECT"
 	| "CONTACTED"
 	| "NEGOTIATING"
-	| "CONTRACTED"
+	| "CONFIRMED"
+	| "COMPLETED"
+	| "CANCELLED";
+export type SupplierPaymentStatus =
+	| "PENDING"
+	| "PAID"
+	| "INSTALLMENTS"
+	| "OVERDUE"
+	| "CANCELLED";
+export type SupplierPaymentModel = "FULL" | "INSTALLMENTS" | "CUSTOM";
+export type InstallmentStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
+export type FoodPlanCategory =
+	| "STARTER"
+	| "MAIN_COURSE"
+	| "SIDE_DISH"
+	| "DESSERT"
+	| "FRUIT"
+	| "OTHER";
+export type FoodPlanUnit =
+	| "UNIT"
+	| "PLATE"
+	| "BOWL"
+	| "PORTION"
+	| "GRAM"
+	| "KILOGRAM"
+	| "LITER"
+	| "GLASS"
+	| "BOTTLE"
+	| "PACKAGE"
+	| "OTHER";
+export type FoodPlanStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
+export type ChecklistStatus =
+	| "PENDING"
+	| "IN_PROGRESS"
 	| "COMPLETED"
 	| "CANCELLED";
 export type GuestType = "FAMILY" | "FRIEND" | "COLLEAGUE" | "VIP" | "OTHER";
@@ -80,9 +116,10 @@ export type ScheduleStatus =
 	| "CANCELLED";
 export type InventoryCategory =
 	| "DRINK"
-	| "FOOD"
-	| "CAKE"
-	| "DECORATION"
+	| "MATERIAL"
+	| "EQUIPMENT"
+	| "FURNITURE"
+	| "LINEN"
 	| "OTHER";
 export type InventoryUnit =
 	| "UNIT"
@@ -201,50 +238,43 @@ export type Budget = {
 	updatedAt: Date;
 };
 
-export type BudgetCategory = {
+// ── Supplier ────────────────────────────────────────────────────
+export type Supplier = {
 	id: string;
 	eventId: string;
 	name: string;
+	category: SupplierCategory;
+	price: number | null;
+	phone: string | null;
+	email: string | null;
+	address: string | null;
+	status: SupplierStatus;
+	paymentModel: SupplierPaymentModel;
+	paymentStatus: SupplierPaymentStatus;
+	nextDueDate: Date | null;
 	description: string | null;
-	plannedAmount: number;
-	createdAt: Date;
-	updatedAt: Date;
-};
-
-export type BudgetWithCategories = Budget & {
-	categories: BudgetCategory[];
-};
-
-// ── Expense ──────────────────────────────────────────────────────
-export type Expense = {
-	id: string;
-	eventId: string;
-	budgetCategoryId: string | null;
-	vendorId: string | null;
-	inventoryItemId: string | null;
-	description: string;
-	type: ExpenseType;
-	totalAmount: number;
-	dueDate: Date | null;
-	status: ExpenseStatus;
-	paidPercentage: number;
 	notes: string | null;
-	createdBy: string;
+	categoryFields: unknown;
+	customFields: unknown;
 	createdAt: Date;
 	updatedAt: Date;
 };
 
-export type ExpenseWithRelations = Expense & {
-	vendor: Vendor | null;
-	budgetCategory: BudgetCategory | null;
-	inventoryItem: InventoryItem | null;
-	payments: Payment[];
+/** Money figures resolved by the backend finance module. */
+export type SupplierMoney = {
+	total: number;
+	paid: number;
+	pending: number;
+	percentage: number;
+	paymentStatus: SupplierPaymentStatus;
+	nextDueDate: Date | null;
+	hasInstallments: boolean;
+	isFullyPaid: boolean;
 };
 
-// ── Payment ──────────────────────────────────────────────────────
-export type Payment = {
+export type SupplierPayment = {
 	id: string;
-	expenseId: string;
+	supplierId: string;
 	amount: number;
 	paymentDate: Date;
 	method: string;
@@ -255,39 +285,64 @@ export type Payment = {
 	updatedAt: Date;
 };
 
-// ── Vendor ───────────────────────────────────────────────────────
-export type Vendor = {
+export type SupplierInstallment = {
 	id: string;
-	eventId: string;
-	name: string;
-	category: VendorCategory;
-	phone: string | null;
-	email: string | null;
-	address: string | null;
-	status: VendorStatus;
-	description: string | null;
+	supplierId: string;
+	position: number;
+	amount: number;
+	dueDate: Date;
+	paidAt: Date | null;
+	status: InstallmentStatus;
 	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 };
 
-export type VendorWithRelations = Vendor & {
-	expenses: Expense[];
-	contracts: VendorContract[];
+export type SupplierWithRelations = Supplier & {
+	payments: SupplierPayment[];
+	installments: SupplierInstallment[];
 };
 
-// ── VendorContract ───────────────────────────────────────────────
-export type VendorContract = {
+// ── Food Plan ───────────────────────────────────────────────────
+export type FoodPlan = {
 	id: string;
 	eventId: string;
-	vendorId: string;
-	number: string | null;
-	startDate: Date | null;
-	endDate: Date | null;
-	amount: number | null;
-	status: string;
-	documentId: string | null;
+	supplierId: string | null;
 	notes: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
+export type FoodPlanItem = {
+	id: string;
+	eventId: string;
+	foodPlanId: string;
+	name: string;
+	category: FoodPlanCategory;
+	quantity: number;
+	unit: FoodPlanUnit;
+	description: string | null;
+	notes: string | null;
+	status: FoodPlanStatus;
+	customFields: unknown;
+	position: number;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
+// ── Checklist ───────────────────────────────────────────────────
+export type ChecklistItem = {
+	id: string;
+	eventId: string;
+	title: string;
+	description: string | null;
+	status: ChecklistStatus;
+	position: number;
+	dueDate: Date | null;
+	supplierId: string | null;
+	inventoryItemId: string | null;
+	autoManaged: boolean;
+	completedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 };
@@ -499,18 +554,16 @@ export type InventoryItem = {
 	category: InventoryCategory;
 	plannedQuantity: number;
 	currentQuantity: number;
-	venueQuantity: number;
 	status: InventoryStatus;
 	unit: InventoryUnit;
 	unitPrice: number | null;
-	vendorId: string | null;
+	customFields: unknown;
 	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 };
 
 export type InventoryItemWithRelations = InventoryItem & {
-	vendor: Vendor | null;
 	movements: InventoryMovement[];
 };
 
@@ -526,15 +579,13 @@ export type InventoryListItem = {
 	status: InventoryStatus;
 	plannedQuantity: number;
 	currentQuantity: number;
-	venueQuantity: number;
 	remainingQuantity: number;
 	completionPercentage: number;
 	unitPrice: number | null;
 	totalValue: number;
 	completedValue: number;
 	pendingValue: number;
-	vendorId: string | null;
-	vendor: Vendor | null;
+	customFields: unknown;
 	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -582,7 +633,6 @@ export type InventoryStats = {
 	totalItems: number;
 	totalQuantity: number;
 	totalCurrent: number;
-	totalVenue: number;
 	totalRemaining: number;
 	completionPercentage: number;
 	totalValue: number;
@@ -603,9 +653,9 @@ export type Document = {
 	name: string;
 	type: DocumentType;
 	reference: string | null;
-	vendorId: string | null;
-	expenseId: string | null;
-	paymentId: string | null;
+	supplierId: string | null;
+	supplierPaymentId: string | null;
+	supplierInstallmentId: string | null;
 	status: DocumentStatus;
 	createdBy: string;
 	createdAt: Date;
@@ -613,7 +663,7 @@ export type Document = {
 };
 
 export type DocumentWithRelations = Document & {
-	vendor: Vendor | null;
+	supplier: Supplier | null;
 };
 
 // ── Notification ─────────────────────────────────────────────────
@@ -826,28 +876,36 @@ export type ScheduleStats = {
 	cancelled: number;
 };
 
-// ── Expense Stats ────────────────────────────────────────────────
-export type ExpenseStats = {
-	totalAmount: number;
-	totalPaid: number;
+// ── Budget aggregates (backend derived) ─────────────────────────
+export type BudgetTotals = {
+	totalBudget: number;
+	reserve: number;
+	available: number;
+	planned: number;
+	spent: number;
+	pending: number;
+	overdue: number;
 	remaining: number;
-	paymentRate: number;
-	paymentCount: number;
+	usagePercentage: number;
+	/** Share of the committed amount that has already been settled, 0..100. */
+	paymentPercentage: number;
+	currency: string;
 };
 
-// ── Budget Stats ─────────────────────────────────────────────────
-export type BudgetStats = {
-	plannedAmount: number;
-	reserveAmount: number;
-	totalSpent: number;
-	totalPaid: number;
-	available: number;
-	utilizationRate: number;
-	paymentRate: number;
-	categoryCount: number;
-	expenseCount: number;
-	paidExpenses: number;
-	pendingExpenses: number;
+export type BudgetStats = BudgetTotals & {
+	byCategory: BudgetBreakdownEntry[];
+	bySource: BudgetBreakdownEntry[];
+	byPaymentStatus: BudgetBreakdownEntry[];
+};
+
+export type BudgetBreakdownEntry = {
+	key: string;
+	label: string;
+	planned: number;
+	paid: number;
+	pending: number;
+	percentage: number;
+	count: number;
 };
 
 // ── API Response Types ───────────────────────────────────────────
@@ -922,25 +980,18 @@ export type CreateGuestInput = {
 	tableId?: string;
 };
 
-export type CreateVendorInput = {
+export type CreateSupplierInput = {
 	eventId: string;
 	name: string;
-	category: VendorCategory;
+	category: SupplierCategory;
+	price?: number;
 	phone?: string;
 	email?: string;
 	address?: string;
 	description?: string;
-};
-
-export type CreateExpenseInput = {
-	eventId: string;
-	description: string;
-	totalAmount: number;
-	budgetCategoryId?: string;
-	vendorId?: string;
-	dueDate?: string;
 	notes?: string;
-	inventory?: CreateInventoryItemInput;
+	customFields?: Record<string, unknown>;
+	categoryFields?: Record<string, unknown>;
 };
 
 export type CreateInventoryItemInput = {
@@ -949,11 +1000,10 @@ export type CreateInventoryItemInput = {
 	category: InventoryCategory;
 	plannedQuantity: number;
 	currentQuantity?: number;
-	venueQuantity?: number;
 	unit: InventoryUnit;
 	unitPrice?: number;
-	vendorId?: string;
 	notes?: string;
+	customFields?: Record<string, unknown>;
 };
 
 export type CreateDocumentInput = {
@@ -961,9 +1011,9 @@ export type CreateDocumentInput = {
 	name: string;
 	type: DocumentType;
 	reference?: string;
-	vendorId?: string;
-	expenseId?: string;
-	paymentId?: string;
+	supplierId?: string;
+	supplierPaymentId?: string;
+	supplierInstallmentId?: string;
 };
 
 export type CreateScheduleInput = {

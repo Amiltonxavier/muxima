@@ -12,14 +12,6 @@ export const EXPENSE_TYPE_LABELS: Record<string, string> = {
 	INCOME: "Receita",
 };
 
-export const EXPENSE_STATUS_LABELS: Record<string, string> = {
-	PLANNED: "Planeado",
-	PARTIALLY_PAID: "Parcialmente pago",
-	PAID: "Pago",
-	OVERDUE: "Atrasado",
-	CANCELLED: "Cancelado",
-};
-
 export const GUEST_TYPE_LABELS: Record<string, string> = {
 	FAMILY: "Família",
 	FRIEND: "Amigo",
@@ -44,13 +36,30 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
 	CANCELLED: "Cancelado",
 };
 
-export const VENDOR_STATUS_LABELS: Record<string, string> = {
+export const SUPPLIER_STATUS_LABELS: Record<string, string> = {
 	PROSPECT: "Prospeto",
 	CONTACTED: "Contactado",
 	NEGOTIATING: "Em negociação",
-	CONTRACTED: "Contratado",
+	CONFIRMED: "Confirmado",
 	COMPLETED: "Concluído",
 	CANCELLED: "Cancelado",
+};
+
+/** Payment state of a supplier, resolved by the API. */
+export const SUPPLIER_PAYMENT_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Por pagar",
+	PAID: "Pago",
+	INSTALLMENTS: "Em parcelas",
+	OVERDUE: "Em atraso",
+	CANCELLED: "Cancelado",
+};
+
+/** State of a single installment, resolved by the API. */
+export const INSTALLMENT_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Por pagar",
+	PAID: "Paga",
+	OVERDUE: "Em atraso",
+	CANCELLED: "Cancelada",
 };
 
 export const MEMBER_ROLE_LABELS: Record<string, string> = {
@@ -70,19 +79,29 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 	OTHER: "Outro",
 };
 
-export const VENDOR_CATEGORY_LABELS: Record<string, string> = {
+export const SUPPLIER_CATEGORY_LABELS: Record<string, string> = {
 	VENUE: "Salão",
 	DECORATION: "Decoração",
-	MUSIC: "Música",
-	PHOTOGRAPHY: "Fotografia",
-	VIDEO: "Vídeo",
+	FLORIST: "Flores",
 	CATERING: "Catering",
 	CAKE: "Bolo",
-	DRINKS: "Bebidas",
-	TRANSPORT: "Transporte",
+	SWEETS_AND_SAVOURIES: "Doces e salgados",
+	PHOTOGRAPHER: "Fotografia",
+	VIDEOGRAPHER: "Vídeo",
+	DJ: "DJ",
+	BAND: "Banda",
+	MUSIC: "Música",
+	ENTERTAINMENT: "Animação",
+	TRANSPORT: "Transportes",
 	BEAUTY: "Beleza",
+	BRIDE_ATTIRE: "Vestido da noiva",
+	GROOM_ATTIRE: "Traje do noivo",
+	RINGS: "Alianças",
+	WEDDING_PLANNER: "Planeamento",
+	OFFICIANT: "Celebrante",
+	FAVOURS: "Lembranças",
+	ACCOMMODATION: "Alojamento",
 	SECURITY: "Segurança",
-	ENTERTAINMENT: "Entretenimento",
 	OTHER: "Outro",
 };
 
@@ -108,9 +127,10 @@ export const INVENTORY_STATUS_LABELS: Record<string, string> = {
 
 export const INVENTORY_CATEGORY_LABELS: Record<string, string> = {
 	DRINK: "Bebidas",
-	FOOD: "Alimentação",
-	CAKE: "Bolos",
-	DECORATION: "Decoração",
+	MATERIAL: "Materiais",
+	EQUIPMENT: "Equipamento",
+	FURNITURE: "Mobiliário",
+	LINEN: "Loiça e têxteis",
 	OTHER: "Outros",
 };
 
@@ -204,7 +224,6 @@ export function getStatusColor(status: string): string {
 		PROSPECT: "bg-neutral-100 text-neutral-700",
 		CONTACTED: "bg-blue-50 text-blue-700",
 		NEGOTIATING: "bg-amber-50 text-amber-700",
-		CONTRACTED: "bg-green-50 text-green-700",
 		NOT_STARTED: "bg-neutral-100 text-neutral-700",
 		READY: "bg-emerald-50 text-emerald-700",
 		PRIVATE: "bg-neutral-100 text-neutral-700",
@@ -217,10 +236,11 @@ export function getStatusLabel(
 	status: string,
 	type:
 		| "event"
-		| "expense"
 		| "guest"
 		| "task"
-		| "vendor"
+		| "supplier"
+		| "supplierPayment"
+		| "installment"
 		| "role"
 		| "document"
 		| "inventory"
@@ -228,10 +248,11 @@ export function getStatusLabel(
 ): string {
 	const labels: Record<string, Record<string, string>> = {
 		event: EVENT_STATUS_LABELS,
-		expense: EXPENSE_STATUS_LABELS,
 		guest: GUEST_STATUS_LABELS,
 		task: TASK_STATUS_LABELS,
-		vendor: VENDOR_STATUS_LABELS,
+		supplier: SUPPLIER_STATUS_LABELS,
+		supplierPayment: SUPPLIER_PAYMENT_STATUS_LABELS,
+		installment: INSTALLMENT_STATUS_LABELS,
 		role: MEMBER_ROLE_LABELS,
 		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
 		inventory: INVENTORY_STATUS_LABELS,

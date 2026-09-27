@@ -5,7 +5,7 @@ export type DocumentFilterParams = {
 	search?: string;
 	type?: DocumentType;
 	status?: DocumentStatus;
-	vendorId?: string;
+	supplierId?: string;
 };
 
 function buildDocumentWhere(
@@ -28,8 +28,8 @@ function buildDocumentWhere(
 	if (filters?.status) {
 		conditions.push({ status: filters.status });
 	}
-	if (filters?.vendorId) {
-		conditions.push({ vendorId: filters.vendorId });
+	if (filters?.supplierId) {
+		conditions.push({ supplierId: filters.supplierId });
 	}
 
 	return { AND: conditions };
@@ -44,7 +44,11 @@ export const DocumentRepository = {
 		const skip = (pagination.page - 1) * pagination.limit;
 		return db.document.findMany({
 			where: buildDocumentWhere(eventId, filters),
-			include: { vendor: true, expense: true, payment: true },
+			include: {
+				supplier: true,
+				supplierPayment: true,
+				supplierInstallment: true,
+			},
 			orderBy: { createdAt: "desc" },
 			skip,
 			take: pagination.limit,
@@ -58,7 +62,11 @@ export const DocumentRepository = {
 	findById(id: string) {
 		return db.document.findUnique({
 			where: { id },
-			include: { vendor: true, expense: true, payment: true },
+			include: {
+				supplier: true,
+				supplierPayment: true,
+				supplierInstallment: true,
+			},
 		});
 	},
 
@@ -67,9 +75,9 @@ export const DocumentRepository = {
 		name: string;
 		type: DocumentType;
 		reference?: string;
-		vendorId?: string;
-		expenseId?: string;
-		paymentId?: string;
+		supplierId?: string;
+		supplierPaymentId?: string;
+		supplierInstallmentId?: string;
 		createdBy: string;
 	}) {
 		return db.document.create({ data });
@@ -81,9 +89,9 @@ export const DocumentRepository = {
 			name: string;
 			type: "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
 			reference: string;
-			vendorId: string;
-			expenseId: string;
-			paymentId: string;
+			supplierId: string;
+			supplierPaymentId: string;
+			supplierInstallmentId: string;
 			status: "ACTIVE" | "ARCHIVED" | "DELETED";
 		}>,
 	) {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { calculateBudget } from "../calculate-budget";
 import {
 	calculateGuestCount,
 	calculateGuestPercentage,
@@ -93,42 +92,6 @@ describe("formatPhoneWithCountryCode", () => {
 
 	it("does not double-add country code", () => {
 		expect(formatPhoneWithCountryCode("244912345678")).toBe("+244 912345678");
-	});
-});
-
-describe("calculateBudget", () => {
-	it("calculates budget with no expenses", () => {
-		const result = calculateBudget(5000000, []);
-		expect(result.totalPlanned).toBe(5000000);
-		expect(result.totalContracted).toBe(0);
-		expect(result.totalPaid).toBe(0);
-		expect(result.totalPending).toBe(0);
-		expect(result.utilizationPercentage).toBe(0);
-		expect(result.isOverBudget).toBe(false);
-	});
-
-	it("calculates budget with mixed expenses", () => {
-		const expenses = [
-			{ totalAmount: 1000000, status: "PAID" },
-			{ totalAmount: 500000, status: "PLANNED" },
-			{ totalAmount: 300000, status: "OVERDUE" },
-		];
-		const result = calculateBudget(5000000, expenses);
-		expect(result.totalContracted).toBe(1800000);
-		expect(result.totalPaid).toBe(1000000);
-		expect(result.totalPending).toBe(800000);
-		expect(result.totalOverdue).toBe(300000);
-		expect(result.utilizationPercentage).toBe(36);
-		expect(result.isOverBudget).toBe(false);
-	});
-
-	it("detects over budget", () => {
-		const expenses = [
-			{ totalAmount: 3000000, status: "PAID" },
-			{ totalAmount: 3000000, status: "PLANNED" },
-		];
-		const result = calculateBudget(5000000, expenses);
-		expect(result.isOverBudget).toBe(true);
 	});
 });
 

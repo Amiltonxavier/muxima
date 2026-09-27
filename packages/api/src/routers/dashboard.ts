@@ -1,13 +1,15 @@
 import db from "@muxima/db";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { getBudgetSnapshot } from "../modules/budget/repository";
 import { requireEventAccess } from "../shared/auth/event-access";
+import { centsToUnits } from "../shared/finance/money";
 
 export const dashboardRouter = {
 	getGlobalStats: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
 
-		const [events, guests, invitations, vendors, budgets, members] =
+		const [events, guests, invitations, suppliers, budgets, members] =
 			await Promise.all([
 				db.event.count({ where: { ownerId: userId } }),
 				db.guest.count({
@@ -16,7 +18,7 @@ export const dashboardRouter = {
 				db.guestInvitation.count({
 					where: { event: { ownerId: userId } },
 				}),
-				db.vendor.count({
+				db.supplier.count({
 					where: { event: { ownerId: userId } },
 				}),
 				db.budget.count({
@@ -31,7 +33,7 @@ export const dashboardRouter = {
 			events,
 			guests,
 			invitations,
-			vendors,
+			suppliers,
 			budgets,
 			members,
 		};
@@ -67,36 +69,38 @@ export const dashboardRouter = {
 			};
 		}),
 
+	/**
+	 * Budget chart data. Every figure comes from the shared budget aggregator,
+	 * so the dashboard can never disagree with the budget page.
+	 */
 	getBudgetChart: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-
-			const budget = await db.budget.findUnique({
-				where: { eventId: input.eventId },
-			});
-
-			const expenses = await db.expense.findMany({
-				where: { eventId: input.eventId },
-				select: { totalAmount: true, status: true },
-			});
-
-			const totalPlanned = Number(budget?.plannedAmount ?? 0);
-			const reserveAmount = Number(budget?.reserveAmount ?? 0);
-			const totalSpent = expenses.reduce(
-				(sum, e) => sum + Number(e.totalAmount),
-				0,
-			);
-			const totalReserved = expenses
-				.filter((e) => e.status === "PLANNED")
-				.reduce((sum, e) => sum + Number(e.totalAmount), 0);
+			const { totals, breakdown } = await getBudgetSnapshot(input.eventId);
 
 			return {
-				totalBudget: totalPlanned,
-				reserve: reserveAmount,
-				planned: totalReserved,
-				spent: totalSpent,
-				available: totalPlanned - totalSpent,
+				totalBudget: centsToUnits(totals.totalBudget),
+				reserve: centsToUnits(totals.reserve),
+				available: centsToUnits(totals.available),
+				planned: centsToUnits(totals.planned),
+				spent: centsToUnits(totals.spent),
+				pending: centsToUnits(totals.pending),
+				overdue: centsToUnits(totals.overdue),
+				usagePercentage: totals.usagePercentage,
+				currency: totals.currency,
+				bySource: breakdown.bySource.map((entry) => ({
+					...entry,
+					planned: centsToUnits(entry.planned),
+					paid: centsToUnits(entry.paid),
+					pending: centsToUnits(entry.pending),
+				})),
+				byCategory: breakdown.byCategory.map((entry) => ({
+					...entry,
+					planned: centsToUnits(entry.planned),
+					paid: centsToUnits(entry.paid),
+					pending: centsToUnits(entry.pending),
+				})),
 			};
 		}),
 };

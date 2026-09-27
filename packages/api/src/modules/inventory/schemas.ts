@@ -2,9 +2,10 @@ import { z } from "zod";
 
 export const INVENTORY_CATEGORIES = [
 	"DRINK",
-	"FOOD",
-	"CAKE",
-	"DECORATION",
+	"MATERIAL",
+	"EQUIPMENT",
+	"FURNITURE",
+	"LINEN",
 	"OTHER",
 ] as const;
 
@@ -42,25 +43,16 @@ const inventoryCoreFields = {
 		.positive("Quantidade planeada deve ser maior que zero"),
 	unit: z.enum(INVENTORY_UNITS),
 	unitPrice: z.number().min(0).optional(),
-	vendorId: z.string().uuid().optional(),
 	notes: z.string().optional(),
+	customFields: z.record(z.string(), z.unknown()).optional(),
 };
 
 export const createInventoryItemSchema = z
 	.object({
 		...inventoryCoreFields,
 		currentQuantity: z.number().min(0).optional().default(0),
-		venueQuantity: z.number().min(0).optional().default(0),
 	})
 	.superRefine((value, ctx) => {
-		if (value.venueQuantity > value.plannedQuantity) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["venueQuantity"],
-				message:
-					"A quantidade destinada ao salão não pode superar a quantidade planeada",
-			});
-		}
 		if (value.currentQuantity > value.plannedQuantity) {
 			ctx.addIssue({
 				code: "custom",
@@ -78,23 +70,8 @@ export const updateInventoryItemSchema = z
 	.object({
 		...inventoryCoreFields,
 		currentQuantity: z.number().min(0).optional(),
-		venueQuantity: z.number().min(0).optional(),
 	})
-	.partial()
-	.superRefine((value, ctx) => {
-		if (
-			value.venueQuantity !== undefined &&
-			value.plannedQuantity !== undefined &&
-			value.venueQuantity > value.plannedQuantity
-		) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["venueQuantity"],
-				message:
-					"A quantidade destinada ao salão não pode superar a quantidade planeada",
-			});
-		}
-	});
+	.partial();
 
 export type UpdateInventoryItemInput = z.infer<
 	typeof updateInventoryItemSchema

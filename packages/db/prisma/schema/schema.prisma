@@ -1,8 +1,8 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated"
+  provider     = "prisma-client"
+  output       = "../generated"
   moduleFormat = "esm"
-  runtime = "nodejs"
+  runtime      = "nodejs"
 }
 
 datasource db {
@@ -58,19 +58,6 @@ enum InvitationStatus {
   CANCELLED
 }
 
-enum ExpenseType {
-  EXPENSE
-  INCOME
-}
-
-enum ExpenseStatus {
-  PLANNED
-  PARTIALLY_PAID
-  PAID
-  OVERDUE
-  CANCELLED
-}
-
 enum PaymentMethod {
   CASH
   BANK_TRANSFER
@@ -80,34 +67,97 @@ enum PaymentMethod {
   OTHER
 }
 
-enum VendorCategory {
+enum SupplierCategory {
   VENUE
-  DECORATION
-  MUSIC
-  PHOTOGRAPHY
-  VIDEO
   CATERING
   CAKE
-  DRINKS
+  SWEETS_AND_SAVOURIES
+  DECORATION
+  FLORIST
+  PHOTOGRAPHER
+  VIDEOGRAPHER
+  DJ
+  BAND
+  MUSIC
+  ENTERTAINMENT
   TRANSPORT
   BEAUTY
+  BRIDE_ATTIRE
+  GROOM_ATTIRE
+  RINGS
+  WEDDING_PLANNER
+  OFFICIANT
+  FAVOURS
+  ACCOMMODATION
   SECURITY
-  ENTERTAINMENT
   OTHER
 }
 
-enum VendorStatus {
+enum SupplierStatus {
   PROSPECT
   CONTACTED
   NEGOTIATING
-  CONTRACTED
+  CONFIRMED
   COMPLETED
   CANCELLED
 }
 
-enum ContractStatus {
-  DRAFT
-  ACTIVE
+/// Denormalised mirror of the value computed by the backend resolver.
+/// Never trusted on read: the API always recomputes from price +
+/// installments + payments.
+enum SupplierPaymentStatus {
+  PENDING
+  PAID
+  INSTALLMENTS
+  OVERDUE
+  CANCELLED
+}
+
+enum SupplierPaymentModel {
+  FULL
+  INSTALLMENTS
+  CUSTOM
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum FoodPlanCategory {
+  STARTER
+  MAIN_COURSE
+  SIDE_DISH
+  DESSERT
+  FRUIT
+  OTHER
+}
+
+enum FoodPlanUnit {
+  UNIT
+  PLATE
+  BOWL
+  PORTION
+  GRAM
+  KILOGRAM
+  LITER
+  GLASS
+  BOTTLE
+  PACKAGE
+  OTHER
+}
+
+enum FoodPlanStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ChecklistStatus {
+  PENDING
+  IN_PROGRESS
   COMPLETED
   CANCELLED
 }
@@ -188,9 +238,10 @@ enum ScheduleStatus {
 
 enum InventoryCategory {
   DRINK
-  FOOD
-  CAKE
-  DECORATION
+  MATERIAL
+  EQUIPMENT
+  FURNITURE
+  LINEN
   OTHER
 }
 
@@ -271,47 +322,47 @@ enum DedicationStatus {
 // ============================================================
 
 model Event {
-  id          String      @id @default(uuid())
-  ownerId     String
-  name        String
-  type        EventType
-  status      EventStatus @default(DRAFT)
-  eventDate   DateTime?
-  startTime   String?
-  endTime     String?
-  venueName   String?
-  address     String?
-  province    String?
-  municipality String?
-  neighborhood String?
-  reference   String?
-  latitude    Float?
-  longitude   Float?
-  capacity    Int?
-  limitGuestCapacity Boolean @default(false)
-  currency    String      @default("AOA")
-  description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                 String      @id @default(uuid())
+  ownerId            String
+  name               String
+  type               EventType
+  status             EventStatus @default(DRAFT)
+  eventDate          DateTime?
+  startTime          String?
+  endTime            String?
+  venueName          String?
+  address            String?
+  province           String?
+  municipality       String?
+  neighborhood       String?
+  reference          String?
+  latitude           Float?
+  longitude          Float?
+  capacity           Int?
+  limitGuestCapacity Boolean     @default(false)
+  currency           String      @default("AOA")
+  description        String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  owner           User              @relation(fields: [ownerId], references: [id])
-  members         EventMember[]
-  invitations     EventInvitation[]
-  budget          Budget?
-  budgetCategories BudgetCategory[]
-  expenses        Expense[]
-  vendors         Vendor[]
-  vendorContracts VendorContract[]
-  guests          Guest[]
+  owner            User              @relation(fields: [ownerId], references: [id])
+  members          EventMember[]
+  invitations      EventInvitation[]
+  budget           Budget?
+  suppliers        Supplier[]
+  foodPlans        FoodPlan[]
+  foodPlanItems    FoodPlanItem[]
+  checklistItems   ChecklistItem[]
+  guests           Guest[]
   guestInvitations GuestInvitation[]
-  tables          Table[]
-  tasks           Task[]
-  schedules       Schedule[]
-  inventoryItems  InventoryItem[]
-  documents       Document[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  dedications     Dedication[]
+  tables           Table[]
+  tasks            Task[]
+  schedules        Schedule[]
+  inventoryItems   InventoryItem[]
+  documents        Document[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  dedications      Dedication[]
 
   @@index([ownerId])
   @@map("event")
@@ -327,8 +378,8 @@ model EventMember {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id])
+  event           Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id])
   dedicationViews DedicationViewer[]
 
   @@unique([eventId, userId])
@@ -338,20 +389,20 @@ model EventMember {
 }
 
 model EventInvitation {
-  id         String             @id @default(uuid())
+  id         String           @id @default(uuid())
   eventId    String
   invitedBy  String
   email      String?
   phone      String?
   role       MemberRole
   token      String
-  status     InvitationStatus   @default(PENDING)
+  status     InvitationStatus @default(PENDING)
   expiresAt  DateTime
   acceptedAt DateTime?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
-  event  Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   inviter User  @relation(fields: [invitedBy], references: [id])
 
   @@index([eventId])
@@ -360,71 +411,63 @@ model EventInvitation {
   @@map("event_invitation")
 }
 
+/// Planning target for the event. Every derived figure (totalBudget,
+/// totalSpent, totalPaid, totalPending, totalOverdue, breakdown, analytics)
+/// is computed by the API from Inventory + Suppliers; nothing is stored here.
 model Budget {
-  id             String   @id @default(uuid())
-  eventId        String   @unique
-  plannedAmount  Decimal
-  reserveAmount  Decimal? @default(0)
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(uuid())
+  eventId       String   @unique
+  plannedAmount Decimal  @default(0)
+  reserveAmount Decimal? @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@map("budget")
 }
 
-model BudgetCategory {
-  id             String   @id @default(uuid())
+model Supplier {
+  id             String                @id @default(uuid())
   eventId        String
   name           String
+  category       SupplierCategory
+  /// Agreed price. Nullable so a supplier can exist before negotiation ends.
+  price          Decimal?
+  phone          String?
+  email          String?
+  address        String?
+  status         SupplierStatus        @default(PROSPECT)
+  paymentModel   SupplierPaymentModel  @default(FULL)
+  paymentStatus  SupplierPaymentStatus @default(PENDING)
+  /// Denormalised: sum of installment due dates before the nearest one.
+  nextDueDate    DateTime?
   description    String?
-  plannedAmount  Decimal  @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  notes          String?
+  /// Category-specific fields, validated per-category by the API.
+  categoryFields Json?
+  /// Free-form extra fields defined by the user.
+  customFields   Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
-  event    Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  expenses Expense[]
-
-  @@index([eventId])
-  @@map("budget_category")
-}
-
-model Expense {
-  id               String        @id @default(uuid())
-  eventId          String
-  budgetCategoryId String?
-  vendorId         String?
-  description      String
-  type             ExpenseType   @default(EXPENSE)
-  totalAmount      Decimal
-  dueDate          DateTime?
-  status           ExpenseStatus @default(PLANNED)
-  paidPercentage   Float         @default(0)
-  notes            String?
-  createdBy        String
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  inventoryItemId  String?
-
-  event           Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  budgetCategory  BudgetCategory? @relation(fields: [budgetCategoryId], references: [id])
-  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
-  inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  payments        Payment[]
-  documents       Document[]
-  creator         User            @relation(fields: [createdBy], references: [id])
+  event          Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  payments       SupplierPayment[]
+  installments   SupplierInstallment[]
+  documents      Document[]
+  foodPlans      FoodPlan[]
+  checklistItems ChecklistItem[]
 
   @@index([eventId])
-  @@index([budgetCategoryId])
-  @@index([vendorId])
-  @@index([createdBy])
-  @@map("expense")
+  @@index([eventId, status])
+  @@index([eventId, category])
+  @@map("supplier")
 }
 
-model Payment {
+model SupplierPayment {
   id          String        @id @default(uuid())
-  expenseId   String
+  supplierId  String
   amount      Decimal
   paymentDate DateTime
   method      PaymentMethod
@@ -434,59 +477,103 @@ model Payment {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  creator  User     @relation(fields: [createdBy], references: [id])
+  supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  creator   User       @relation(fields: [createdBy], references: [id])
   documents Document[]
 
-  @@index([expenseId])
+  @@index([supplierId])
   @@index([createdBy])
-  @@map("payment")
+  @@map("supplier_payment")
 }
 
-model Vendor {
-  id          String         @id @default(uuid())
-  eventId     String
-  name        String
-  category    VendorCategory
-  phone       String?
-  email       String?
-  address     String?
-  status      VendorStatus   @default(PROSPECT)
-  description String?
-  notes       String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+model SupplierInstallment {
+  id         String            @id @default(uuid())
+  supplierId String
+  position   Int               @default(1)
+  amount     Decimal
+  dueDate    DateTime
+  paidAt     DateTime?
+  status     InstallmentStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
-  event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  expenses  Expense[]
-  contracts VendorContract[]
-  inventoryItems InventoryItem[]
+  supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   documents Document[]
 
-  @@index([eventId])
-  @@map("vendor")
+  @@unique([supplierId, position])
+  @@index([supplierId])
+  @@map("supplier_installment")
 }
 
-model VendorContract {
-  id         String         @id @default(uuid())
-  eventId    String
-  vendorId   String
-  number     String?
-  startDate  DateTime?
-  endDate    DateTime?
-  amount     Decimal?
-  status     ContractStatus @default(DRAFT)
-  documentId String?
+/// One food plan per event. A single supplier may be attached to it, and
+/// only one — the API rejects a second, different supplier.
+model FoodPlan {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  supplierId String?
   notes      String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  event    Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items    FoodPlanItem[]
+
+  @@index([supplierId])
+  @@map("food_plan")
+}
+
+/// No prices here by design: catering/sweets/cake money lives on Supplier.
+model FoodPlanItem {
+  id           String           @id @default(uuid())
+  eventId      String
+  foodPlanId   String
+  name         String
+  category     FoodPlanCategory
+  quantity     Decimal          @default(1)
+  unit         FoodPlanUnit     @default(PORTION)
+  description  String?
+  notes        String?
+  status       FoodPlanStatus   @default(PENDING)
+  customFields Json?
+  position     Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  foodPlan FoodPlan @relation(fields: [foodPlanId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
-  @@index([vendorId])
-  @@map("vendor_contract")
+  @@index([foodPlanId])
+  @@map("food_plan_item")
+}
+
+model ChecklistItem {
+  id              String          @id @default(uuid())
+  eventId         String
+  title           String
+  description     String?
+  status          ChecklistStatus @default(PENDING)
+  position        Int             @default(0)
+  dueDate         DateTime?
+  supplierId      String?
+  inventoryItemId String?
+  /// True when the status is maintained by the API from the linked
+  /// supplier/inventory state rather than by a user action.
+  autoManaged     Boolean         @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([supplierId])
+  @@index([inventoryItemId])
+  @@map("checklist_item")
 }
 
 model Guest {
@@ -503,9 +590,9 @@ model Guest {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  event       Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  companions  GuestCompanion[]
-  tableGuests TableGuest[]
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  companions       GuestCompanion[]
+  tableGuests      TableGuest[]
   invitationGuests InvitationGuest[]
 
   @@index([eventId])
@@ -513,12 +600,12 @@ model Guest {
 }
 
 model GuestCompanion {
-  id        String            @id @default(uuid())
+  id        String          @id @default(uuid())
   guestId   String
   name      String
-  status    CompanionStatus   @default(PENDING)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  status    CompanionStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
 
@@ -527,23 +614,23 @@ model GuestCompanion {
 }
 
 model GuestInvitation {
-  id         String                  @id @default(uuid())
-  eventId    String
-  code       String
-  url        String?
-  status      GuestInvitationStatus   @default(CREATED)
+  id          String                @id @default(uuid())
+  eventId     String
+  code        String
+  url         String?
+  status      GuestInvitationStatus @default(CREATED)
   sentAt      DateTime?
   openedAt    DateTime?
   respondedAt DateTime?
   publishedAt DateTime?
   response    String?
   qrCode      String?
-  rsvpStatus  RsvpStatus             @default(PENDING)
+  rsvpStatus  RsvpStatus            @default(PENDING)
   expiresAt   DateTime?
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 
-  event  Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event  Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   guests InvitationGuest[]
 
   @@unique([code])
@@ -552,10 +639,10 @@ model GuestInvitation {
 }
 
 model InvitationGuest {
-  id              String   @id @default(uuid())
-  invitationId    String
-  guestId         String
-  createdAt       DateTime @default(now())
+  id           String   @id @default(uuid())
+  invitationId String
+  guestId      String
+  createdAt    DateTime @default(now())
 
   invitation GuestInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
   guest      Guest           @relation(fields: [guestId], references: [id], onDelete: Cascade)
@@ -616,10 +703,10 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  event          Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  assignee       User?  @relation("TaskAssignee", fields: [assignedTo], references: [id])
-  completer      User?  @relation("TaskCompleter", fields: [completedBy], references: [id])
-  creator        User   @relation("TaskCreator", fields: [createdBy], references: [id])
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignee  User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  completer User? @relation("TaskCompleter", fields: [completedBy], references: [id])
+  creator   User  @relation("TaskCreator", fields: [createdBy], references: [id])
 
   @@index([eventId])
   @@index([assignedTo])
@@ -647,28 +734,26 @@ model Schedule {
 }
 
 model InventoryItem {
-  id               String            @id @default(uuid())
-  eventId          String
-  name             String
-  category         InventoryCategory
-  plannedQuantity  Decimal
-  currentQuantity  Decimal           @default(0)
-  venueQuantity    Decimal           @default(0)
-  status           InventoryStatus   @default(PENDING)
-  unit             InventoryUnit
-  unitPrice        Decimal?
-  vendorId         String?
-  notes            String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  eventId         String
+  name            String
+  category        InventoryCategory
+  plannedQuantity Decimal
+  currentQuantity Decimal           @default(0)
+  status          InventoryStatus   @default(PENDING)
+  unit            InventoryUnit
+  unitPrice       Decimal?
+  notes           String?
+  customFields    Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  event     Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  vendor    Vendor?            @relation(fields: [vendorId], references: [id])
-  movements InventoryMovement[]
-  expenses  Expense[]
+  event          Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  movements      InventoryMovement[]
+  checklistItems ChecklistItem[]
 
   @@index([eventId])
-  @@index([vendorId])
+  @@index([eventId, category])
   @@map("inventory_item")
 }
 
@@ -692,29 +777,32 @@ model InventoryMovement {
 }
 
 model Document {
-  id         String         @id @default(uuid())
-  eventId    String
-  name       String
-  type       DocumentType
-  reference  String?
-  vendorId   String?
-  expenseId  String?
-  paymentId  String?
-  status     DocumentStatus @default(ACTIVE)
-  createdBy  String
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id                    String         @id @default(uuid())
+  eventId               String
+  name                  String
+  type                  DocumentType
+  reference             String?
+  /// Where the file lives. The API only accepts the formats below.
+  url                   String?
+  mimeType              String?
+  supplierId            String?
+  supplierPaymentId     String?
+  supplierInstallmentId String?
+  status                DocumentStatus @default(ACTIVE)
+  createdBy             String
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  vendor  Vendor?  @relation(fields: [vendorId], references: [id])
-  expense Expense? @relation(fields: [expenseId], references: [id])
-  payment Payment? @relation(fields: [paymentId], references: [id])
-  creator User     @relation(fields: [createdBy], references: [id])
+  event               Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier            Supplier?            @relation(fields: [supplierId], references: [id])
+  supplierPayment     SupplierPayment?     @relation(fields: [supplierPaymentId], references: [id])
+  supplierInstallment SupplierInstallment? @relation(fields: [supplierInstallmentId], references: [id])
+  creator             User                 @relation(fields: [createdBy], references: [id])
 
   @@index([eventId])
-  @@index([vendorId])
-  @@index([expenseId])
-  @@index([paymentId])
+  @@index([supplierId])
+  @@index([supplierPaymentId])
+  @@index([supplierInstallmentId])
   @@index([createdBy])
   @@map("document")
 }

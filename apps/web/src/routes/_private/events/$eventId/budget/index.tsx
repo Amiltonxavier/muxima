@@ -1,11 +1,11 @@
-import type {
-	InventoryCategory,
-	InventoryUnit,
-} from "@muxima/api/shared/types/entities";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import { Card, CardContent, CardHeader } from "@muxima/ui/components/card";
-import { Checkbox } from "@muxima/ui/components/checkbox";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@muxima/ui/components/card";
 import {
 	Dialog,
 	DialogContent,
@@ -14,9 +14,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@muxima/ui/components/dialog";
-import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
-import { Pagination } from "@muxima/ui/components/pagination";
 import { Progress } from "@muxima/ui/components/progress";
 import {
 	Select,
@@ -40,10 +38,9 @@ import {
 	TabsTrigger,
 } from "@muxima/ui/components/tabs";
 import { Textarea } from "@muxima/ui/components/textarea";
-import { useForm, useStore } from "@tanstack/react-form";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { ChartColumn, Eye, List, Pencil, Plus, Trash2 } from "lucide-react";
+import { useForm } from "@tanstack/react-form";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ChartColumn, ExternalLink, List, Pencil, Target } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
@@ -51,145 +48,149 @@ import { CurrencyInput } from "@/shared/components/currency-input";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
+	type BudgetSource,
 	useBudget,
-	useCreateExpense,
-	useDeleteExpense,
-	useExpenseStats,
-	useExpenses,
-	useUpdateExpense,
-	useUpsertBudget,
+	useBudgetLines,
+	useBudgetSummary,
+	useUpdateBudgetTarget,
 } from "@/shared/queries/budget-queries";
-import { useVendors } from "@/shared/queries/vendor-queries";
-import { type ExpenseInput, expenseSchema } from "@/utils/budget-schemas";
 import { formatCurrency } from "@/utils/format-currency";
-import { formatDate } from "@/utils/format-date";
-import {
-	type InventoryItemInput,
-	inventoryItemSchema,
-} from "@/utils/inventory-schemas";
-import { orpc } from "@/utils/orpc";
-import {
-	EXPENSE_STATUS_LABELS,
-	getStatusColor,
-	getStatusLabel,
-	INVENTORY_CATEGORY_LABELS,
-	INVENTORY_UNIT_LABELS,
-	toSelectItems,
-} from "@/utils/status-helpers";
 import { BudgetAnalytics } from "./-components/budget-analytics";
 
 export const Route = createFileRoute("/_private/events/$eventId/budget/")({
 	component: BudgetPage,
 });
 
-type ExpenseStatusValue =
-	| "PLANNED"
-	| "PARTIALLY_PAID"
-	| "PAID"
-	| "OVERDUE"
-	| "CANCELLED";
-
-type ExpenseListItem = NonNullable<
-	ReturnType<typeof useExpenses>["data"]
->["data"][number];
-
-type InventoryInitialValues = {
-	id: string;
-	name: string;
-	category: InventoryCategory;
-	unit: InventoryUnit;
-	plannedQuantity: number;
-	currentQuantity: number;
-	venueQuantity: number;
-	unitPrice: number;
+const SOURCE_LABELS: Record<BudgetSource, string> = {
+	INVENTORY: "Inventário",
+	SUPPLIER: "Fornecedores",
 };
 
-type ExpenseDialogSubmitValues = ExpenseInput & {
-	vendorId?: string;
-	status?: ExpenseStatusValue;
-	isInventoryItem: boolean;
-	inventory?: InventoryItemInput;
-};
-
+/**
+ * The budget is a read model: the only thing a user can write here is the
+ * planning target. Every total, percentage and breakdown below comes from
+ * `budget.getByEventId` / `budget.getSummary`, computed by the API from the
+ * Inventory and the Suppliers. Money rows are edited where they live, so each
+ * line links to its own screen.
+ */
 function BudgetPage() {
 	const { eventId } = Route.useParams();
 
-	const [expensePage, setExpensePage] = useState(1);
-	const [expenseLimit, setExpenseLimit] = useState(20);
+	const [source, setSource] = useState<BudgetSource | undefined>(undefined);
+	const [showTargetDialog, setShowTargetDialog] = useState(false);
 
 	const budgetQuery = useBudget(eventId);
-	const expensesQuery = useExpenses(eventId, {
-		page: expensePage,
-		limit: expenseLimit,
-	});
-	const vendorsQuery = useVendors(eventId, { page: 1, limit: 50 });
-	const budgetStatsQuery = useQuery(
-		orpc.budget.getStats.queryOptions({ input: { eventId } }),
-	);
-	const createExpense = useCreateExpense();
-	const updateExpense = useUpdateExpense();
-	const deleteExpense = useDeleteExpense();
-	const upsertBudget = useUpsertBudget();
-
-	const vendors = vendorsQuery.data?.data ?? [];
-
-	const [showCreateExpenseDialog, setShowCreateExpenseDialog] = useState(false);
-	const [showEditBudgetDialog, setShowEditBudgetDialog] = useState(false);
-	const [editingExpense, setEditingExpense] = useState<ExpenseListItem | null>(
-		null,
-	);
-	const [viewingExpense, setViewingExpense] = useState<ExpenseListItem | null>(
-		null,
-	);
-	const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
-		null,
-	);
-	const [activeTab, setActiveTab] = useState<string>("lista");
+	const summaryQuery = useBudgetSummary(eventId);
+	const linesQuery = useBudgetLines(eventId, source);
+	const updateTarget = useUpdateBudgetTarget();
 
 	const budget = budgetQuery.data;
-	const expenses = expensesQuery.data?.data ?? [];
-	const expensesMeta = expensesQuery.data?.meta;
-	const budgetStats = budgetStatsQuery.data;
+	const totals = summaryQuery.data?.totals;
+	const lines = linesQuery.data?.data ?? [];
 
-	const plannedAmount =
-		budgetStats?.plannedAmount ?? Number(budget?.plannedAmount ?? 0);
-	const totalExpenses = budgetStats?.totalSpent ?? 0;
-	const remaining = budgetStats?.available ?? 0;
+	const isOverBudget = (totals?.remaining ?? 0) < 0;
 
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
-			<div className="flex items-center justify-between">
+
+			<div className="flex items-center justify-between gap-4">
 				<div>
 					<h1 className="font-semibold text-2xl">Orçamento</h1>
-					{budget && (
-						<p className="text-muted-foreground text-sm">
-							{budget.notes ? budget.notes : "Orçamento definido"}
-						</p>
-					)}
+					<p className="text-muted-foreground text-sm">
+						Os totais são calculados a partir do inventário e dos fornecedores.
+						Aqui só define a meta.
+					</p>
 				</div>
-				<div className="flex gap-2">
-					{budget && (
-						<Button
-							variant="outline"
-							onClick={() => setShowEditBudgetDialog(true)}
-						>
-							<Pencil className="mr-2 h-4 w-4" />
-							Editar orçamento
-						</Button>
-					)}
-					<Button onClick={() => setShowCreateExpenseDialog(true)}>
-						<Plus className="mr-2 h-4 w-4" />
-						Adicionar despesa
-					</Button>
-				</div>
+				<Button
+					variant={budget ? "outline" : "default"}
+					onClick={() => setShowTargetDialog(true)}
+				>
+					<Pencil className="mr-2 h-4 w-4" />
+					{budget ? "Editar meta" : "Definir meta"}
+				</Button>
 			</div>
 
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+			{summaryQuery.isLoading ? (
+				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					{["card-1", "card-2", "card-3", "card-4"].map((id) => (
+						<Card key={id}>
+							<CardHeader>
+								<div className="h-4 w-20 animate-pulse rounded bg-muted" />
+							</CardHeader>
+							<CardContent>
+								<div className="h-8 w-28 animate-pulse rounded bg-muted" />
+							</CardContent>
+						</Card>
+					))}
+				</div>
+			) : (
+				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					<StatsCard
+						title="Meta"
+						value={formatCurrency(totals?.totalBudget ?? 0)}
+						description={
+							(totals?.reserve ?? 0) > 0
+								? `reserva ${formatCurrency(totals?.reserve ?? 0)}`
+								: undefined
+						}
+						icon={<Target className="h-4 w-4" />}
+					/>
+					<StatsCard
+						title="Planeado"
+						value={formatCurrency(totals?.planned ?? 0)}
+						description={`${totals?.usagePercentage ?? 0}% da meta`}
+					/>
+					<StatsCard
+						title="Pago"
+						value={formatCurrency(totals?.spent ?? 0)}
+						description={`${totals?.paymentPercentage ?? 0}% do planeado`}
+					/>
+					<StatsCard
+						title="Por pagar"
+						value={formatCurrency(totals?.pending ?? 0)}
+						description={
+							(totals?.overdue ?? 0) > 0
+								? `${formatCurrency(totals?.overdue ?? 0)} em atraso`
+								: undefined
+						}
+					/>
+				</div>
+			)}
+
+			{totals && (
+				<Card>
+					<CardContent className="space-y-2 pt-6">
+						<div className="flex items-baseline justify-between text-sm">
+							<span className="text-muted-foreground">
+								Disponível para planeamento
+							</span>
+							<span
+								className={
+									isOverBudget
+										? "font-semibold text-destructive"
+										: "font-semibold"
+								}
+							>
+								{formatCurrency(totals.remaining ?? 0)}
+							</span>
+						</div>
+						<Progress value={totals.usagePercentage} />
+						{isOverBudget && (
+							<p className="text-destructive text-xs">
+								O planeado ultrapassa o disponível. Ajuste a meta ou revise os
+								itens do inventário e os fornecedores.
+							</p>
+						)}
+					</CardContent>
+				</Card>
+			)}
+
+			<Tabs defaultValue="lista">
 				<TabsList>
 					<TabsTrigger value="lista">
 						<List className="mr-2 h-4 w-4" />
-						Lista
+						Itens
 					</TabsTrigger>
 					<TabsTrigger value="analytics">
 						<ChartColumn className="mr-2 h-4 w-4" />
@@ -198,123 +199,74 @@ function BudgetPage() {
 				</TabsList>
 
 				<TabsContent value="lista">
-					<div className="space-y-6">
-						{budgetQuery.isLoading ? (
-							<div className="grid gap-4 sm:grid-cols-3">
-								{["card-1", "card-2", "card-3"].map((id) => (
-									<Card key={id}>
-										<CardHeader>
-											<div className="h-4 w-20 animate-pulse rounded bg-muted" />
-										</CardHeader>
-										<CardContent>
-											<div className="h-8 w-28 animate-pulse rounded bg-muted" />
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						) : (
-							<div className="grid gap-4 sm:grid-cols-3">
-								<StatsCard
-									title="Planeado"
-									value={formatCurrency(plannedAmount)}
-									description={
-										(budgetStats?.reserveAmount ?? 0) > 0
-											? `Reserva: ${formatCurrency(budgetStats?.reserveAmount ?? 0)}`
-											: undefined
-									}
-								/>
-								<StatsCard
-									title="Gasto"
-									value={formatCurrency(totalExpenses)}
-								/>
-								<StatsCard
-									title="Disponível"
-									value={
-										<span
-											className={
-												remaining < 0 ? "text-red-600" : "text-green-600"
-											}
-										>
-											{formatCurrency(remaining > 0 ? remaining : 0)}
-										</span>
-									}
-								/>
-							</div>
-						)}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2">
+							<Select
+								value={source ?? "todas"}
+								onValueChange={(v) =>
+									setSource(v === "todas" ? undefined : (v as BudgetSource))
+								}
+							>
+								<SelectTrigger className="w-48">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="todas">Todas as origens</SelectItem>
+									{Object.entries(SOURCE_LABELS).map(([value, label]) => (
+										<SelectItem key={value} value={value}>
+											{label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 
 						<QueryState
 							state={{
-								isLoading: expensesQuery.isLoading,
-								isError: expensesQuery.isError,
-								isEmpty: expenses.length === 0,
-								hasData: expenses.length > 0,
+								isLoading: linesQuery.isLoading,
+								isError: linesQuery.isError,
+								isEmpty: lines.length === 0,
+								hasData: lines.length > 0,
 							}}
 						>
 							<Card>
 								<Table>
-									{" "}
 									<TableHeader>
 										<TableRow>
+											<TableHead>Origem</TableHead>
 											<TableHead>Descrição</TableHead>
-											<TableHead>Fornecedor</TableHead>
-											<TableHead>Valor</TableHead>
-											<TableHead>Estado</TableHead>
-											<TableHead>Data</TableHead>
-											<TableHead className="w-24" />
+											<TableHead className="text-right">Planeado</TableHead>
+											<TableHead className="text-right">Pago</TableHead>
+											<TableHead className="text-right">Por pagar</TableHead>
+											<TableHead className="w-40">Progresso</TableHead>
 										</TableRow>
 									</TableHeader>
 									<TableBody>
-										{expenses.map((expense) => (
-											<TableRow key={expense.id}>
-												<TableCell className="font-medium">
-													{expense.description}
-												</TableCell>
-												<TableCell>{expense.vendor?.name || "—"}</TableCell>
+										{lines.map((line) => (
+											<TableRow key={`${line.source}-${line.id}`}>
 												<TableCell>
-													{formatCurrency(Number(expense.totalAmount))}
-												</TableCell>
-												<TableCell>
-													<Badge
-														className={getStatusColor(
-															expense.status || "PLANNED",
-														)}
-													>
-														{getStatusLabel(
-															expense.status || "PLANNED",
-															"expense",
-														)}
+													<Badge variant="outline">
+														{SOURCE_LABELS[line.source]}
 													</Badge>
 												</TableCell>
-												<TableCell>
-													{expense.dueDate ? formatDate(expense.dueDate) : "—"}
+												<TableCell className="font-medium">
+													{line.label}
+												</TableCell>
+												<TableCell className="text-right">
+													{formatCurrency(line.planned)}
+												</TableCell>
+												<TableCell className="text-right">
+													{formatCurrency(line.paid)}
+												</TableCell>
+												<TableCell className="text-right">
+													{formatCurrency(line.pending)}
 												</TableCell>
 												<TableCell>
-													<div className="flex gap-1">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															title="Ver detalhes"
-															onClick={() => setViewingExpense(expense)}
-														>
-															<Eye className="h-3.5 w-3.5" />
-														</Button>
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															title="Editar"
-															onClick={() => setEditingExpense(expense)}
-														>
-															<Pencil className="h-3.5 w-3.5" />
-														</Button>
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															className="text-destructive"
-															title="Eliminar"
-															onClick={() => setDeletingExpenseId(expense.id)}
-														>
-															<Trash2 className="h-3.5 w-3.5" />
-														</Button>
+													<div className="space-y-1">
+														<Progress value={line.percentage} />
+														<span className="text-muted-foreground text-xs">
+															{line.percentage}%
+														</span>
 													</div>
 												</TableCell>
 											</TableRow>
@@ -324,324 +276,68 @@ function BudgetPage() {
 							</Card>
 						</QueryState>
 
-						{expensesMeta && (
-							<Pagination
-								meta={expensesMeta}
-								onPageChange={setExpensePage}
-								onLimitChange={(l) => {
-									setExpenseLimit(l);
-									setExpensePage(1);
-								}}
-								disabled={expensesQuery.isLoading}
-							/>
+						{lines.length > 0 && (
+							<p className="flex items-center gap-2 text-muted-foreground text-xs">
+								Os valores são editados na origem:
+								<Link
+									to="/events/$eventId/inventory"
+									params={{ eventId }}
+									className="inline-flex items-center gap-1 underline"
+								>
+									Inventário <ExternalLink className="h-3 w-3" />
+								</Link>
+								ou
+								<Link
+									to="/events/$eventId/suppliers"
+									params={{ eventId }}
+									className="inline-flex items-center gap-1 underline"
+								>
+									Fornecedores <ExternalLink className="h-3 w-3" />
+								</Link>
+							</p>
 						)}
 					</div>
 				</TabsContent>
 
 				<TabsContent value="analytics">
 					<BudgetAnalytics
-						stats={budgetStats}
-						isLoading={budgetStatsQuery.isLoading}
-						isError={budgetStatsQuery.isError}
+						summary={summaryQuery.data}
+						isLoading={summaryQuery.isLoading}
+						isError={summaryQuery.isError}
 					/>
 				</TabsContent>
 			</Tabs>
 
-			{/* Edit Budget Dialog */}
-			<BudgetDialog
-				open={showEditBudgetDialog}
-				onOpenChange={setShowEditBudgetDialog}
-				initialValues={
-					budget
-						? {
-								plannedAmount: Number(budget.plannedAmount ?? 0),
-								reserveAmount: Number(budget.reserveAmount ?? 0),
-								notes: budget.notes ?? "",
-							}
-						: undefined
-				}
+			<TargetDialog
+				open={showTargetDialog}
+				onOpenChange={setShowTargetDialog}
+				initialValues={{
+					plannedAmount: Number(budget?.plannedAmount ?? 0),
+					reserveAmount: Number(budget?.reserveAmount ?? 0),
+					notes: budget?.notes ?? "",
+				}}
+				isLoading={updateTarget.isPending}
 				onSubmit={(values) => {
-					upsertBudget.mutate(
-						{ ...values, eventId },
+					updateTarget.mutate(
+						{ eventId, ...values },
 						{
 							onSuccess: () => {
-								toast.success("Orçamento atualizado");
-								setShowEditBudgetDialog(false);
+								toast.success("Meta actualizada");
+								setShowTargetDialog(false);
 							},
-							onError: (e) => toast.error(e.message),
+							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}
-				isLoading={upsertBudget.isPending}
 			/>
-
-			{/* Create Expense Dialog */}
-			<ExpenseDialog
-				open={showCreateExpenseDialog}
-				onOpenChange={setShowCreateExpenseDialog}
-				vendors={vendors}
-				onSubmit={(values) => {
-					createExpense.mutate(
-						{ ...values, eventId },
-						{
-							onSuccess: () => {
-								toast.success("Despesa adicionada");
-								setShowCreateExpenseDialog(false);
-							},
-							onError: (e) => toast.error(e.message),
-						},
-					);
-				}}
-				isLoading={createExpense.isPending}
-			/>
-
-			{/* Edit Expense Dialog */}
-			{editingExpense && (
-				<ExpenseDialog
-					open={!!editingExpense}
-					onOpenChange={() => setEditingExpense(null)}
-					vendors={vendors}
-					initialValues={{
-						description: editingExpense.description ?? "",
-						vendorId: editingExpense.vendorId || null,
-						totalAmount: Number(editingExpense.totalAmount ?? 0),
-						dueDate: editingExpense.dueDate
-							? new Date(editingExpense.dueDate).toISOString().split("T")[0]
-							: "",
-						notes: editingExpense.notes ?? "",
-						status: editingExpense.status ?? "PLANNED",
-					}}
-					inventoryInitial={
-						editingExpense.inventoryItem
-							? {
-									id: editingExpense.inventoryItem.id,
-									name: editingExpense.inventoryItem.name,
-									category: editingExpense.inventoryItem.category,
-									unit: editingExpense.inventoryItem.unit,
-									plannedQuantity: Number(
-										editingExpense.inventoryItem.plannedQuantity,
-									),
-									currentQuantity: Number(
-										editingExpense.inventoryItem.currentQuantity,
-									),
-									venueQuantity: Number(
-										editingExpense.inventoryItem.venueQuantity,
-									),
-									unitPrice: Number(
-										editingExpense.inventoryItem.unitPrice ?? 0,
-									),
-								}
-							: null
-					}
-					onSubmit={(values) => {
-						updateExpense.mutate(
-							{ id: editingExpense.id, ...values },
-							{
-								onSuccess: () => {
-									toast.success("Despesa atualizada");
-									setEditingExpense(null);
-								},
-								onError: (e) => toast.error(e.message),
-							},
-						);
-					}}
-					isLoading={updateExpense.isPending}
-				/>
-			)}
-
-			{/* View Expense Dialog */}
-			{viewingExpense && (
-				<ViewExpenseDialog
-					expense={viewingExpense}
-					onClose={() => setViewingExpense(null)}
-				/>
-			)}
-
-			{/* Delete Expense Confirmation */}
-			<Dialog
-				open={!!deletingExpenseId}
-				onOpenChange={() => setDeletingExpenseId(null)}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Eliminar despesa</DialogTitle>
-						<DialogDescription>
-							Tem a certeza que deseja eliminar esta despesa? Esta acção não
-							pode ser desfeita.
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => setDeletingExpenseId(null)}
-						>
-							Cancelar
-						</Button>
-						<Button
-							variant="destructive"
-							disabled={deleteExpense.isPending}
-							onClick={() => {
-								if (deletingExpenseId) {
-									deleteExpense.mutate(
-										{ id: deletingExpenseId },
-										{
-											onSuccess: () => {
-												toast.success("Despesa eliminada");
-												setDeletingExpenseId(null);
-											},
-											onError: (e) => toast.error(e.message),
-										},
-									);
-								}
-							}}
-						>
-							{deleteExpense.isPending ? "A eliminar..." : "Eliminar"}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
 		</div>
 	);
 }
 
 // ========================
-// View Expense Dialog
+// Target Dialog
 // ========================
-function ViewExpenseDialog({
-	expense,
-	onClose,
-}: {
-	expense: ExpenseListItem;
-	onClose: () => void;
-}) {
-	const expenseStatsQuery = useExpenseStats(expense.id ?? "");
-	const expenseStats = expenseStatsQuery.data;
-	const totalPaid = expenseStats?.totalPaid ?? 0;
-	const totalAmount =
-		expenseStats?.totalAmount ?? Number(expense.totalAmount ?? 0);
-	const remaining = expenseStats?.remaining ?? totalAmount - totalPaid;
-	const paymentRate = expenseStats?.paymentRate ?? 0;
-	const vendor = expense.vendor;
-	const category = expense.budgetCategory;
-	const payments = expense.payments ?? [];
-
-	return (
-		<Dialog open onOpenChange={() => onClose()}>
-			<DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>{expense.description}</DialogTitle>
-					<DialogDescription>Detalhes da despesa</DialogDescription>
-				</DialogHeader>
-				<div className="space-y-4">
-					<div className="grid grid-cols-2 gap-3">
-						<div className="rounded border p-3">
-							<p className="text-muted-foreground text-xs">Valor total</p>
-							<p className="font-semibold text-xl">
-								{formatCurrency(totalAmount)}
-							</p>
-						</div>
-						<div className="rounded border p-3">
-							<p className="text-muted-foreground text-xs">Estado</p>
-							<Badge className={getStatusColor(expense.status ?? "PLANNED")}>
-								{getStatusLabel(expense.status ?? "PLANNED", "expense")}
-							</Badge>
-						</div>
-					</div>
-
-					<div className="rounded border p-3">
-						<p className="mb-1 text-muted-foreground text-xs">
-							Progresso de pagamento
-						</p>
-						<div className="mb-1 flex items-center justify-between text-sm">
-							<span>Pago: {formatCurrency(totalPaid)}</span>
-							<span>
-								Restante: {formatCurrency(remaining > 0 ? remaining : 0)}
-							</span>
-						</div>{" "}
-						<Progress value={paymentRate} />
-					</div>
-
-					<div className="grid grid-cols-2 gap-3">
-						{expense.dueDate ? (
-							<div className="rounded border p-3">
-								<p className="text-muted-foreground text-xs">Data limite</p>
-								<p className="font-medium text-sm">
-									{formatDate(expense.dueDate)}
-								</p>
-							</div>
-						) : null}
-						{category && (
-							<div className="rounded border p-3">
-								<p className="text-muted-foreground text-xs">Categoria</p>
-								<p className="font-medium text-sm">{category.name}</p>
-							</div>
-						)}
-					</div>
-
-					{vendor && (
-						<div className="rounded border p-3">
-							<p className="text-muted-foreground text-xs">Fornecedor</p>
-							<p className="font-medium text-sm">{vendor.name}</p>
-							{vendor.phone ? (
-								<p className="text-muted-foreground text-xs">
-									📞 {vendor.phone}
-								</p>
-							) : null}
-						</div>
-					)}
-
-					{expense.notes ? (
-						<div className="rounded border p-3">
-							<p className="text-muted-foreground text-xs">Notas</p>
-							<p className="text-sm">{expense.notes}</p>
-						</div>
-					) : null}
-
-					{payments.length > 0 && (
-						<div>
-							<h4 className="mb-2 font-medium text-sm">
-								Pagamentos ({payments.length})
-							</h4>
-							<div className="space-y-2">
-								{payments.map((payment) => (
-									<div
-										key={payment.id}
-										className="flex items-center justify-between rounded border p-2.5 text-sm"
-									>
-										<div>
-											<p className="font-medium">
-												{formatCurrency(Number(payment.amount))}
-											</p>
-											<p className="text-muted-foreground text-xs">
-												{payment.paymentDate
-													? formatDate(payment.paymentDate)
-													: "—"}{" "}
-												· {payment.method}
-											</p>
-										</div>
-										<Badge variant="outline" className="text-xs">
-											{payment.method}
-										</Badge>
-									</div>
-								))}
-							</div>
-						</div>
-					)}
-				</div>
-				<DialogFooter>
-					<Button variant="outline" onClick={onClose}>
-						Fechar
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
-	);
-}
-
-// ========================
-// Budget Dialog (Create / Edit)
-// ========================
-function BudgetDialog({
+function TargetDialog({
 	open,
 	onOpenChange,
 	initialValues,
@@ -650,7 +346,7 @@ function BudgetDialog({
 }: {
 	open: boolean;
 	onOpenChange: (o: boolean) => void;
-	initialValues?: {
+	initialValues: {
 		plannedAmount: number;
 		reserveAmount: number;
 		notes: string;
@@ -662,17 +358,15 @@ function BudgetDialog({
 	}) => void;
 	isLoading: boolean;
 }) {
-	const isEditing = !!initialValues;
-
 	const form = useForm({
-		defaultValues: {
-			plannedAmount: initialValues?.plannedAmount ?? 0,
-			reserveAmount: initialValues?.reserveAmount ?? 0,
-			notes: initialValues?.notes ?? "",
-		},
+		defaultValues: initialValues,
 		onSubmit: async ({ value }) => {
-			if (!value.plannedAmount || value.plannedAmount <= 0) {
-				toast.error("O valor planeado deve ser maior que zero");
+			if (value.plannedAmount <= 0) {
+				toast.error("A meta deve ser maior que zero");
+				return;
+			}
+			if (value.reserveAmount > value.plannedAmount) {
+				toast.error("A reserva não pode ultrapassar a meta");
 				return;
 			}
 			onSubmit({
@@ -687,9 +381,12 @@ function BudgetDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>
-						{isEditing ? "Editar orçamento" : "Criar orçamento"}
-					</DialogTitle>
+					<DialogTitle>Meta do orçamento</DialogTitle>
+					<DialogDescription>
+						O valor total planeado para o evento. Os totais, o aproveitamento e
+						as categorias são calculados pelo servidor a partir do inventário e
+						dos fornecedores.
+					</DialogDescription>
 				</DialogHeader>
 				<form
 					onSubmit={(e) => {
@@ -702,8 +399,9 @@ function BudgetDialog({
 					<form.Field name="plannedAmount">
 						{(field) => (
 							<div className="space-y-2">
-								<Label>Valor planeado (Kz)</Label>
+								<Label htmlFor="planned-amount">Valor planeado (Kz)</Label>
 								<CurrencyInput
+									id="planned-amount"
 									value={field.state.value || 0}
 									onChange={(v) => field.handleChange(v)}
 									disabled={isLoading}
@@ -714,14 +412,15 @@ function BudgetDialog({
 					<form.Field name="reserveAmount">
 						{(field) => (
 							<div className="space-y-2">
-								<Label>Reserva (Kz)</Label>
+								<Label htmlFor="reserve-amount">Reserva (Kz)</Label>
 								<CurrencyInput
+									id="reserve-amount"
 									value={field.state.value || 0}
 									onChange={(v) => field.handleChange(v)}
 									disabled={isLoading}
 								/>
 								<p className="text-muted-foreground text-xs">
-									Valor de reserva para imprevistos
+									Fica de fora do valor disponível para planeamento.
 								</p>
 							</div>
 						)}
@@ -729,8 +428,9 @@ function BudgetDialog({
 					<form.Field name="notes">
 						{(field) => (
 							<div className="space-y-2">
-								<Label>Notas</Label>
+								<Label htmlFor="budget-notes">Notas</Label>
 								<Textarea
+									id="budget-notes"
 									placeholder="Observações sobre o orçamento (opcional)"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
@@ -748,384 +448,7 @@ function BudgetDialog({
 							Cancelar
 						</Button>
 						<Button type="submit" disabled={isLoading}>
-							{isLoading ? "A guardar..." : isEditing ? "Guardar" : "Criar"}
-						</Button>
-					</DialogFooter>
-				</form>
-			</DialogContent>
-		</Dialog>
-	);
-}
-
-// ========================
-// Expense Dialog (Create / Edit)
-// ========================
-function ExpenseDialog({
-	open,
-	onOpenChange,
-	initialValues,
-	inventoryInitial,
-	onSubmit,
-	isLoading,
-	vendors = [],
-}: {
-	open: boolean;
-	onOpenChange: (o: boolean) => void;
-	initialValues?: {
-		description: string;
-		vendorId?: string | null;
-		totalAmount: number;
-		dueDate: string;
-		notes: string;
-		status?: string;
-	};
-	inventoryInitial?: InventoryInitialValues | null;
-	onSubmit: (values: ExpenseDialogSubmitValues) => void;
-	isLoading: boolean;
-	vendors?: Array<{ id?: string; name?: string }>;
-}) {
-	const isEditing = !!initialValues;
-
-	const form = useForm({
-		defaultValues: {
-			description: initialValues?.description ?? "",
-			vendorId: initialValues?.vendorId ?? "",
-			totalAmount: initialValues?.totalAmount ?? 0,
-			dueDate: initialValues?.dueDate ?? "",
-			notes: initialValues?.notes ?? "",
-			status: (initialValues?.status ?? "PLANNED") as ExpenseStatusValue,
-			isInventoryItem: !!inventoryInitial,
-			inventoryName: inventoryInitial?.name ?? "",
-			inventoryCategory: inventoryInitial?.category ?? "DRINK",
-			inventoryUnit: inventoryInitial?.unit ?? "UNIT",
-			inventoryPlannedQuantity: inventoryInitial?.plannedQuantity ?? 0,
-			inventoryVenueQuantity: inventoryInitial?.venueQuantity ?? 0,
-			inventoryUnitPrice: inventoryInitial?.unitPrice ?? 0,
-		},
-		onSubmit: async ({ value }) => {
-			const result = expenseSchema.safeParse(value);
-			if (!result.success) {
-				toast.error(result.error.issues[0].message);
-				return;
-			}
-			const base: ExpenseInput & {
-				vendorId?: string;
-				status?: ExpenseStatusValue;
-			} = {
-				...result.data,
-				vendorId: value.vendorId || undefined,
-				status: value.status,
-			};
-
-			if (!value.isInventoryItem) {
-				onSubmit({ ...base, isInventoryItem: false });
-				return;
-			}
-
-			const inventoryResult = inventoryItemSchema.safeParse({
-				name: value.inventoryName,
-				category: value.inventoryCategory,
-				unit: value.inventoryUnit,
-				plannedQuantity: value.inventoryPlannedQuantity,
-				venueQuantity: value.inventoryVenueQuantity,
-				unitPrice: value.inventoryUnitPrice,
-			});
-			if (!inventoryResult.success) {
-				toast.error(inventoryResult.error.issues[0].message);
-				return;
-			}
-
-			onSubmit({
-				...base,
-				isInventoryItem: true,
-				inventory: inventoryResult.data,
-			});
-		},
-	});
-
-	const showInventorySection = useStore(
-		form.store,
-		(state) => state.values.isInventoryItem,
-	);
-
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
-				<DialogHeader>
-					<DialogTitle>
-						{isEditing ? "Editar despesa" : "Adicionar despesa"}
-					</DialogTitle>
-				</DialogHeader>
-				<form
-					onSubmit={(e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						form.handleSubmit();
-					}}
-					className="space-y-4"
-				>
-					<form.Field name="description">
-						{(field) => (
-							<div className="space-y-2">
-								<Label>Descrição</Label>
-								<Input
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									disabled={isLoading}
-								/>
-							</div>
-						)}
-					</form.Field>
-					<form.Field name="vendorId">
-						{(field) => (
-							<div className="space-y-2">
-								<Label>Fornecedor</Label>
-								<Select
-									value={field.state.value ?? ""}
-									onValueChange={(v) => field.handleChange(v ?? "")}
-									disabled={isLoading}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="Selecionar fornecedor (opcional)" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="">Sem fornecedor</SelectItem>
-										{vendors.map((v) => (
-											<SelectItem key={v.id} value={v.id}>
-												{v.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						)}
-					</form.Field>
-					<div className="grid grid-cols-2 gap-4">
-						<form.Field name="totalAmount">
-							{(field) => (
-								<div className="space-y-2">
-									<Label>Valor (Kz)</Label>
-									<CurrencyInput
-										value={field.state.value || 0}
-										onChange={(v) => field.handleChange(v)}
-										disabled={isLoading}
-									/>
-								</div>
-							)}
-						</form.Field>
-						<form.Field name="dueDate">
-							{(field) => (
-								<div className="space-y-2">
-									<Label>Data limite</Label>
-									<Input
-										type="date"
-										value={field.state.value}
-										onChange={(e) => field.handleChange(e.target.value)}
-										disabled={isLoading}
-									/>
-								</div>
-							)}
-						</form.Field>
-					</div>
-					{isEditing && (
-						<form.Field name="status">
-							{(field) => (
-								<div className="space-y-2">
-									<Label>Estado</Label>
-									<select
-										value={field.state.value}
-										onChange={(e) =>
-											field.handleChange(
-												e.target.value as
-													| "PLANNED"
-													| "PARTIALLY_PAID"
-													| "PAID"
-													| "OVERDUE"
-													| "CANCELLED",
-											)
-										}
-										disabled={isLoading}
-										className="flex h-10 w-full items-center justify-between border border-input bg-background px-3 py-2 text-sm"
-									>
-										{toSelectItems(EXPENSE_STATUS_LABELS).map((item) => (
-											<option key={item.value} value={item.value}>
-												{item.label}
-											</option>
-										))}
-									</select>
-								</div>
-							)}
-						</form.Field>
-					)}
-					<form.Field name="isInventoryItem">
-						{(field) => (
-							<label
-								htmlFor="is-inventory-item"
-								className="flex cursor-pointer items-center gap-2 text-sm"
-							>
-								<Checkbox
-									id="is-inventory-item"
-									checked={field.state.value}
-									onCheckedChange={(checked) =>
-										field.handleChange(checked === true)
-									}
-									disabled={isLoading}
-								/>
-								É um item do inventário
-							</label>
-						)}
-					</form.Field>
-
-					{showInventorySection && (
-						<div className="space-y-4 rounded border p-4">
-							<div className="flex items-center justify-between">
-								<p className="font-medium text-sm">Dados do inventário</p>
-								{inventoryInitial && (
-									<p className="text-muted-foreground text-xs">
-										Actual: {inventoryInitial.currentQuantity}
-									</p>
-								)}
-							</div>
-							<p className="text-muted-foreground text-xs">
-								Ao guardar, esta despesa cria e amarra o item correspondente ao
-								inventário.
-							</p>
-							<form.Field name="inventoryName">
-								{(field) => (
-									<div className="space-y-2">
-										<Label>Produto</Label>
-										<Input
-											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
-											disabled={isLoading}
-										/>
-									</div>
-								)}
-							</form.Field>
-							<div className="grid grid-cols-2 gap-4">
-								<form.Field name="inventoryCategory">
-									{(field) => (
-										<div className="space-y-2">
-											<Label>Categoria</Label>
-											<Select
-												items={toSelectItems(INVENTORY_CATEGORY_LABELS)}
-												value={field.state.value}
-												onValueChange={(v) =>
-													field.handleChange(v as InventoryCategory)
-												}
-											>
-												<SelectTrigger>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{toSelectItems(INVENTORY_CATEGORY_LABELS).map(
-														(item) => (
-															<SelectItem key={item.value} value={item.value}>
-																{item.label}
-															</SelectItem>
-														),
-													)}
-												</SelectContent>
-											</Select>
-										</div>
-									)}
-								</form.Field>
-								<form.Field name="inventoryUnit">
-									{(field) => (
-										<div className="space-y-2">
-											<Label>Unidade</Label>
-											<Select
-												items={toSelectItems(INVENTORY_UNIT_LABELS)}
-												value={field.state.value}
-												onValueChange={(v) =>
-													field.handleChange(v as InventoryUnit)
-												}
-											>
-												<SelectTrigger>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{toSelectItems(INVENTORY_UNIT_LABELS).map((item) => (
-														<SelectItem key={item.value} value={item.value}>
-															{item.label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										</div>
-									)}
-								</form.Field>
-							</div>
-							<div className="grid grid-cols-3 gap-4">
-								<form.Field name="inventoryPlannedQuantity">
-									{(field) => (
-										<div className="space-y-2">
-											<Label>Quantidade planeada</Label>
-											<Input
-												type="number"
-												min={1}
-												value={field.state.value || ""}
-												onChange={(e) =>
-													field.handleChange(Number(e.target.value) || 0)
-												}
-												disabled={isLoading}
-											/>
-										</div>
-									)}
-								</form.Field>
-								<form.Field name="inventoryVenueQuantity">
-									{(field) => (
-										<div className="space-y-2">
-											<Label>Para o salão</Label>
-											<Input
-												type="number"
-												min={0}
-												value={field.state.value || ""}
-												onChange={(e) =>
-													field.handleChange(Number(e.target.value) || 0)
-												}
-												disabled={isLoading}
-											/>
-										</div>
-									)}
-								</form.Field>
-								<form.Field name="inventoryUnitPrice">
-									{(field) => (
-										<div className="space-y-2">
-											<Label>Preço unit. (Kz)</Label>
-											<CurrencyInput
-												value={field.state.value || 0}
-												onChange={(v) => field.handleChange(v)}
-												disabled={isLoading}
-											/>
-										</div>
-									)}
-								</form.Field>
-							</div>
-						</div>
-					)}
-					<form.Field name="notes">
-						{(field) => (
-							<div className="space-y-2">
-								<Label>Notas</Label>
-								<Textarea
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									disabled={isLoading}
-								/>
-							</div>
-						)}
-					</form.Field>
-					<DialogFooter>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => onOpenChange(false)}
-						>
-							Cancelar
-						</Button>
-						<Button type="submit" disabled={isLoading}>
-							{isLoading ? "A guardar..." : isEditing ? "Guardar" : "Adicionar"}
+							{isLoading ? "A guardar..." : "Guardar"}
 						</Button>
 					</DialogFooter>
 				</form>

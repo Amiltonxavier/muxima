@@ -5,6 +5,7 @@ import type {
 	InventoryUnit,
 	MovementType,
 } from "../../shared/types/entities";
+import { toJsonInput } from "../../shared/utils/json";
 
 /**
  * Every function accepts the db client so the same data access works both
@@ -16,7 +17,6 @@ export type InventoryFilterParams = {
 	search?: string;
 	category?: InventoryCategory;
 	status?: InventoryStatus;
-	vendorId?: string;
 };
 
 export function buildInventoryWhere(
@@ -39,9 +39,6 @@ export function buildInventoryWhere(
 	if (filters?.status) {
 		conditions.push({ status: filters.status });
 	}
-	if (filters?.vendorId) {
-		conditions.push({ vendorId: filters.vendorId });
-	}
 
 	return { AND: conditions };
 }
@@ -56,7 +53,6 @@ export const InventoryRepository = {
 		const skip = (pagination.page - 1) * pagination.limit;
 		return db.inventoryItem.findMany({
 			where: buildInventoryWhere(eventId, filters),
-			include: { vendor: true },
 			orderBy: { createdAt: "desc" },
 			skip,
 			take: pagination.limit,
@@ -70,10 +66,7 @@ export const InventoryRepository = {
 	},
 
 	findById(db: InventoryDb, id: string) {
-		return db.inventoryItem.findUnique({
-			where: { id },
-			include: { vendor: true },
-		});
+		return db.inventoryItem.findUnique({ where: { id } });
 	},
 
 	findMetricsRows(db: InventoryDb, eventId: string) {
@@ -83,7 +76,6 @@ export const InventoryRepository = {
 				status: true,
 				plannedQuantity: true,
 				currentQuantity: true,
-				venueQuantity: true,
 				unitPrice: true,
 			},
 		});
@@ -97,15 +89,16 @@ export const InventoryRepository = {
 			category: InventoryCategory;
 			plannedQuantity: number;
 			currentQuantity: number;
-			venueQuantity: number;
 			status: InventoryStatus;
 			unit: InventoryUnit;
 			unitPrice?: number;
-			vendorId?: string;
 			notes?: string;
+			customFields?: Record<string, unknown>;
 		},
 	) {
-		return db.inventoryItem.create({ data });
+		return db.inventoryItem.create({
+			data: { ...data, customFields: toJsonInput(data.customFields) },
+		});
 	},
 
 	update(
@@ -115,15 +108,17 @@ export const InventoryRepository = {
 			name: string;
 			category: InventoryCategory;
 			plannedQuantity: number;
-			venueQuantity: number;
 			status: InventoryStatus;
 			unit: InventoryUnit;
 			unitPrice: number;
-			vendorId: string;
 			notes: string;
+			customFields: Record<string, unknown>;
 		}>,
 	) {
-		return db.inventoryItem.update({ where: { id }, data });
+		return db.inventoryItem.update({
+			where: { id },
+			data: { ...data, customFields: toJsonInput(data.customFields) },
+		});
 	},
 
 	delete(db: InventoryDb, id: string) {

@@ -1,145 +1,280 @@
 import db from "@muxima/db";
-import type { ExpenseStatus, ExpenseType, Prisma } from "@muxima/db/prisma";
+import type { Prisma } from "@muxima/db/prisma";
 
-export type ExpenseFilterParams = {
-	search?: string;
-	status?: ExpenseStatus;
-	type?: ExpenseType;
-	vendorId?: string;
-};
+import { toCents } from "../../shared/finance/money";
+import {
+	type PaymentInput,
+	resolveSupplierMoney,
+} from "../../shared/finance/supplier-money";
+import {
+	type BudgetAnalytics,
+	type BudgetSnapshot,
+	buildCategoryBreakdown,
+	buildLines,
+	buildMonthlySpend,
+	buildPaymentStatusBreakdown,
+	buildSourceBreakdown,
+	buildTopPendingSuppliers,
+	buildTotals,
+	type InventoryWithMoney,
+	resolveOverdueSuppliers,
+	type SupplierWithMoney,
+} from "./breakdown";
 
-function buildExpenseWhere(
+/**
+ * Budget is a read model.
+ *
+ * Every figure here is derived from the two financial sources of the product:
+ *   - inventory_item.unitPrice x plannedQuantity  (planned spend)
+ *   - inventory_item.unitPrice x currentQuantity  (already acquired)
+ *   - supplier.price / supplier payments        (committed spend)
+ *
+ * Nothing is summed in the browser: this module is the only place where money
+ * is aggregated, and it returns plain numbers in the event currency. The
+ * arithmetic itself lives in `breakdown.ts`, which is pure and unit tested.
+ */
+
+export type {
+	BudgetAnalytics,
+	BudgetBreakdownEntry,
+	BudgetLine,
+	BudgetSnapshot,
+	BudgetSource,
+	BudgetTotals,
+	InventoryWithMoney,
+	SupplierWithMoney,
+} from "./breakdown";
+
+/**
+ * Loads every supplier of an event with its money already resolved by the
+ * shared resolver, so the budget and the suppliers screens can never disagree.
+ */
+export async function loadSuppliersWithMoney(
 	eventId: string,
-	filters?: ExpenseFilterParams,
-): Prisma.ExpenseWhereInput {
-	const conditions: Prisma.ExpenseWhereInput[] = [{ eventId }];
+	now = new Date(),
+): Promise<SupplierWithMoney[]> {
+	const suppliers = await db.supplier.findMany({
+		where: { eventId },
+		select: {
+			id: true,
+			name: true,
+			category: true,
+			price: true,
+			status: true,
+			payments: { select: { amount: true, paymentDate: true } },
+			installments: {
+				select: { amount: true, dueDate: true, status: true, paidAt: true },
+			},
+		},
+	});
 
-	if (filters?.search) {
-		conditions.push({
-			OR: [
-				{ description: { contains: filters.search, mode: "insensitive" } },
-				{ notes: { contains: filters.search, mode: "insensitive" } },
-			],
+	return suppliers.map((supplier) => {
+		const price = toCents(supplier.price);
+		const payments: PaymentInput[] = supplier.payments.map((p) => ({
+			amount: toCents(p.amount),
+			paymentDate: p.paymentDate,
+		}));
+		const money = resolveSupplierMoney({
+			price,
+			payments,
+			installments: supplier.installments.map((i) => ({
+				amount: toCents(i.amount),
+				dueDate: i.dueDate,
+				status: i.status,
+				paidAt: i.paidAt,
+			})),
+			now,
 		});
-	}
-	if (filters?.status) {
-		conditions.push({ status: filters.status });
-	}
-	if (filters?.type) {
-		conditions.push({ type: filters.type });
-	}
-	if (filters?.vendorId) {
-		conditions.push({ vendorId: filters.vendorId });
-	}
 
-	return { AND: conditions };
+		// A cancelled supplier is out of the budget entirely.
+		if (supplier.status === "CANCELLED") {
+			return {
+				id: supplier.id,
+				name: supplier.name,
+				category: supplier.category,
+				price: 0,
+				paid: 0,
+				pending: 0,
+				paymentStatus: "CANCELLED",
+				nextDueDate: null,
+			};
+		}
+
+		return {
+			id: supplier.id,
+			name: supplier.name,
+			category: supplier.category,
+			price,
+			paid: money.paid,
+			pending: money.pending,
+			paymentStatus: money.paymentStatus,
+			nextDueDate: money.nextDueDate,
+		};
+	});
 }
 
-export const BudgetRepository = {
-	findByEventId(eventId: string) {
-		return db.budget.findUnique({ where: { eventId } });
-	},
+async function loadInventoryWithMoney(
+	eventId: string,
+): Promise<InventoryWithMoney[]> {
+	const items = await db.inventoryItem.findMany({
+		where: { eventId },
+		select: {
+			id: true,
+			name: true,
+			category: true,
+			status: true,
+			plannedQuantity: true,
+			currentQuantity: true,
+			unitPrice: true,
+		},
+	});
 
-	upsert(
-		eventId: string,
-		data: { plannedAmount: number; reserveAmount?: number; notes?: string },
-	) {
-		return db.budget.upsert({
-			where: { eventId },
-			update: data,
-			create: { eventId, ...data },
-		});
-	},
+	return items.map((item) => {
+		const unitPrice = toCents(item.unitPrice);
+		const plannedQuantity = Number(item.plannedQuantity);
+		const currentQuantity = Number(item.currentQuantity);
+		const planned = Math.round(unitPrice * plannedQuantity);
+		const spent = Math.round(unitPrice * currentQuantity);
 
-	findCategoriesByEventId(eventId: string) {
-		return db.budgetCategory.findMany({ where: { eventId } });
-	},
+		return {
+			id: item.id,
+			name: item.name,
+			category: item.category,
+			status: item.status,
+			planned,
+			spent,
+			// Never negative: an item over-acquired reports nothing pending.
+			pending: Math.max(0, planned - spent),
+		};
+	});
+}
 
-	createCategory(data: {
-		eventId: string;
-		name: string;
-		description?: string;
-		plannedAmount?: number;
-	}) {
-		return db.budgetCategory.create({ data });
-	},
+export async function getBudgetSnapshot(
+	eventId: string,
+	now = new Date(),
+): Promise<BudgetSnapshot> {
+	const [event, budget, inventory, suppliers] = await Promise.all([
+		db.event.findUnique({ where: { id: eventId }, select: { currency: true } }),
+		db.budget.findUnique({ where: { eventId } }),
+		loadInventoryWithMoney(eventId),
+		loadSuppliersWithMoney(eventId, now),
+	]);
 
-	updateCategory(
-		id: string,
-		data: Partial<{
-			name: string;
-			description: string;
-			plannedAmount: number;
-		}>,
-	) {
-		return db.budgetCategory.update({ where: { id }, data });
-	},
+	const lines = buildLines(inventory, suppliers);
+	const overdueSuppliers = await loadOverdueSuppliers(eventId, now);
 
-	deleteCategory(id: string) {
-		return db.budgetCategory.delete({ where: { id } });
-	},
+	const totals = buildTotals({
+		lines,
+		totalBudget: toCents(budget?.plannedAmount),
+		reserve: toCents(budget?.reserveAmount),
+		overdue: overdueSuppliers.reduce((sum, s) => sum + s.overdueAmount, 0),
+		currency: event?.currency ?? "AOA",
+	});
 
-	findExpensesByEventId(
-		eventId: string,
-		pagination: { page: number; limit: number },
-		filters?: ExpenseFilterParams,
-	) {
-		const skip = (pagination.page - 1) * pagination.limit;
-		return db.expense.findMany({
-			where: buildExpenseWhere(eventId, filters),
-			include: { vendor: true, budgetCategory: true, payments: true },
-			orderBy: { createdAt: "desc" },
-			skip,
-			take: pagination.limit,
-		});
-	},
+	const breakdown: BudgetAnalytics = {
+		byCategory: buildCategoryBreakdown(inventory, suppliers),
+		bySource: buildSourceBreakdown(lines),
+		byPaymentStatus: buildPaymentStatusBreakdown(suppliers),
+		topPendingSuppliers: buildTopPendingSuppliers(suppliers),
+		overdueSuppliers,
+		monthlySpend: await loadMonthlySpend(eventId),
+	};
 
-	countExpensesByEventId(eventId: string, filters?: ExpenseFilterParams) {
-		return db.expense.count({ where: buildExpenseWhere(eventId, filters) });
-	},
+	return { totals, lines, breakdown, hasTarget: Boolean(budget) };
+}
 
-	updateExpense(
-		id: string,
-		data: Partial<{
-			description: string;
-			totalAmount: number;
-			budgetCategoryId: string;
-			vendorId: string;
-			dueDate: Date;
-			status: "PLANNED" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "CANCELLED";
-			paidPercentage: number;
-			notes: string;
-		}>,
-	) {
-		return db.expense.update({ where: { id }, data });
-	},
+async function loadOverdueSuppliers(eventId: string, now: Date) {
+	const suppliers = await db.supplier.findMany({
+		where: {
+			eventId,
+			status: { not: "CANCELLED" },
+			installments: {
+				some: {
+					status: { in: ["PENDING", "OVERDUE"] },
+					paidAt: null,
+					dueDate: { lt: now },
+				},
+			},
+		},
+		select: {
+			id: true,
+			name: true,
+			installments: {
+				where: { paidAt: null, status: { in: ["PENDING", "OVERDUE"] } },
+				select: { amount: true, dueDate: true },
+				orderBy: { dueDate: "asc" },
+			},
+		},
+	});
 
-	findExpenseById(id: string) {
-		return db.expense.findUnique({ where: { id } });
-	},
+	return resolveOverdueSuppliers(
+		suppliers.map((supplier) => ({
+			id: supplier.id,
+			name: supplier.name,
+			installments: supplier.installments.map((i) => ({
+				amount: toCents(i.amount),
+				dueDate: i.dueDate,
+			})),
+		})),
+		now,
+	);
+}
 
-	createPayment(data: {
-		expenseId: string;
-		amount: number;
-		paymentDate: Date;
-		method:
-			| "CASH"
-			| "BANK_TRANSFER"
-			| "ATM"
-			| "CARD"
-			| "MOBILE_PAYMENT"
-			| "OTHER";
-		reference?: string;
-		notes?: string;
-		createdBy: string;
-	}) {
-		return db.payment.create({ data });
-	},
+/**
+ * Supplier spend per calendar month, taken from the recorded payment dates so
+ * the chart reflects cash out rather than accruals.
+ */
+async function loadMonthlySpend(eventId: string) {
+	const payments = await db.supplierPayment.findMany({
+		where: { supplier: { eventId } },
+		select: { amount: true, paymentDate: true },
+		orderBy: { paymentDate: "asc" },
+	});
 
-	aggregatePaymentsByExpense(expenseId: string) {
-		return db.payment.aggregate({
-			where: { expenseId },
-			_sum: { amount: true },
-		});
-	},
-};
+	return buildMonthlySpend(
+		payments.map((p) => ({
+			amount: toCents(p.amount),
+			paymentDate: p.paymentDate,
+		})),
+	);
+}
+
+/** Where the money goes, ordered for display. Used by the budget page. */
+export async function getBudgetLines(
+	eventId: string,
+	filter: Prisma.InventoryItemWhereInput = {},
+	now = new Date(),
+) {
+	const [suppliers, items] = await Promise.all([
+		loadSuppliersWithMoney(eventId, now),
+		db.inventoryItem.findMany({
+			where: { eventId, ...filter },
+			select: {
+				id: true,
+				name: true,
+				category: true,
+				status: true,
+				plannedQuantity: true,
+				currentQuantity: true,
+				unitPrice: true,
+			},
+		}),
+	]);
+
+	const inventory: InventoryWithMoney[] = items.map((item) => {
+		const unitPrice = toCents(item.unitPrice);
+		const planned = Math.round(unitPrice * Number(item.plannedQuantity));
+		const spent = Math.round(unitPrice * Number(item.currentQuantity));
+		return {
+			id: item.id,
+			name: item.name,
+			category: item.category,
+			status: item.status,
+			planned,
+			spent,
+			pending: Math.max(0, planned - spent),
+		};
+	});
+
+	return buildLines(inventory, suppliers).sort((a, b) => b.planned - a.planned);
+}

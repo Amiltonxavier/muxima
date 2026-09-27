@@ -9,6 +9,12 @@ export default defineConfig({
 		alias: {
 			"@muxima/env/server": path.resolve(__dirname, "../env/src/server.ts"),
 			"@muxima/auth": path.resolve(__dirname, "../auth/src/index.ts"),
+			// Longer paths first: a bare "@muxima/db" alias would otherwise
+			// rewrite "@muxima/db/prisma" into "<file>/prisma".
+			"@muxima/db/prisma": path.resolve(
+				__dirname,
+				"../db/prisma/generated/client.ts",
+			),
 			"@muxima/db": path.resolve(__dirname, "../db/src/index.ts"),
 		},
 	},

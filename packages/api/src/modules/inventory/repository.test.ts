@@ -24,18 +24,16 @@ describe("buildInventoryWhere", () => {
 		});
 	});
 
-	it("combines category, status and vendorId filters", () => {
+	it("combines the category and status filters", () => {
 		const where = buildInventoryWhere("evt_1", {
 			category: "DRINK",
 			status: "PENDING",
-			vendorId: "vnd_1",
 		});
 
 		expect(where.AND).toEqual([
 			{ eventId: "evt_1" },
 			{ category: "DRINK" },
 			{ status: "PENDING" },
-			{ vendorId: "vnd_1" },
 		]);
 	});
 
@@ -89,7 +87,6 @@ describe("InventoryRepository.findMetricsRows", () => {
 				status: true,
 				plannedQuantity: true,
 				currentQuantity: true,
-				venueQuantity: true,
 				unitPrice: true,
 			},
 		});

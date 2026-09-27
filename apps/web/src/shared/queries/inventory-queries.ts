@@ -2,20 +2,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import type { PaginationParams } from "./task-queries";
 
+export type InventoryCategoryValue =
+	| "DRINK"
+	| "MATERIAL"
+	| "EQUIPMENT"
+	| "FURNITURE"
+	| "LINEN"
+	| "OTHER";
+
 export interface InventoryFilters {
 	search?: string;
-	category?: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
+	category?: InventoryCategoryValue;
 	status?: "PENDING" | "IN_PROGRESS" | "COMPLETED";
-	vendorId?: string;
 }
 
+const inventoryRootKey = ["inventory"] as const;
+
 export const inventoryKeys = {
-	all: ["inventory"] as const,
+	all: inventoryRootKey,
 	list: (eventId: string, params: Record<string, unknown>) =>
-		[...inventoryKeys.all, "list", eventId, params] as const,
-	stats: (eventId: string) => [...inventoryKeys.all, "stats", eventId] as const,
-	detail: (id: string) => [...inventoryKeys.all, "detail", id] as const,
-	history: (id: string) => [...inventoryKeys.all, "history", id] as const,
+		[...inventoryRootKey, "list", eventId, params] as const,
+	stats: (eventId: string) => [...inventoryRootKey, "stats", eventId] as const,
+	detail: (id: string) => [...inventoryRootKey, "detail", id] as const,
+	history: (id: string) => [...inventoryRootKey, "history", id] as const,
 };
 
 /**
@@ -28,8 +37,8 @@ export function useInventoryItems(
 ) {
 	const page = pagination.page ?? 1;
 	const limit = pagination.limit ?? 20;
-	const { search, category, status, vendorId } = pagination;
-	const input = { eventId, page, limit, search, category, status, vendorId };
+	const { search, category, status } = pagination;
+	const input = { eventId, page, limit, search, category, status };
 	return useQuery({
 		...orpc.inventory.list.queryOptions({ input }),
 		queryKey: inventoryKeys.list(eventId, input),

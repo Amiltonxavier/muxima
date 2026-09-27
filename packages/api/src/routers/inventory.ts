@@ -13,6 +13,7 @@ import {
 } from "../shared/auth/event-access";
 import { inventoryListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
+import { syncChecklistForInventoryItem } from "./checklist";
 
 export const inventoryRouter = {
 	list: protectedProcedure
@@ -32,7 +33,6 @@ export const inventoryRouter = {
 					search: input.search,
 					category: input.category,
 					status: input.status,
-					vendorId: input.vendorId,
 				},
 			);
 
@@ -61,14 +61,16 @@ export const inventoryRouter = {
 		.input(createInventoryItemSchema.extend({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			return db.$transaction((tx) =>
-				InventoryService.create(
+			return db.$transaction(async (tx) => {
+				const item = await InventoryService.create(
 					tx,
 					input.eventId,
 					context.session.user.id,
 					input,
-				),
-			);
+				);
+				await syncChecklistForInventoryItem(tx, item.id);
+				return item;
+			});
 		}),
 
 	update: protectedProcedure
@@ -78,9 +80,11 @@ export const inventoryRouter = {
 			if (eventId) {
 				await requireEventAccess(context.session.user.id, eventId);
 			}
-			return db.$transaction((tx) =>
-				InventoryService.update(tx, input.id, input),
-			);
+			return db.$transaction(async (tx) => {
+				const item = await InventoryService.update(tx, input.id, input);
+				await syncChecklistForInventoryItem(tx, item.id);
+				return item;
+			});
 		}),
 
 	delete: protectedProcedure
@@ -104,14 +108,17 @@ export const inventoryRouter = {
 			if (eventId) {
 				await requireEventAccess(context.session.user.id, eventId);
 			}
-			return db.$transaction((tx) =>
-				InventoryService.addMovement(
+			return db.$transaction(async (tx) => {
+				const movement = await InventoryService.addMovement(
 					tx,
 					input.inventoryItemId,
 					context.session.user.id,
 					input,
-				),
-			);
+				);
+				// A movement can complete the item, so the checklist follows.
+				await syncChecklistForInventoryItem(tx, input.inventoryItemId);
+				return movement;
+			});
 		}),
 
 	getHistory: protectedProcedure

@@ -125,9 +125,10 @@ export type ExpenseListInput = z.infer<typeof expenseListInput>;
 // ── Inventory ────────────────────────────────────────────────────
 export const inventoryFiltersSchema = z.object({
 	search: z.string().trim().optional(),
-	category: z.enum(["DRINK", "FOOD", "CAKE", "DECORATION", "OTHER"]).optional(),
+	category: z
+		.enum(["DRINK", "MATERIAL", "EQUIPMENT", "FURNITURE", "LINEN", "OTHER"])
+		.optional(),
 	status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
-	vendorId: z.string().uuid().optional(),
 });
 
 export type InventoryFilters = z.infer<typeof inventoryFiltersSchema>;
@@ -140,7 +141,7 @@ export const documentFiltersSchema = z.object({
 	search: z.string().trim().optional(),
 	type: z.enum(["CONTRACT", "RECEIPT", "QUOTE", "OTHER"]).optional(),
 	status: z.enum(["ACTIVE", "ARCHIVED", "DELETED"]).optional(),
-	vendorId: z.string().uuid().optional(),
+	supplierId: z.string().uuid().optional(),
 });
 
 export type DocumentFilters = z.infer<typeof documentFiltersSchema>;

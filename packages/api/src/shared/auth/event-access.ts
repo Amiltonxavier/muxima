@@ -34,11 +34,11 @@ export async function getEventIdForResource(
 	entity:
 		| "guest"
 		| "task"
-		| "vendor"
+		| "supplier"
 		| "inventoryItem"
 		| "document"
-		| "expense"
-		| "budgetCategory"
+		| "foodPlan"
+		| "checklistItem"
 		| "schedule",
 	resourceId: string,
 ): Promise<string | null> {
@@ -57,12 +57,12 @@ export async function getEventIdForResource(
 			});
 			return t?.eventId ?? null;
 		}
-		case "vendor": {
-			const v = await db.vendor.findUnique({
+		case "supplier": {
+			const s = await db.supplier.findUnique({
 				where: { id: resourceId },
 				select: { eventId: true },
 			});
-			return v?.eventId ?? null;
+			return s?.eventId ?? null;
 		}
 		case "inventoryItem": {
 			const i = await db.inventoryItem.findUnique({
@@ -78,19 +78,19 @@ export async function getEventIdForResource(
 			});
 			return d?.eventId ?? null;
 		}
-		case "expense": {
-			const e = await db.expense.findUnique({
+		case "foodPlan": {
+			const f = await db.foodPlan.findUnique({
 				where: { id: resourceId },
 				select: { eventId: true },
 			});
-			return e?.eventId ?? null;
+			return f?.eventId ?? null;
 		}
-		case "budgetCategory": {
-			const bc = await db.budgetCategory.findUnique({
+		case "checklistItem": {
+			const c = await db.checklistItem.findUnique({
 				where: { id: resourceId },
 				select: { eventId: true },
 			});
-			return bc?.eventId ?? null;
+			return c?.eventId ?? null;
 		}
 		case "schedule": {
 			const s = await db.schedule.findUnique({

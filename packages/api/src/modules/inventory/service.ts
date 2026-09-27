@@ -9,7 +9,6 @@ import type {
 	InventoryUnit,
 	MovementType,
 	UserSummary,
-	Vendor,
 } from "../../shared/types/entities";
 import { type InventoryDb, InventoryRepository } from "./repository";
 import type {
@@ -111,11 +110,9 @@ type PrismaItem = {
 	status: InventoryStatus;
 	plannedQuantity: Numeric;
 	currentQuantity: Numeric;
-	venueQuantity: Numeric;
 	unitPrice: Numeric | null;
-	vendorId: string | null;
-	vendor?: Vendor | null;
 	notes: string | null;
+	customFields: unknown;
 	createdAt: Date;
 	updatedAt: Date;
 };
@@ -123,7 +120,6 @@ type PrismaItem = {
 export function toListItem(item: PrismaItem): InventoryListItem {
 	const plannedQuantity = toNumber(item.plannedQuantity);
 	const currentQuantity = toNumber(item.currentQuantity);
-	const venueQuantity = toNumber(item.venueQuantity);
 	const unitPrice = item.unitPrice === null ? null : toNumber(item.unitPrice);
 	const { remainingQuantity, completionPercentage } = computeItemMetrics(
 		plannedQuantity,
@@ -144,15 +140,13 @@ export function toListItem(item: PrismaItem): InventoryListItem {
 		status: item.status,
 		plannedQuantity,
 		currentQuantity,
-		venueQuantity,
 		remainingQuantity,
 		completionPercentage,
 		unitPrice,
 		totalValue,
 		completedValue,
 		pendingValue,
-		vendorId: item.vendorId,
-		vendor: item.vendor ?? null,
+		customFields: item.customFields,
 		notes: item.notes,
 		createdAt: item.createdAt,
 		updatedAt: item.updatedAt,
@@ -202,7 +196,6 @@ export const InventoryService = {
 			search?: string;
 			category?: InventoryCategory;
 			status?: InventoryStatus;
-			vendorId?: string;
 		},
 	): Promise<{ data: InventoryListItem[]; total: number }> {
 		const [items, total] = await Promise.all([
@@ -228,7 +221,6 @@ export const InventoryService = {
 
 		let totalQuantity = 0;
 		let totalCurrent = 0;
-		let totalVenue = 0;
 		let totalValue = 0;
 		let completedValue = 0;
 		let completedItems = 0;
@@ -240,12 +232,10 @@ export const InventoryService = {
 		for (const row of rows) {
 			const planned = toNumber(row.plannedQuantity);
 			const current = toNumber(row.currentQuantity);
-			const venue = toNumber(row.venueQuantity);
 			const unitPrice = row.unitPrice === null ? null : toNumber(row.unitPrice);
 
 			totalQuantity += planned;
 			totalCurrent += current;
-			totalVenue += venue;
 
 			const values = computeValues(planned, current, unitPrice);
 			totalValue += values.totalValue;
@@ -265,7 +255,6 @@ export const InventoryService = {
 			totalItems: rows.length,
 			totalQuantity,
 			totalCurrent,
-			totalVenue,
 			totalRemaining,
 			completionPercentage: computeCompletionPercentage(
 				totalQuantity,
@@ -289,11 +278,6 @@ export const InventoryService = {
 		userId: string,
 		input: CreateInventoryItemInput,
 	): Promise<InventoryListItem> {
-		if (input.venueQuantity > input.plannedQuantity) {
-			throw new ForbiddenError(
-				"A quantidade destinada ao salão não pode superar a quantidade planeada",
-			);
-		}
 		if (input.currentQuantity > input.plannedQuantity) {
 			throw new ForbiddenError(
 				"A quantidade actual não pode superar a quantidade planeada",
@@ -306,12 +290,11 @@ export const InventoryService = {
 			category: input.category,
 			plannedQuantity: input.plannedQuantity,
 			currentQuantity: input.currentQuantity,
-			venueQuantity: input.venueQuantity,
 			status: computeStatus(input.plannedQuantity, input.currentQuantity),
 			unit: input.unit,
 			unitPrice: input.unitPrice,
-			vendorId: input.vendorId,
 			notes: input.notes,
+			customFields: input.customFields,
 		});
 
 		// Initial stock is registered as a movement so the history is complete
@@ -342,16 +325,10 @@ export const InventoryService = {
 		const plannedQuantity =
 			input.plannedQuantity ?? toNumber(item.plannedQuantity);
 		const currentQuantity = toNumber(item.currentQuantity);
-		const venueQuantity = input.venueQuantity ?? toNumber(item.venueQuantity);
 
 		if (plannedQuantity < currentQuantity) {
 			throw new ForbiddenError(
 				"A quantidade planeada não pode ser inferior à quantidade actual",
-			);
-		}
-		if (venueQuantity > plannedQuantity) {
-			throw new ForbiddenError(
-				"A quantidade destinada ao salão não pode superar a quantidade planeada",
 			);
 		}
 

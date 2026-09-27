@@ -3,8 +3,9 @@
  *
  * Populates the database with a deterministic, realistic dataset:
  * exactly 40 events (30 weddings + 10 engagements) with full relational data
- * across every module (members, budgets, vendors, guests, tables, tasks,
- * schedules, inventory, expenses, payments, documents, notifications, audits).
+ * across every module (members, budget targets, suppliers with their payments
+ * and installments, food plan, checklist, guests, tables, tasks, schedules,
+ * inventory, documents, notifications, audits).
  *
  * Idempotent: deletes the seeded rows and recreates them — safe to re-run
  * without a `db reset` (or with `pnpm db:reset`, which forces a full wipe).
@@ -22,7 +23,32 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
-import { type Prisma, PrismaClient } from "../prisma/generated/client";
+// Prisma 7 does not re-export the enums through the `Prisma` namespace, so
+// they are imported by name from the generated client.
+import {
+	type ChecklistStatus,
+	type CompanionStatus,
+	type FoodPlanCategory,
+	type FoodPlanStatus,
+	type FoodPlanUnit,
+	type GuestInvitationStatus,
+	type InventoryCategory,
+	type InventoryStatus,
+	type InventoryUnit,
+	type MemberRole,
+	type MemberStatus,
+	type NotificationType,
+	type Prisma,
+	PrismaClient,
+	type RsvpStatus,
+	type ScheduleStatus,
+	type SupplierCategory,
+	SupplierPaymentModel,
+	type SupplierPaymentStatus,
+	type SupplierStatus,
+	type TaskCategory,
+	type TaskStatus,
+} from "../prisma/generated/client";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -62,8 +88,17 @@ const SEED_PREFIX = "seed";
 // `salt:key` hex) — formato usado pelo `verifyPassword` do better-auth.
 const SEED_PASSWORD = "Muxima@2024";
 
-function scryptAsync(password: string, salt: Buffer, keylen: number) {
-	return new Promise<Buffer>((resolve, reject) => {
+/**
+ * The salt is the hex string stored in the credential, exactly like better-auth
+ * builds it, so the salt is passed to scrypt as a string and not as bytes:
+ * re-hashing the same password with the stored salt has to reproduce the key.
+ */
+function scryptAsync(
+	password: string,
+	salt: string,
+	keylen: number,
+): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
 		nodeScrypt(
 			password,
 			salt,
@@ -443,7 +478,7 @@ const VENUES: Venue[] = [
 ] as const;
 
 // ── Vendor business names per category ─────────────────────────────
-const VENDOR_NAMES: Record<string, readonly string[]> = {
+const SUPPLIER_NAMES: Record<string, readonly string[]> = {
 	VENUE: [
 		"Jardim das Flores",
 		"Quinta do Mussulo",
@@ -468,14 +503,19 @@ const VENDOR_NAMES: Record<string, readonly string[]> = {
 		"Ritmo Vivo",
 		"Afro Fusion",
 	],
-	PHOTOGRAPHY: [
+	PHOTOGRAPHER: [
 		"Olhar Fotográfico",
 		"Luz & Sombra",
 		"Fotografia Horizonte",
 		"Kiss Glow",
 		"Lente Mágica",
 	],
-	VIDEO: ["CineMuxima", "Vídeo Nota", "Filmes do Mussulo", "Câmara & História"],
+	VIDEOGRAPHER: [
+		"CineMuxima",
+		"Vídeo Nota",
+		"Filmes do Mussulo",
+		"Câmara & História",
+	],
 	CATERING: [
 		"Chef Ngola",
 		"Sabores da Kanda",
@@ -490,7 +530,7 @@ const VENDOR_NAMES: Record<string, readonly string[]> = {
 		"Confeitaria Vivi",
 		"Doçaria Real",
 	],
-	DRINKS: [
+	SWEETS_AND_SAVOURIES: [
 		"Bebidas Kwanza",
 		"Sommelier Luanda",
 		"Bar Central",
@@ -535,19 +575,28 @@ const VENDOR_NAMES: Record<string, readonly string[]> = {
 const CATEGORY_LABEL: Record<string, string> = {
 	VENUE: "Espaço",
 	DECORATION: "Decoração",
-	MUSIC: "Música",
-	PHOTOGRAPHY: "Fotografia",
-	VIDEO: "Vídeo",
+	FLORIST: "Flores",
 	CATERING: "Catering",
 	CAKE: "Bolo",
-	DRINKS: "Bebidas",
+	SWEETS_AND_SAVOURIES: "Doces e salgados",
+	PHOTOGRAPHER: "Fotografia",
+	VIDEOGRAPHER: "Vídeo",
+	DJ: "DJ",
+	BAND: "Banda",
+	MUSIC: "Música",
+	ENTERTAINMENT: "Animação",
 	TRANSPORT: "Transportes",
 	BEAUTY: "Beleza",
+	BRIDE_ATTIRE: "Vestido da noiva",
+	GROOM_ATTIRE: "Traje do noivo",
+	RINGS: "Alianças",
+	WEDDING_PLANNER: "Planeamento",
+	OFFICIANT: "Celebrante",
+	FAVOURS: "Lembranças",
+	ACCOMMODATION: "Alojamento",
 	SECURITY: "Segurança",
-	ENTERTAINMENT: "Animação",
 	OTHER: "Serviços",
 };
-
 // ── Seed users (Better Auth schema) ────────────────────────────────
 const SEED_USERS: Prisma.UserCreateManyInput[] = [
 	{
@@ -689,13 +738,25 @@ interface EventPlan {
 	partnerId: string;
 }
 
+/**
+ * Reads a capacity by index, failing loudly when the plan grows past the
+ * capacity tables instead of silently creating an event with no seats.
+ */
+function capacityAt(values: readonly number[], index: number): number {
+	const value = values[index];
+	if (value === undefined) {
+		throw new Error(`No capacity defined for event index ${index}`);
+	}
+	return value;
+}
+
 function buildEventPlans(): EventPlan[] {
 	return EVENT_STATUSES.map((status, i) => {
 		const type = i < 30 ? "WEDDING" : "ENGAGEMENT";
-		const capacity =
-			type === "WEDDING"
-				? WEDDING_CAPACITIES[i]
-				: ENGAGEMENT_CAPACITIES[i - 30];
+		const capacity = capacityAt(
+			type === "WEDDING" ? WEDDING_CAPACITIES : ENGAGEMENT_CAPACITIES,
+			type === "WEDDING" ? i : i - 30,
+		);
 		const rng = mulberry32(1337 + i * 977);
 
 		// fillRatio = confirmed guests / capacity. Confirmed must always fit.
@@ -767,8 +828,14 @@ const VIP_GROUPS = [
 ];
 const OTHER_GROUPS = ["Vizinhos", "Comunidade", "Amigos da Família"];
 
+/**
+ * `createManyInput` types the id as optional; the seed always assigns a stable
+ * one so the companion and invitation rows can point at it.
+ */
+type SeededGuest = Prisma.GuestCreateManyInput & { id: string };
+
 interface GuestSeed {
-	record: Prisma.GuestCreateManyInput;
+	record: SeededGuest;
 	confirmed: boolean;
 	status:
 		| "CONFIRMED"
@@ -972,28 +1039,59 @@ const INVENTORY_WEDDING = [
 	{ name: "Água Mineral 500ml", cat: "DRINK", unit: "BOTTLE", price: 300 },
 	{ name: "Sumo Natural (Laranja)", cat: "DRINK", unit: "LITER", price: 2500 },
 	{ name: "Cerveja Eza", cat: "DRINK", unit: "CASE", price: 8000 },
-	{ name: "Barriga de Porco Assada", cat: "FOOD", unit: "KG", price: 6500 },
-	{ name: "Calulu de Frango", cat: "FOOD", unit: "KG", price: 4000 },
-	{ name: "Arroz com Tomate", cat: "FOOD", unit: "KG", price: 1500 },
-	{ name: "Salada Tropical", cat: "FOOD", unit: "KG", price: 3000 },
+	{ name: "Barriga de Porco Assada", cat: "MATERIAL", unit: "KG", price: 6500 },
+	{ name: "Calulu de Frango", cat: "MATERIAL", unit: "KG", price: 4000 },
+	{ name: "Arroz com Tomate", cat: "MATERIAL", unit: "KG", price: 1500 },
+	{ name: "Salada Tropical", cat: "MATERIAL", unit: "KG", price: 3000 },
 	{
 		name: "Bolo de Casamento 4 Andares",
-		cat: "CAKE",
+		cat: "MATERIAL",
 		unit: "UNIT",
 		price: 250000,
 	},
 	{
 		name: "Rosas Brancas (centro de mesa)",
-		cat: "DECORATION",
+		cat: "MATERIAL",
 		unit: "UNIT",
 		price: 800,
 	},
-	{ name: "Velas Aromáticas", cat: "DECORATION", unit: "UNIT", price: 500 },
+	{ name: "Velas Aromáticas", cat: "MATERIAL", unit: "UNIT", price: 500 },
 	{
 		name: "Tecido Organza Branco",
-		cat: "DECORATION",
+		cat: "LINEN",
 		unit: "PACKAGE",
 		price: 15000,
+	},
+	{
+		name: "Toalha de Mesa Algodão (50 un.)",
+		cat: "LINEN",
+		unit: "PACKAGE",
+		price: 22000,
+	},
+	{
+		name: "Cadeira Tiffany Dourada",
+		cat: "FURNITURE",
+		unit: "UNIT",
+		price: 4500,
+	},
+	{ name: "Mesa Redonda 1,80 m", cat: "FURNITURE", unit: "UNIT", price: 38000 },
+	{
+		name: "M-microfone Sem Fios",
+		cat: "EQUIPMENT",
+		unit: "UNIT",
+		price: 95000,
+	},
+	{
+		name: "Projetor 5000 lumens",
+		cat: "EQUIPMENT",
+		unit: "UNIT",
+		price: 320000,
+	},
+	{
+		name: "Gerador Elétrico 5 kVA",
+		cat: "EQUIPMENT",
+		unit: "UNIT",
+		price: 450000,
 	},
 	{
 		name: "Caixa de Fogos de Artifício",
@@ -1009,42 +1107,176 @@ const INVENTORY_ENGAGEMENT = [
 	{ name: "Sangria de Frutas", cat: "DRINK", unit: "LITER", price: 3500 },
 	{
 		name: "Petiscos (Empadas e Folhados)",
-		cat: "FOOD",
+		cat: "MATERIAL",
 		unit: "KG",
 		price: 5500,
 	},
-	{ name: "Canapés de Queijo", cat: "FOOD", unit: "KG", price: 4800 },
-	{ name: "Bolo de Noivado", cat: "CAKE", unit: "UNIT", price: 120000 },
-	{ name: "Balões Dourados", cat: "DECORATION", unit: "UNIT", price: 1200 },
+	{ name: "Canapés de Queijo", cat: "MATERIAL", unit: "KG", price: 4800 },
+	{ name: "Bolo de Noivado", cat: "MATERIAL", unit: "UNIT", price: 120000 },
+	{ name: "Balões Dourados", cat: "MATERIAL", unit: "UNIT", price: 1200 },
 ] as const;
 
-const EXPENSE_TEMPLATES: Record<
-	string,
-	readonly { desc: string; share: number }[]
-> = {
-	VENUE: [
-		{ desc: "Aluguer do espaço", share: 1 },
-		{ desc: "Caução e licença do espaço", share: 0.12 },
-	],
-	DECORATION: [
-		{ desc: "Arranjos florais", share: 0.5 },
-		{ desc: "Decoração e iluminação", share: 0.5 },
-	],
-	MUSIC: [
-		{ desc: "DJ e som", share: 0.6 },
-		{ desc: "Banda ao vivo", share: 0.4 },
-	],
-	PHOTOGRAPHY: [{ desc: "Fotografia e vídeo", share: 1 }],
-	VIDEO: [{ desc: "Edição de vídeo", share: 1 }],
-	CATERING: [{ desc: "Catering completo", share: 1 }],
-	CAKE: [{ desc: "Bolo e doces", share: 1 }],
-	DRINKS: [{ desc: "Bebidas e bar", share: 1 }],
-	TRANSPORT: [{ desc: "Transporte e cortejo", share: 1 }],
-	BEAUTY: [{ desc: "Maquilhagem, penteado e cuidados", share: 1 }],
-	SECURITY: [{ desc: "Segurança do evento", share: 1 }],
-	ENTERTAINMENT: [{ desc: "Animação e efeitos", share: 1 }],
-	OTHER: [{ desc: "Papelaria e lembranças", share: 1 }],
-};
+// ── Food plan menu pool ─────────────────────────────────────────────
+// No prices on purpose: catering money belongs to the supplier, so the same
+// spend is never counted twice in the budget.
+const FOOD_PLAN_MENU: ReadonlyArray<{
+	name: string;
+	category: FoodPlanCategory;
+	unit: FoodPlanUnit;
+	share?: number;
+	desc: string;
+}> = [
+	{
+		name: "Entradas frias (queijo, fiambre, fumados)",
+		category: "STARTER",
+		unit: "PLATE",
+		share: 0.8,
+		desc: "Mesa de frios com opções vegetarianas.",
+	},
+	{
+		name: "Entradas quentes (croquetes, pastéis)",
+		category: "STARTER",
+		unit: "PLATE",
+		share: 0.8,
+		desc: "Servidos à mesa durante a receção.",
+	},
+	{
+		name: "Sopa da estação",
+		category: "STARTER",
+		unit: "PORTION",
+		desc: "Caldo servido como entrada.",
+	},
+	{
+		name: "Peito de frango grelhado com arroz",
+		category: "MAIN_COURSE",
+		unit: "PLATE",
+		share: 0.7,
+		desc: "Acompanhamento: arroz, salada e legumes.",
+	},
+	{
+		name: "Peixe grelhado do dia",
+		category: "MAIN_COURSE",
+		unit: "PLATE",
+		share: 0.2,
+		desc: "Disponível para 20% dos convidados.",
+	},
+	{
+		name: "Massa ao molho de tomate",
+		category: "MAIN_COURSE",
+		unit: "PLATE",
+		share: 0.2,
+		desc: "Opção vegetariana.",
+	},
+	{
+		name: "Arroz de frango",
+		category: "MAIN_COURSE",
+		unit: "PLATE",
+		share: 0.1,
+		desc: "Prato tradicional, por encomenda.",
+	},
+	{
+		name: "Batatas fritas",
+		category: "SIDE_DISH",
+		unit: "PORTION",
+		share: 0.8,
+		desc: "Acompanhamento do prato principal.",
+	},
+	{
+		name: "Salada verde temperada",
+		category: "SIDE_DISH",
+		unit: "PLATE",
+		share: 0.6,
+		desc: "Com molho da casa.",
+	},
+	{
+		name: "Legumes salteados",
+		category: "SIDE_DISH",
+		unit: "PLATE",
+		share: 0.5,
+		desc: "Vegetariano.",
+	},
+	{
+		name: "Bolo de noiva",
+		category: "DESSERT",
+		unit: "PORTION",
+		desc: "Fatias Generosas.",
+	},
+	{
+		name: "Trufas e doces finos",
+		category: "DESSERT",
+		unit: "PORTION",
+		share: 0.8,
+		desc: "Mesas de doces.",
+	},
+	{
+		name: "Mousse de chocolate",
+		category: "DESSERT",
+		unit: "PORTION",
+		share: 0.6,
+		desc: "Porções individuais.",
+	},
+	{
+		name: "Fruta da estação",
+		category: "FRUIT",
+		unit: "PLATE",
+		share: 0.8,
+		desc: "Mesa de fruta e mingau.",
+	},
+	{
+		name: "Sumos naturais",
+		category: "OTHER",
+		unit: "LITER",
+		share: 0.5,
+		desc: "Laranja, Manga e Maracujá.",
+	},
+	{
+		name: "Água e refrigerantes",
+		category: "OTHER",
+		unit: "BOTTLE",
+		share: 0.7,
+		desc: "Consumo durante a festa.",
+	},
+	{
+		name: "Café e chá",
+		category: "OTHER",
+		unit: "PORTION",
+		share: 0.8,
+		desc: "Servido no fim da recepção.",
+	},
+];
+
+// ── Manual checklist items (never touched by the API) ──────────────
+const CHECKLIST_TEMPLATES = [
+	{
+		title: "Fechar a lista de convidados",
+		desc: "Confirmar presenças até dois dias antes.",
+	},
+	{
+		title: "Enviar o mapa do salão ao decorator",
+		desc: "Indicativo de mesas e zonas de serviço.",
+	},
+	{ title: "Testar o sistema de som", desc: "Microfones, colunas e gerador." },
+	{
+		title: "Confirmar o horário dos fornecedores",
+		desc: "Hora de chegada e de montagem de cada serviço.",
+	},
+	{
+		title: "Definir o plano de chuva",
+		desc: "Espaço alternativo e cobertura.",
+	},
+	{
+		title: "Preparar a mesa dos presentes",
+		desc: "Livro de mensagens e cartão de agradecimento.",
+	},
+	{
+		title: "Rever o contrato com o fotógrafo",
+		desc: "Direitos de imagem e prazo de entrega.",
+	},
+	{
+		title: "Organizar o cortejo",
+		desc: "Carros, ordem de entrada e condutores.",
+	},
+];
 
 async function main() {
 	console.log("🌱 Seeding database...");
@@ -1057,7 +1289,7 @@ async function main() {
 	await prisma.invitationGuest.deleteMany({});
 	await prisma.guestCompanion.deleteMany({});
 	await prisma.tableGuest.deleteMany({});
-	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "payment", "expense", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "vendor_contract", "vendor", "budget_category", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
+	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "checklist_item", "food_plan_item", "food_plan", "supplier_installment", "supplier_payment", "supplier", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
 	await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
 
 	// ── 1. USERS + CREDENTIALS ────────────────────────────────────────
@@ -1147,8 +1379,8 @@ async function main() {
 		const rng = mulberry32(91 + plan.index * 149);
 		const members: {
 			user: string;
-			role: Prisma.MemberRole;
-			status: Prisma.MemberStatus;
+			role: MemberRole;
+			status: MemberStatus;
 			joined: Date | null;
 		}[] = [
 			{
@@ -1231,9 +1463,10 @@ async function main() {
 		`  ✅ Event Members (${memberRecords.length}) / Invitations (${eventInvitationRecords.length})`,
 	);
 
-	// ── 4. BUDGETS + CATEGORIES ────────────────────────────────────────
+	// ── 4. BUDGET TARGETS ─────────────────────────────────────────────
+	// The budget is only a target: the spend is derived from the suppliers and
+	// the inventory, so there are no budget categories to keep in sync.
 	const budgetRecords: Prisma.BudgetCreateManyInput[] = [];
-	const budgetCatRecords: Prisma.BudgetCategoryCreateManyInput[] = [];
 
 	for (const plan of plans) {
 		const rng = mulberry32(311 + plan.index * 317);
@@ -1251,76 +1484,45 @@ async function main() {
 			notes:
 				plan.status === "DRAFT"
 					? "Orçamento preliminar — valores a confirmar."
-					: "Orçamento distribuído por categorias de fornecedores.",
-		});
-
-		const cats =
-			plan.type === "WEDDING"
-				? [
-						"Espaço & Decoração",
-						"Catering & Bebidas",
-						"Música & Entretenimento",
-						"Fotografia & Vídeo",
-						"Vestuário & Beleza",
-						"Transporte & Logística",
-						"Convites & Papelaria",
-					]
-				: [
-						"Espaço & Decoração",
-						"Catering & Bebidas",
-						"Música & Entretenimento",
-						"Fotografia & Vídeo",
-					];
-
-		let remaining = Math.round(plannedAmount * 0.92);
-		cats.forEach((cat, j) => {
-			const isLast = j === cats.length - 1;
-			const amount = isLast
-				? remaining
-				: Math.round(remaining * (0.08 + rng() * 0.22));
-			remaining -= amount;
-			budgetCatRecords.push({
-				id: `bcat_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
-				eventId: plan.id,
-				name: cat,
-				description: `Despesas de ${cat.toLowerCase()}`,
-				plannedAmount: amount,
-			});
+					: "Orçamento derivado dos fornecedores e do inventário.",
 		});
 	}
 	await prisma.budget.createMany({ data: budgetRecords });
-	await prisma.budgetCategory.createMany({ data: budgetCatRecords });
-	console.log(
-		`  ✅ Budgets (${budgetRecords.length}) / Categories (${budgetCatRecords.length})`,
-	);
+	console.log(`  ✅ Budgets (${budgetRecords.length})`);
 
-	// ── 5. VENDORS + CONTRACTS ─────────────────────────────────────────
-	const vendorRecords: Prisma.VendorCreateManyInput[] = [];
-	const contractRecords: Prisma.VendorContractCreateManyInput[] = [];
+	// ── 5. SUPPLIERS + PAYMENTS + INSTALLMENTS ───────────────────────
+	// Money lives here now: every supplier carries an agreed price, the
+	// payments made against it and, when it is paid in stages, the schedule.
+	const supplierRecords: Prisma.SupplierCreateManyInput[] = [];
+	const supplierPaymentRecords: Prisma.SupplierPaymentCreateManyInput[] = [];
+	const supplierInstallmentRecords: Prisma.SupplierInstallmentCreateManyInput[] =
+		[];
 
-	const WEDDING_VENDOR_CATS = [
+	const WEDDING_SUPPLIER_CATS = [
 		"VENUE",
 		"DECORATION",
 		"CATERING",
 		"MUSIC",
-		"PHOTOGRAPHY",
+		"PHOTOGRAPHER",
 		"TRANSPORT",
 		"BEAUTY",
 		"ENTERTAINMENT",
 	] as const;
-	const ENGAGEMENT_VENDOR_CATS = [
+	const ENGAGEMENT_SUPPLIER_CATS = [
 		"VENUE",
 		"DECORATION",
 		"CATERING",
 		"MUSIC",
-		"PHOTOGRAPHY",
+		"PHOTOGRAPHER",
 		"CAKE",
 	] as const;
 
 	for (const plan of plans) {
 		const rng = mulberry32(503 + plan.index * 271);
 		const cats: readonly string[] =
-			plan.type === "WEDDING" ? WEDDING_VENDOR_CATS : ENGAGEMENT_VENDOR_CATS;
+			plan.type === "WEDDING"
+				? WEDDING_SUPPLIER_CATS
+				: ENGAGEMENT_SUPPLIER_CATS;
 
 		const count =
 			plan.status === "DRAFT"
@@ -1329,6 +1531,13 @@ async function main() {
 					? 3
 					: Math.min(cats.length, randInt(rng, 5, cats.length));
 		const usedCats: string[] = [];
+		// The agreed prices have to stay inside the target, otherwise the seeded
+		// budget would look broken on the very first load.
+		let priceBudget = Math.round(
+			Number(
+				budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0,
+			) * 0.62,
+		);
 
 		for (let j = 0; j < count; j++) {
 			let cat = pick(rng, cats);
@@ -1338,64 +1547,177 @@ async function main() {
 			const rngV = mulberry32(607 + plan.index * 91 + j * 43);
 			const business = pick(
 				rngV,
-				VENDOR_NAMES[cat] ?? (["Muxima Serviços"] as const),
+				SUPPLIER_NAMES[cat] ?? (["Muxima Serviços"] as const),
 			);
-			const status: Prisma.VendorStatus =
+			const supplierId = `sup_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`;
+			const status: SupplierStatus =
 				plan.status === "COMPLETED"
 					? "COMPLETED"
 					: plan.status === "CANCELLED"
 						? "CANCELLED"
 						: plan.status === "DRAFT"
 							? "PROSPECT"
-							: pick(rngV, ["CONTACTED", "NEGOTIATING", "CONTRACTED"] as const);
+							: pick(rngV, ["CONTACTED", "NEGOTIATING", "CONFIRMED"] as const);
 
-			vendorRecords.push({
-				id: `vnd_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+			// Only committed suppliers have a price. The first supplier takes a
+			// larger share, the rest share what is left.
+			const isCommitted = status === "CONFIRMED" || status === "COMPLETED";
+			const share = Math.max(1, count - j) / ((count * (count + 1)) / 2);
+			const price = isCommitted
+				? Math.max(50_000, Math.round((priceBudget * share) / 5_000) * 5_000)
+				: 0;
+			priceBudget -= price;
+
+			// A quarter of the committed suppliers pay in stages.
+			const useInstallments = isCommitted && rngV() < 0.25;
+			const installmentCount = useInstallments ? randInt(rngV, 2, 4) : 0;
+
+			supplierRecords.push({
+				id: supplierId,
 				eventId: plan.id,
 				name: `${business} — ${CATEGORY_LABEL[cat] ?? "Serviços"}`,
-				category: cat as Prisma.VendorCategory,
+				category: cat as SupplierCategory,
 				phone: `+244 ${randInt(rngV, 910, 989)} ${pad(randInt(rngV, 0, 999))} ${pad(randInt(rngV, 0, 999))}`,
 				email: `${business.toLowerCase().replace(/[^a-z0-9]+/g, "")}@muxima.ao`,
 				address: `${pick(rngV, VENUES).neighborhood}, ${pick(rngV, VENUES).province}`,
 				status,
 				description: `Serviço de ${CATEGORY_LABEL[cat]?.toLowerCase() ?? "apoio"} para o evento.`,
 				notes:
-					status === "CONTRACTED"
+					status === "CONFIRMED"
 						? "Contrato assinado e confirmado."
 						: status === "COMPLETED"
 							? "Serviço concluído com sucesso."
-							: "Seguimento necessário.",
+							: status === "CANCELLED"
+								? "Contrato cancelado."
+								: "Seguimento necessário.",
+				price: price > 0 ? price : null,
+				paymentModel: useInstallments
+					? SupplierPaymentModel.INSTALLMENTS
+					: SupplierPaymentModel.FULL,
+				// Filled in below, once the payments are known.
+				paymentStatus: "PENDING",
+				nextDueDate: null,
 			});
 
-			// Contract for contracted/completed vendors.
-			if (
-				(status === "CONTRACTED" || status === "COMPLETED") &&
-				rngV() > 0.35
-			) {
-				contractRecords.push({
-					id: `ctr_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
-					eventId: plan.id,
-					vendorId: `vnd_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
-					number: `CT-2026-${pad(plan.index + 1)}-${j + 1}`,
-					startDate: daysAgo(randInt(rngV, 5, 60)),
-					endDate: daysAhead(randInt(rngV, 30, 200)),
-					amount:
-						Math.round((plan.capacity * randInt(rngV, 4000, 12000)) / 500) *
-						500,
-					status: plan.status === "COMPLETED" ? "COMPLETED" : "ACTIVE",
-					notes: "Pagamento por etapas conforme contrato.",
+			if (!isCommitted || price <= 0) continue;
+
+			// Installment schedule: equal parts, the last one absorbing the
+			// rounding remainder so the parts always add up to the price.
+			const installments: Array<{
+				position: number;
+				amount: number;
+				dueDate: Date;
+			}> = [];
+			if (useInstallments) {
+				const part = Math.round(price / installmentCount / 5_000) * 5_000;
+				let running = 0;
+				for (let k = 0; k < installmentCount; k++) {
+					const amount = k === installmentCount - 1 ? price - running : part;
+					running += amount;
+					installments.push({
+						position: k + 1,
+						amount,
+						// Spaced from today towards the event, so a completed
+						// event has every date in the past.
+						dueDate: daysAgo(
+							randInt(rngV, 5, 20) + (installmentCount - k) * 45,
+						),
+					});
+				}
+			}
+
+			// How much was already paid, mirroring the rules the API applies.
+			const paidRatio =
+				plan.status === "COMPLETED"
+					? 1
+					: plan.status === "CANCELLED"
+						? 0
+						: pick(rngV, [0, 0.25, 0.5, 0.75, 1]);
+			let paid = 0;
+			if (paidRatio > 0) {
+				paid = Math.round((price * paidRatio) / 5_000) * 5_000;
+				if (paidRatio === 1) paid = price;
+				if (paid > 0) {
+					supplierPaymentRecords.push({
+						id: `spay_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+						supplierId,
+						amount: paid,
+						paymentDate: daysAgo(randInt(rngV, 1, 40)),
+						method: pick(rngV, [
+							"CASH",
+							"BANK_TRANSFER",
+							"ATM",
+							"CARD",
+							"MOBILE_PAYMENT",
+						] as const),
+						reference: `TRF-2026-${pad(plan.index + 1)}-${j + 1}`,
+						notes: paidRatio === 1 ? "Pagamento integral" : "Adiantamento",
+						createdBy: plan.ownerId,
+					});
+				}
+			}
+
+			// A schedule is only stored for suppliers that really have one, and
+			// each installment is marked paid once the payments cover it: a
+			// payment settles the schedule from the earliest due date onwards.
+			let covered = 0;
+			for (const [k, installment] of installments.entries()) {
+				const isPaid = paid - covered >= installment.amount;
+				if (isPaid) covered += installment.amount;
+				supplierInstallmentRecords.push({
+					id: `sinst_${pad(plan.index + 1)}_${j + 1}_${k + 1}_${SEED_PREFIX}`,
+					supplierId,
+					position: installment.position,
+					amount: installment.amount,
+					dueDate: installment.dueDate,
+					status: isPaid ? "PAID" : "PENDING",
+					paidAt: isPaid ? daysAgo(randInt(rngV, 1, 20)) : null,
+					notes: isPaid ? "Parcela liquidada" : null,
 				});
+			}
+
+			// Nearest installment the payments do not cover yet.
+			let accumulated = 0;
+			const nextDueDate = installments
+				.filter((installment) => {
+					if (paid < accumulated + installment.amount) return true;
+					accumulated += installment.amount;
+					return false;
+				})
+				.map((installment) => installment.dueDate)
+				.sort((a, b) => a.getTime() - b.getTime())[0];
+			const isOverdue =
+				nextDueDate !== undefined && nextDueDate.getTime() < now.getTime();
+
+			// Stored status, using the same precedence as the finance module.
+			// A cancelled supplier never reaches this point: it is not committed,
+			// so it has no price and no money to report.
+			const paymentStatus: SupplierPaymentStatus = isOverdue
+				? "OVERDUE"
+				: paid >= price
+					? "PAID"
+					: paid > 0
+						? "INSTALLMENTS"
+						: "PENDING";
+
+			const row = supplierRecords[supplierRecords.length - 1];
+			if (row) {
+				row.paymentStatus = paymentStatus;
+				row.nextDueDate = nextDueDate ?? null;
 			}
 		}
 	}
-	await prisma.vendor.createMany({ data: vendorRecords });
-	await prisma.vendorContract.createMany({ data: contractRecords });
+	await prisma.supplier.createMany({ data: supplierRecords });
+	await prisma.supplierPayment.createMany({ data: supplierPaymentRecords });
+	await prisma.supplierInstallment.createMany({
+		data: supplierInstallmentRecords,
+	});
 	console.log(
-		`  ✅ Vendors (${vendorRecords.length}) / Contracts (${contractRecords.length})`,
+		`  ✅ Suppliers (${supplierRecords.length}) / Payments (${supplierPaymentRecords.length}) / Installments (${supplierInstallmentRecords.length})`,
 	);
 
 	// ── 6. GUESTS + COMPANIONS + INVITATIONS ──────────────────────────
-	const guestRecords: Prisma.GuestCreateManyInput[] = [];
+	const guestRecords: SeededGuest[] = [];
 	const companionRecords: Prisma.GuestCompanionCreateManyInput[] = [];
 	const guestInvitationRecords: Prisma.GuestInvitationCreateManyInput[] = [];
 	const invitationGuestRecords: Prisma.InvitationGuestCreateManyInput[] = [];
@@ -1456,7 +1778,7 @@ async function main() {
 					const pending = rng() > 0.7;
 					guestRecords.push(guestSeed.record);
 					for (let c = 0; c < wantCompanions; c++) {
-						const companionStatus: Prisma.CompanionStatus = pending
+						const companionStatus: CompanionStatus = pending
 							? "PENDING"
 							: "CONFIRMED";
 						const role =
@@ -1570,7 +1892,7 @@ async function main() {
 			if (!guestRecords.some((r) => r.id === guestId))
 				guestRecords.push({ ...g.record, id: guestId });
 
-			const invStatus: Prisma.GuestInvitationStatus =
+			const invStatus: GuestInvitationStatus =
 				g.status === "CONFIRMED"
 					? "RESPONDED"
 					: g.status === "DECLINED"
@@ -1581,10 +1903,12 @@ async function main() {
 								? "CANCELLED"
 								: g.status === "WAITING"
 									? "OPENED"
-									: randInt(rng, 0, 1) === 0
-										? "SENT"
-										: "OPENED";
-			const rsvp: Prisma.RsvpStatus =
+									: rng() < 0.2
+										? "CREATED"
+										: randInt(rng, 0, 1) === 0
+											? "SENT"
+											: "OPENED";
+			const rsvp: RsvpStatus =
 				g.status === "CONFIRMED"
 					? "CONFIRMED"
 					: g.status === "DECLINED"
@@ -1616,7 +1940,7 @@ async function main() {
 	}
 	// De-duplicate pending guest records pushed twice.
 	const seen = new Set<string>();
-	const uniqueGuests: Prisma.GuestCreateManyInput[] = [];
+	const uniqueGuests: SeededGuest[] = [];
 	for (const r of guestRecords) {
 		if (!seen.has(r.id)) {
 			seen.add(r.id);
@@ -1743,7 +2067,7 @@ async function main() {
 				: overdue
 					? daysAgo(randInt(rng, 1, 7))
 					: daysAhead(randInt(rng, 5, 120));
-			const status: Prisma.TaskStatus = completed
+			const status: TaskStatus = completed
 				? "COMPLETED"
 				: overdue
 					? "IN_PROGRESS"
@@ -1754,7 +2078,7 @@ async function main() {
 				eventId: plan.id,
 				title: template,
 				description: `Tarefa de ${cat.toLowerCase()} para o planeamento do evento.`,
-				category: cat as Prisma.TaskCategory,
+				category: cat as TaskCategory,
 				priority: pick(rng, ["LOW", "MEDIUM", "HIGH", "URGENT"] as const),
 				status,
 				assignedTo: plan.partnerId,
@@ -1773,7 +2097,7 @@ async function main() {
 				? eventRecords.find((e) => e.id === plan.id)?.eventDate
 				: null) ?? monthsAhead(2);
 		const baseDate = new Date(eventDate);
-		const scheduleStatus: Prisma.ScheduleStatus =
+		const scheduleStatus: ScheduleStatus =
 			plan.status === "COMPLETED"
 				? "COMPLETED"
 				: plan.status === "CANCELLED"
@@ -1818,9 +2142,32 @@ async function main() {
 				: Math.min(pool.length, randInt(rng, 6, pool.length));
 		const selected = [...pool];
 		selected.sort(() => rng() - 0.5);
+		const chosen = selected.slice(0, count);
 
-		for (const [j, item] of selected.slice(0, count).entries()) {
-			const plannedQuantity = randInt(rng, 5, 120);
+		// The budget is now derived from the inventory and the suppliers, so the
+		// quantities have to stay inside the target instead of being random:
+		// each item gets a share of the inventory slice of the budget, weighted
+		// so a case of water and a generator both appear in a sensible amount.
+		const inventorySlice = Math.round(
+			Number(
+				budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0,
+			) * 0.18,
+		);
+		const weights = chosen.map(() => 1 + rng() * 14);
+		const weightedCost = chosen.reduce(
+			(sum, item, i) => sum + item.price * (weights[i] ?? 1),
+			0,
+		);
+		const scale = weightedCost > 0 ? inventorySlice / weightedCost : 0;
+
+		for (const [j, item] of chosen.entries()) {
+			// Quantity proportional to the weight, normalised so the total
+			// planned value of the slice matches the inventory share of the
+			// budget: sum(price x quantity) = inventorySlice.
+			const plannedQuantity = Math.max(
+				1,
+				Math.round((weights[j] ?? 1) * scale),
+			);
 			const roll = rng();
 			// Some items full, some low, some zero — analytics friendly.
 			const currentQuantity =
@@ -1829,7 +2176,7 @@ async function main() {
 					: roll < 0.5
 						? Math.round(plannedQuantity * (0.1 + rng() * 0.4))
 						: plannedQuantity;
-			const status: Prisma.InventoryStatus =
+			const status: InventoryStatus =
 				plan.status === "COMPLETED"
 					? "COMPLETED"
 					: currentQuantity >= plannedQuantity
@@ -1841,13 +2188,11 @@ async function main() {
 				id: `inv_${pad(plan.index + 1)}_${j + 1}`,
 				eventId: plan.id,
 				name: item.name,
-				category: item.cat as Prisma.InventoryCategory,
+				category: item.cat as InventoryCategory,
 				plannedQuantity,
 				currentQuantity,
-				venueQuantity:
-					status === "COMPLETED" ? plannedQuantity : currentQuantity,
 				status,
-				unit: item.unit as Prisma.InventoryUnit,
+				unit: item.unit as InventoryUnit,
 				unitPrice: item.price,
 				notes:
 					status === "PENDING"
@@ -1895,153 +2240,186 @@ async function main() {
 		`  ✅ Inventory (${inventoryRecords.length}) / Movements (${movementRecords.length})`,
 	);
 
-	// ── 10. EXPENSES + PAYMENTS + DOCUMENTS ────────────────────────────
-	const expenseRecords: Prisma.ExpenseCreateManyInput[] = [];
-	const paymentRecords: Prisma.PaymentCreateManyInput[] = [];
+	// ── 10. FOOD PLAN + CHECKLIST + DOCUMENTS ──────────────────────────
+	const foodPlanRecords: Prisma.FoodPlanCreateManyInput[] = [];
+	const foodPlanItemRecords: Prisma.FoodPlanItemCreateManyInput[] = [];
+	const checklistRecords: Prisma.ChecklistItemCreateManyInput[] = [];
 	const documentRecords: Prisma.DocumentCreateManyInput[] = [];
 
-	const budgetCatIndex = new Map<string, number>();
-	budgetCatRecords.forEach((c, ci) => {
-		budgetCatIndex.set(c.eventId, ci);
-	});
-
 	for (const plan of plans) {
-		const rng = mulberry32(1117 + plan.index * 211);
-		const cats = budgetCatRecords.filter((c) => c.eventId === plan.id);
-		const totalPlanned =
-			budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0;
-		// Utilization varies: completed ~ full, drafts near zero, others 30-75%.
-		const utilization =
-			plan.status === "COMPLETED"
-				? 0.9 + rng() * 0.18
-				: plan.status === "CANCELLED"
-					? 0.1 + rng() * 0.15
+		// ── Food plan: one per event, at most one catering supplier ──
+		const rngF = mulberry32(911 + plan.index * 97);
+		// The catering supplier, when the event has one, is the plan's supplier.
+		const catering = supplierRecords.find(
+			(s) => s.eventId === plan.id && s.category === "CATERING",
+		);
+		const planId = `fpl_${pad(plan.index + 1)}_${SEED_PREFIX}`;
+		foodPlanRecords.push({
+			id: planId,
+			eventId: plan.id,
+			supplierId: catering?.id ?? null,
+			notes:
+				plan.status === "DRAFT"
+					? "Menu por definir com o fornecedor."
+					: "Menu aprovado com o fornecedor.",
+		});
+
+		const menuCount =
+			plan.status === "DRAFT" ? randInt(rngF, 3, 5) : randInt(rngF, 6, 10);
+		const menu = [...FOOD_PLAN_MENU].sort(() => rngF() - 0.5);
+		for (const [j, dish] of menu.slice(0, menuCount).entries()) {
+			const roll = rngF();
+			// Completed events have everything prepared, drafts barely anything.
+			const status: FoodPlanStatus =
+				plan.status === "COMPLETED"
+					? "COMPLETED"
+					: plan.status === "CANCELLED"
+						? "PENDING"
+						: roll < 0.3
+							? "COMPLETED"
+							: roll < 0.7
+								? "IN_PROGRESS"
+								: "PENDING";
+			foodPlanItemRecords.push({
+				id: `fpi_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+				eventId: plan.id,
+				foodPlanId: planId,
+				name: dish.name,
+				category: dish.category,
+				quantity: Math.round(plan.capacity * (dish.share ?? 1)),
+				unit: dish.unit,
+				description: dish.desc,
+				status,
+				position: j + 1,
+			});
+		}
+
+		// ── Checklist ───────────────────────────────────────────────
+		// The status is derived, exactly as the API derives it: a supplier item
+		// is complete when the supplier is confirmed and fully paid, an
+		// inventory item when the planned quantity was reached.
+		let position = 0;
+		const nextPosition = () => (position += 1);
+
+		for (const supplier of supplierRecords.filter(
+			(s) => s.eventId === plan.id,
+		)) {
+			const paid = supplierPaymentRecords
+				.filter((pay) => pay.supplierId === supplier.id)
+				.reduce((sum, pay) => sum + Number(pay.amount), 0);
+			const price = Number(supplier.price ?? 0);
+			const fullyPaid = price > 0 ? paid >= price : paid > 0;
+
+			const status: ChecklistStatus =
+				supplier.status === "CANCELLED"
+					? "CANCELLED"
+					: supplier.status === "CONFIRMED" && fullyPaid
+						? "COMPLETED"
+						: supplier.status === "CONFIRMED"
+							? "IN_PROGRESS"
+							: "PENDING";
+
+			checklistRecords.push({
+				id: `chk_sup_${pad(plan.index + 1)}_${nextPosition()}`,
+				eventId: plan.id,
+				title: `Contratar ${supplier.name}`,
+				description: "Estado e pagamento do fornecedor.",
+				status,
+				supplierId: supplier.id,
+				autoManaged: true,
+				position: nextPosition(),
+				completedAt:
+					status === "COMPLETED" ? daysAgo(randInt(rngF, 1, 30)) : null,
+			});
+		}
+
+		for (const item of inventoryRecords.filter((i) => i.eventId === plan.id)) {
+			const planned = Number(item.plannedQuantity);
+			const current = Number(item.currentQuantity);
+			const status: ChecklistStatus =
+				item.status === "COMPLETED" || (planned > 0 && current >= planned)
+					? "COMPLETED"
+					: item.status === "IN_PROGRESS"
+						? "IN_PROGRESS"
+						: "PENDING";
+
+			checklistRecords.push({
+				id: `chk_inv_${pad(plan.index + 1)}_${nextPosition()}`,
+				eventId: plan.id,
+				title: `Adquirir ${item.name}`,
+				description: "Aquisição e conferência do inventário.",
+				status,
+				inventoryItemId: item.id,
+				autoManaged: true,
+				position: nextPosition(),
+				completedAt:
+					status === "COMPLETED" ? daysAgo(randInt(rngF, 1, 30)) : null,
+			});
+		}
+
+		// A few manual items, which the API never touches.
+		const manual = [...CHECKLIST_TEMPLATES].sort(() => rngF() - 0.5);
+		const manualCount = plan.status === "DRAFT" ? 1 : 3;
+		for (const [j, template] of manual.slice(0, manualCount).entries()) {
+			const status: ChecklistStatus =
+				plan.status === "COMPLETED"
+					? "COMPLETED"
 					: plan.status === "DRAFT"
-						? 0 + rng() * 0.05
-						: plan.status === "CONFIRMED"
-							? 0.45 + rng() * 0.3
-							: randInt(rng, 25, 60) / 100;
-		const spendTarget = Math.round(Number(totalPlanned) * utilization);
+						? "PENDING"
+						: pick(rngF, ["PENDING", "IN_PROGRESS", "COMPLETED"] as const);
+			checklistRecords.push({
+				id: `chk_man_${pad(plan.index + 1)}_${j + 1}`,
+				eventId: plan.id,
+				title: template.title,
+				description: template.desc,
+				status,
+				autoManaged: false,
+				position: nextPosition(),
+				dueDate: daysAhead(randInt(rngF, 5, 60)),
+				completedAt:
+					status === "COMPLETED" ? daysAgo(randInt(rngF, 1, 20)) : null,
+			});
+		}
 
-		let spent = 0;
-		for (const [ci, cat] of cats.entries()) {
-			const share = 0.1 + rng() * 0.35;
-			const expCount = randInt(rng, 1, 2);
-			const templates =
-				EXPENSE_TEMPLATES[cat.name.split(" & ")[0] as string] ??
-				EXPENSE_TEMPLATES.OTHER ??
-				[];
-			for (let e = 0; e < expCount; e++) {
-				const expId = `exp_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`;
-				const isLast = ci === cats.length - 1 && e === expCount - 1;
-				const amount = isLast
-					? Math.max(0, spendTarget - spent)
-					: Math.round((spendTarget * share) / expCount / 500) * 500;
-				spent += amount;
-				const vendor = vendorRecords.find(
-					(v) =>
-						v.eventId === plan.id &&
-						(v.category as string) === (cat.name.split(" & ")[0] ?? ""),
-				);
-				const tpl = templates[e % templates.length] ??
-					templates[0] ?? { desc: "Serviço", share: 1 };
-				const paidShare =
-					plan.status === "COMPLETED"
-						? 1
-						: plan.status === "CANCELLED"
-							? 0
-							: rng();
-				const status: Prisma.ExpenseStatus =
-					plan.status === "CANCELLED"
-						? "CANCELLED"
-						: plan.status === "COMPLETED"
-							? "PAID"
-							: paidShare > 0.7
-								? "PAID"
-								: paidShare > 0.4
-									? "PARTIALLY_PAID"
-									: rng() > 0.5
-										? "PLANNED"
-										: "OVERDUE";
-				const paidPercentage =
-					status === "PAID"
-						? 100
-						: status === "PARTIALLY_PAID"
-							? randInt(rng, 30, 60)
-							: 0;
+		// ── Documents: contracts and receipts, attached to the supplier ──
+		const rngD = mulberry32(1201 + plan.index * 167);
+		const eventSuppliers = supplierRecords
+			.map((supplier, supplierIndex) => ({ supplier, supplierIndex }))
+			.filter(
+				({ supplier }) =>
+					supplier.eventId === plan.id && supplier.status !== "PROSPECT",
+			);
+		for (const { supplier, supplierIndex } of eventSuppliers) {
+			const payment = supplierPaymentRecords.find(
+				(pay) => pay.supplierId === supplier.id,
+			);
+			if (!payment) continue;
+			if (rngD() > 0.55) continue;
 
-				expenseRecords.push({
-					id: expId,
-					eventId: plan.id,
-					budgetCategoryId: cat.id,
-					vendorId: vendor?.id ?? null,
-					description: `${tpl.desc} — ${cat.name}`,
-					type: "EXPENSE",
-					totalAmount: amount,
-					dueDate:
-						status === "OVERDUE"
-							? daysAgo(randInt(rng, 1, 10))
-							: daysAhead(randInt(rng, 5, 90)),
-					status,
-					paidPercentage,
-					notes:
-						status === "PAID"
-							? "Pagamento concluído."
-							: status === "OVERDUE"
-								? "Pagamento em atraso."
-								: null,
-					createdBy: plan.ownerId,
-					inventoryItemId: null,
-				});
-
-				// Payments consistent with paidPercentage.
-				const paidAmount =
-					Math.round((Number(amount) * paidPercentage) / 100 / 500) * 500;
-				if (paidAmount > 0) {
-					paymentRecords.push({
-						id: `pay_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
-						expenseId: expId,
-						amount: paidAmount,
-						paymentDate: daysAgo(randInt(rng, 1, 40)),
-						method: pick(rng, [
-							"CASH",
-							"BANK_TRANSFER",
-							"ATM",
-							"CARD",
-							"MOBILE_PAYMENT",
-						] as const),
-						reference:
-							status === "PAID"
-								? `TRF-2026-${pad(plan.index + 1)}-${ci + 1}-${e + 1}`
-								: null,
-						notes: status === "PAID" ? "Pagamento integral" : "Adiantamento",
-						createdBy: plan.ownerId,
-					});
-				}
-
-				// Documents for major expenses (only when a payment row exists).
-				if (paidAmount > 0 && status === "PAID" && rng() > 0.6) {
-					documentRecords.push({
-						id: `doc_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
-						eventId: plan.id,
-						name: `Fatura — ${tpl.desc} (${cat.name})`,
-						type: "RECEIPT",
-						reference: `FAT-2026-${pad(plan.index + 1)}-${ci + 1}-${e + 1}`,
-						vendorId: vendor?.id ?? null,
-						expenseId: expId,
-						paymentId: `pay_${pad(plan.index + 1)}_${ci + 1}_${e + 1}`,
-						status: "ACTIVE",
-						createdBy: plan.ownerId,
-					});
-				}
-			}
+			const isReceipt = supplier.paymentStatus === "PAID";
+			documentRecords.push({
+				id: `doc_${pad(plan.index + 1)}_${supplierIndex + 1}_${SEED_PREFIX}`,
+				eventId: plan.id,
+				supplierId: supplier.id,
+				supplierPaymentId: isReceipt ? (payment.id ?? null) : null,
+				name: isReceipt
+					? `Recibo — ${supplier.name}`
+					: `Contrato — ${supplier.name}`,
+				type: isReceipt ? "RECEIPT" : "CONTRACT",
+				reference: `${isReceipt ? "REC" : "CT"}-2026-${pad(plan.index + 1)}-${pad(supplierIndex + 1)}`,
+				url: `https://documentos.muxima.ao/${plan.id}/${supplierIndex + 1}/${isReceipt ? "recibo" : "contrato"}.pdf`,
+				mimeType: "application/pdf",
+				status: "ACTIVE",
+				createdBy: plan.ownerId,
+			});
 		}
 	}
-	await prisma.expense.createMany({ data: expenseRecords });
-	await prisma.payment.createMany({ data: paymentRecords });
+	await prisma.foodPlan.createMany({ data: foodPlanRecords });
+	await prisma.foodPlanItem.createMany({ data: foodPlanItemRecords });
+	await prisma.checklistItem.createMany({ data: checklistRecords });
 	await prisma.document.createMany({ data: documentRecords });
 	console.log(
-		`  ✅ Expenses (${expenseRecords.length}) / Payments (${paymentRecords.length}) / Documents (${documentRecords.length})`,
+		`  ✅ Food Plans (${foodPlanRecords.length}) / Items (${foodPlanItemRecords.length}) / Checklist (${checklistRecords.length}) / Documents (${documentRecords.length})`,
 	);
 
 	// ── 11. NOTIFICATIONS + AUDIT LOGS ─────────────────────────────────
@@ -2057,7 +2435,7 @@ async function main() {
 			members[randInt(rng, 0, Math.max(0, members.length - 1))]?.userId ??
 			plan.ownerId;
 
-		const notificationTypes: Prisma.NotificationType[] = [
+		const notificationTypes: NotificationType[] = [
 			"FINANCE",
 			"TASKS",
 			"GUESTS",
@@ -2089,8 +2467,9 @@ async function main() {
 		const entities = [
 			"Event",
 			"Budget",
-			"Vendor",
-			"Expense",
+			"Supplier",
+			"FoodPlan",
+			"ChecklistItem",
 			"Guest",
 			"Task",
 			"InventoryItem",
@@ -2103,7 +2482,7 @@ async function main() {
 				userId: target,
 				action: (["CREATE", "UPDATE"] as const)[a % 2] ?? "CREATE",
 				entity: pick(rng, entities),
-				entityId: `${pick(rng, ["evt", "bgt", "vnd", "exp", "gst", "tsk"])}_${plan.index + 1}`,
+				entityId: `${pick(rng, ["evt", "bgt", "sup", "fpl", "chk", "gst", "tsk"])}_${plan.index + 1}`,
 				newData: { note: "atualizado no âmbito do seed" },
 				createdAt: daysAgo(randInt(rng, 1, 40)),
 			});
@@ -2296,9 +2675,9 @@ async function main() {
 	console.log(`   Events:         ${eventRecords.length}`);
 	console.log(`   Event Members:  ${memberRecords.length}`);
 	console.log(`   Budgets:        ${budgetRecords.length}`);
-	console.log(`   Budget Cats:    ${budgetCatRecords.length}`);
-	console.log(`   Vendors:        ${vendorRecords.length}`);
-	console.log(`   Contracts:      ${contractRecords.length}`);
+	console.log(`   Suppliers:      ${supplierRecords.length}`);
+	console.log(`   Sup. Payments:  ${supplierPaymentRecords.length}`);
+	console.log(`   Sup. Installs:  ${supplierInstallmentRecords.length}`);
 	console.log(`   Guests:         ${uniqueGuests.length}`);
 	console.log(`   Companions:     ${companionRecords.length}`);
 	console.log(`   Invitations:    ${guestInvitationRecords.length}`);
@@ -2308,8 +2687,9 @@ async function main() {
 	console.log(`   Schedules:      ${scheduleRecords.length}`);
 	console.log(`   Inventory:      ${inventoryRecords.length}`);
 	console.log(`   Movements:      ${movementRecords.length}`);
-	console.log(`   Expenses:       ${expenseRecords.length}`);
-	console.log(`   Payments:       ${paymentRecords.length}`);
+	console.log(`   Food Plans:     ${foodPlanRecords.length}`);
+	console.log(`   Food Plan Items:${foodPlanItemRecords.length}`);
+	console.log(`   Checklist:      ${checklistRecords.length}`);
 	console.log(`   Documents:      ${documentRecords.length}`);
 	console.log(`   Notifications:  ${notificationRecords.length}`);
 	console.log(`   Audit Logs:     ${auditRecords.length}`);

@@ -12,7 +12,13 @@ type FakeItem = {
 	id: string;
 	eventId: string;
 	name: string;
-	category: "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER";
+	category:
+		| "DRINK"
+		| "MATERIAL"
+		| "EQUIPMENT"
+		| "FURNITURE"
+		| "LINEN"
+		| "OTHER";
 	unit:
 		| "UNIT"
 		| "BOX"
@@ -25,9 +31,7 @@ type FakeItem = {
 	status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
 	plannedQuantity: number;
 	currentQuantity: number;
-	venueQuantity: number;
 	unitPrice: number | null;
-	vendorId: string | null;
 	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -56,9 +60,7 @@ function makeItem(overrides: Partial<FakeItem> & { id: string }): FakeItem {
 		status: "PENDING",
 		plannedQuantity: 10,
 		currentQuantity: 0,
-		venueQuantity: 0,
 		unitPrice: null,
-		vendorId: null,
 		notes: null,
 		createdAt: new Date("2026-01-01"),
 		updatedAt: new Date("2026-01-01"),
@@ -209,7 +211,6 @@ describe("InventoryService.create", () => {
 			unit: "UNIT",
 			plannedQuantity: 10,
 			currentQuantity: 4,
-			venueQuantity: 8,
 			unitPrice: 1_000,
 		});
 
@@ -222,7 +223,7 @@ describe("InventoryService.create", () => {
 		expect(store.movements[0]?.totalCost).toBe(4_000);
 	});
 
-	it("rejects venue quantity above planned quantity", async () => {
+	it("rejects a current quantity above the planned quantity", async () => {
 		const { fake, store } = createFakeDb([]);
 
 		await expect(
@@ -231,12 +232,11 @@ describe("InventoryService.create", () => {
 				category: "OTHER",
 				unit: "UNIT",
 				plannedQuantity: 10,
-				currentQuantity: 0,
-				venueQuantity: 20,
+				currentQuantity: 12,
 				unitPrice: undefined,
 			}),
 		).rejects.toThrow(
-			"A quantidade destinada ao salão não pode superar a quantidade planeada",
+			"A quantidade actual não pode superar a quantidade planeada",
 		);
 		expect(store.items).toHaveLength(0);
 	});
@@ -386,15 +386,15 @@ describe("InventoryService.update", () => {
 		);
 	});
 
-	it("rejects venue quantity above the new planned quantity", async () => {
+	it("rejects a planned quantity below the current quantity", async () => {
 		const { fake } = createFakeDb([
-			makeItem({ id: "inv_1", plannedQuantity: 10, venueQuantity: 10 }),
+			makeItem({ id: "inv_1", plannedQuantity: 10, currentQuantity: 8 }),
 		]);
 
 		await expect(
 			InventoryService.update(fake, "inv_1", { plannedQuantity: 4 }),
 		).rejects.toThrow(
-			"A quantidade destinada ao salão não pode superar a quantidade planeada",
+			"A quantidade planeada não pode ser inferior à quantidade actual",
 		);
 	});
 
@@ -405,7 +405,6 @@ describe("InventoryService.update", () => {
 
 		const updated = await InventoryService.update(fake, "inv_1", {
 			plannedQuantity: 6,
-			venueQuantity: 6,
 		});
 
 		expect(updated.status).toBe("COMPLETED");
@@ -488,7 +487,6 @@ describe("InventoryService.getStats", () => {
 				id: "inv_1",
 				plannedQuantity: 10,
 				currentQuantity: 10,
-				venueQuantity: 10,
 				status: "COMPLETED",
 				unitPrice: 100,
 			}),
@@ -496,7 +494,6 @@ describe("InventoryService.getStats", () => {
 				id: "inv_2",
 				plannedQuantity: 20,
 				currentQuantity: 5,
-				venueQuantity: 8,
 				status: "IN_PROGRESS",
 				unitPrice: 50,
 			}),
@@ -504,7 +501,6 @@ describe("InventoryService.getStats", () => {
 				id: "inv_3",
 				plannedQuantity: 5,
 				currentQuantity: 0,
-				venueQuantity: 5,
 				status: "PENDING",
 				unitPrice: null,
 			}),
@@ -516,7 +512,6 @@ describe("InventoryService.getStats", () => {
 			totalItems: 3,
 			totalQuantity: 35,
 			totalCurrent: 15,
-			totalVenue: 23,
 			totalRemaining: 20,
 			completionPercentage: 43,
 			totalValue: 2_000,

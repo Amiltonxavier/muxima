@@ -32,7 +32,6 @@ export async function inventoryRoutes(app: FastifyInstance) {
 			search: query.search || undefined,
 			category: validateEnum(query.category, VALID_INVENTORY_CATEGORIES),
 			status: validateEnum(query.status, VALID_INVENTORY_STATUSES),
-			vendorId: query.vendorId || undefined,
 		};
 		const result = await InventoryService.list(
 			db,
