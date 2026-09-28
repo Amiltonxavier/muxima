@@ -3,7 +3,20 @@
 // They should be derived from Prisma types but represent the API response shape.
 
 // ── Enums ────────────────────────────────────────────────────────
-export type EventType = "ENGAGEMENT" | "WEDDING";
+// Mirrors the Prisma `EventType` enum: the events router returns the model
+// directly, so this union must cover every value the schema defines.
+export type EventType =
+	| "ENGAGEMENT"
+	| "WEDDING"
+	| "BIRTHDAY"
+	| "CONFERENCE"
+	| "WORKSHOP"
+	| "GRADUATION"
+	| "DINNER"
+	| "CORPORATE"
+	| "BABY_SHOWER"
+	| "CEREMONY"
+	| "PARTY";
 export type EventStatus =
 	| "DRAFT"
 	| "PLANNING"
@@ -248,6 +261,14 @@ export type Supplier = {
 	phone: string | null;
 	email: string | null;
 	address: string | null;
+	/** Tax identification number (optional). */
+	nif: string | null;
+	/** Bank details (optional). */
+	iban: string | null;
+	/** Whether the supplier accepts MULTICAIXA Express. */
+	hasMcxExpress: boolean;
+	/** Phone associated with the supplier's MULTICAIXA Express. */
+	mcxPhone: string | null;
 	status: SupplierStatus;
 	paymentModel: SupplierPaymentModel;
 	paymentStatus: SupplierPaymentStatus;
@@ -269,6 +290,8 @@ export type SupplierMoney = {
 	paymentStatus: SupplierPaymentStatus;
 	nextDueDate: Date | null;
 	hasInstallments: boolean;
+	/** Unsettled installments left in an active plan. */
+	remainingInstallments: number;
 	isFullyPaid: boolean;
 };
 

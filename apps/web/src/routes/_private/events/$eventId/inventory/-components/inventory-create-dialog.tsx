@@ -42,7 +42,13 @@ export function InventoryCreateDialog({
 	const form = useForm({
 		defaultValues: {
 			name: "",
-			category: "DRINK" as "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER",
+			category: "DRINK" as
+				| "DRINK"
+				| "MATERIAL"
+				| "EQUIPMENT"
+				| "FURNITURE"
+				| "LINEN"
+				| "OTHER",
 			unit: "UNIT" as
 				| "UNIT"
 				| "BOX"
@@ -53,7 +59,6 @@ export function InventoryCreateDialog({
 				| "PACKAGE"
 				| "OTHER",
 			plannedQuantity: 0,
-			venueQuantity: 0,
 			unitPrice: 0,
 			notes: "",
 		},
@@ -116,7 +121,13 @@ export function InventoryCreateDialog({
 										value={field.state.value}
 										onValueChange={(v) =>
 											field.handleChange(
-												v as "DRINK" | "FOOD" | "CAKE" | "DECORATION" | "OTHER",
+												v as
+													| "DRINK"
+													| "MATERIAL"
+													| "EQUIPMENT"
+													| "FURNITURE"
+													| "LINEN"
+													| "OTHER",
 											)
 										}
 									>
@@ -171,7 +182,7 @@ export function InventoryCreateDialog({
 						</form.Field>
 					</div>
 
-					<div className="grid grid-cols-3 gap-4">
+					<div className="grid grid-cols-2 gap-4">
 						<form.Field name="plannedQuantity">
 							{(field) => (
 								<div className="space-y-2">
@@ -179,22 +190,6 @@ export function InventoryCreateDialog({
 									<Input
 										type="number"
 										min={1}
-										value={field.state.value || ""}
-										onChange={(e) =>
-											field.handleChange(Number(e.target.value) || 0)
-										}
-										disabled={createItem.isPending}
-									/>
-								</div>
-							)}
-						</form.Field>
-						<form.Field name="venueQuantity">
-							{(field) => (
-								<div className="space-y-2">
-									<Label>Para o salão</Label>
-									<Input
-										type="number"
-										min={0}
 										value={field.state.value || ""}
 										onChange={(e) =>
 											field.handleChange(Number(e.target.value) || 0)

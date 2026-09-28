@@ -1,4 +1,5 @@
 import type { InvitationStats } from "@muxima/api/shared/types/entities";
+import { StatsGrid } from "@/shared/components/metrics";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export function InvitationsStats({
@@ -11,7 +12,7 @@ export function InvitationsStats({
 	}
 
 	return (
-		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		<StatsGrid columns={4}>
 			<StatsCard
 				title="Total de convites"
 				value={stats.total}
@@ -32,6 +33,6 @@ export function InvitationsStats({
 				value={stats.expired + stats.cancelled}
 				description={`${stats.cancelled} cancelados`}
 			/>
-		</div>
+		</StatsGrid>
 	);
 }

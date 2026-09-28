@@ -11,7 +11,8 @@ import {
 	Trash2,
 	Users,
 } from "lucide-react";
-import { getStatusColor, getStatusLabel } from "@/utils/status-helpers";
+import { StatusDot } from "@/shared/components/status-dot";
+import { getStatusLabel, getStatusTone } from "@/utils/status-helpers";
 import type { GuestItem } from "../-types/guest.types";
 import {
 	getGuestCompanions,
@@ -36,6 +37,7 @@ export function GuestsTableRow({
 }) {
 	const tableName = getGuestTableName(guest);
 	const companions = getGuestCompanions(guest);
+	const status = guest.status || "PENDING";
 
 	return (
 		<TableRow>
@@ -88,9 +90,10 @@ export function GuestsTableRow({
 				)}
 			</TableCell>
 			<TableCell>
-				<Badge className={getStatusColor(guest.status || "PENDING")}>
-					{getStatusLabel(guest.status || "PENDING", "guest")}
-				</Badge>
+				<StatusDot
+					label={getStatusLabel(status, "guest")}
+					tone={getStatusTone(status)}
+				/>
 			</TableCell>
 			<TableCell>
 				<div className="flex gap-1">

@@ -7,11 +7,25 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatCurrencyCompact(value: number): string {
-	if (value >= 1_000_000) {
-		return `${(value / 1_000_000).toFixed(1).replace(".0", "")}M Kz`;
+	const absoluteValue = Math.abs(value);
+	const sign = value < 0 ? "-" : "";
+
+	const format = (amount: number, suffix: string) =>
+		`${sign}${new Intl.NumberFormat("pt-AO", {
+			maximumFractionDigits: 1,
+		}).format(amount)}${suffix} Kz`;
+
+	if (absoluteValue >= 1_000_000_000) {
+		return format(absoluteValue / 1_000_000_000, "B");
 	}
-	if (value >= 1_000) {
-		return `${(value / 1_000).toFixed(0)}K Kz`;
+
+	if (absoluteValue >= 1_000_000) {
+		return format(absoluteValue / 1_000_000, "M");
 	}
+
+	if (absoluteValue >= 1_000) {
+		return format(absoluteValue / 1_000, "K");
+	}
+
 	return formatCurrency(value);
 }

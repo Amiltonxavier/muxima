@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { checklistKeys } from "@/shared/queries/checklist-queries";
 import { orpc } from "@/utils/orpc";
 import type { PaginationParams } from "./task-queries";
 
@@ -123,6 +124,23 @@ export function useUpdateSupplier() {
 		orpc.suppliers.update.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+			},
+		}),
+	);
+}
+
+/**
+ * Dedicated status mutation (PATCH semantics). The status also drives the
+ * checklist, so every supplier query plus the checklist is invalidated.
+ */
+export function useChangeSupplierStatus() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.suppliers.changeStatus.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+				queryClient.invalidateQueries({ queryKey: checklistKeys.all });
 			},
 		}),
 	);

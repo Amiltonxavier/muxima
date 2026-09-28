@@ -256,7 +256,11 @@ function DocumentDialog({
 											([value, label]) => ({ value, label }),
 										)}
 										value={field.state.value}
-										onValueChange={(v) => field.handleChange(v as string)}
+										onValueChange={(v) =>
+											field.handleChange(
+												v as "OTHER" | "CONTRACT" | "RECEIPT" | "QUOTE",
+											)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

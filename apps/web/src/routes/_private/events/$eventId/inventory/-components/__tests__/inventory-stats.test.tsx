@@ -9,7 +9,6 @@ const stats: InventoryStatsDto = {
 	totalItems: 8,
 	totalQuantity: 400,
 	totalCurrent: 320,
-	totalVenue: 280,
 	totalRemaining: 80,
 	completionPercentage: 80,
 	totalValue: 4_000_000,
@@ -28,11 +27,12 @@ describe("InventoryStats", () => {
 		render(<InventoryStats stats={stats} />);
 
 		expect(screen.getByText("Total de produtos")).toBeDefined();
-		expect(screen.getByText("Qtd. planeada")).toBeDefined();
+		expect(screen.getByText("Qtd. concluída")).toBeDefined();
 		expect(screen.getByText("Em falta")).toBeDefined();
-		expect(screen.getByText("Para o salão")).toBeDefined();
+		expect(screen.getByText("Progresso")).toBeDefined();
 
-		expect(screen.getByText("400")).toBeDefined();
+		// A quantidade planeada vive como limite do progresso ("/ 400").
+		expect(screen.getByText("/ 400")).toBeDefined();
 		expect(screen.getByText("320")).toBeDefined();
 		expect(screen.getByText("80%")).toBeDefined();
 	});
@@ -125,15 +125,13 @@ describe("InventoryTable", () => {
 			status: "IN_PROGRESS" as const,
 			plannedQuantity: 300,
 			currentQuantity: 280,
-			venueQuantity: 280,
 			remainingQuantity: 20,
 			completionPercentage: 93,
 			unitPrice: 10_000,
 			totalValue: 3_000_000,
 			completedValue: 2_800_000,
 			pendingValue: 200_000,
-			vendorId: null,
-			vendor: null,
+			customFields: null,
 			notes: null,
 			createdAt: new Date("2026-09-01T10:00:00.000Z"),
 			updatedAt: new Date("2026-09-20T10:00:00.000Z"),
@@ -165,15 +163,13 @@ describe("InventoryTable", () => {
 			status: "COMPLETED" as const,
 			plannedQuantity: 10,
 			currentQuantity: 10,
-			venueQuantity: 10,
 			remainingQuantity: 0,
 			completionPercentage: 100,
 			unitPrice: null,
 			totalValue: 0,
 			completedValue: 0,
 			pendingValue: 0,
-			vendorId: null,
-			vendor: null,
+			customFields: null,
 			notes: null,
 			createdAt: new Date("2026-09-01T10:00:00.000Z"),
 			updatedAt: new Date("2026-09-20T10:00:00.000Z"),

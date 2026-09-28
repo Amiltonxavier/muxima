@@ -64,6 +64,7 @@ enum PaymentMethod {
   ATM
   CARD
   MOBILE_PAYMENT
+  MULTICAIXA_EXPRESS
   OTHER
 }
 
@@ -100,9 +101,7 @@ enum SupplierStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
-}
-
-/// Denormalised mirror of the value computed by the backend resolver.
+}  /// Denormalised mirror of the amount computed by the backend resolver.
 /// Never trusted on read: the API always recomputes from price +
 /// installments + payments.
 enum SupplierPaymentStatus {
@@ -433,11 +432,19 @@ model Supplier {
   eventId        String
   name           String
   category       SupplierCategory
-  /// Agreed price. Nullable so a supplier can exist before negotiation ends.
+  /// Agreed amount. Nullable so a supplier can exist before negotiation ends.
   price          Decimal?
   phone          String?
   email          String?
   address        String?
+  /// Tax identification number (optional, validated by the API when set).
+  nif            String?
+  /// Bank details (optional).
+  iban           String?
+  /// Whether the supplier accepts MULTICAIXA Express (mobile payments).
+  hasMcxExpress  Boolean               @default(false)
+  /// Phone number associated with the supplier's MULTICAIXA Express.
+  mcxPhone       String?
   status         SupplierStatus        @default(PROSPECT)
   paymentModel   SupplierPaymentModel  @default(FULL)
   paymentStatus  SupplierPaymentStatus @default(PENDING)

@@ -5,7 +5,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@muxima/ui/components/select";
-import { EVENT_STATUS_LABELS, getStatusColor } from "@/utils/status-helpers";
+import { EVENT_STATUS_LABELS } from "@/utils/status-helpers";
 import { useUpdateEvent } from "../../-queries/event-queries";
 
 const EVENT_STATUSES = [
@@ -43,17 +43,8 @@ export function UpdateEventStatus({ eventId, status }: UpdateEventStatusProps) {
 	};
 
 	return (
-		<Select
-			items={Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => ({
-				value,
-				label,
-			}))}
-			value={status}
-			onValueChange={handleUpdateStatusEvent}
-		>
-			<SelectTrigger
-				className={`h-auto w-auto cursor-pointer border-0 bg-transparent p-0 px-2.5 py-1.5 shadow-none ring-0 hover:bg-black/5 ${getStatusColor(status)}`}
-			>
+		<Select value={status} onValueChange={handleUpdateStatusEvent}>
+			<SelectTrigger className="h-auto w-auto cursor-pointer border bg-transparent px-2.5 py-1.5 shadow-none ring-0 hover:bg-black/5">
 				<SelectValue />
 			</SelectTrigger>
 

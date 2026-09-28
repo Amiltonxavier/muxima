@@ -13,12 +13,14 @@ import {
 	Gift,
 	Home,
 	LayoutGrid,
+	ListChecks,
 	Mail,
 	Package,
 	Settings,
 	ShoppingCart,
 	TableProperties,
 	Users,
+	UtensilsCrossed,
 } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
@@ -67,6 +69,16 @@ const eventNavGroups: NavGroup[] = [
 				label: "Cronograma",
 				icon: <Calendar className="h-4 w-4" />,
 				to: "/events/$eventId/schedule",
+			},
+			{
+				label: "Alimentação",
+				icon: <UtensilsCrossed className="h-4 w-4" />,
+				to: "/events/$eventId/food-plan",
+			},
+			{
+				label: "Checklist",
+				icon: <ListChecks className="h-4 w-4" />,
+				to: "/events/$eventId/checklist",
 			},
 		],
 	},

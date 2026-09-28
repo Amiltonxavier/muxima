@@ -64,7 +64,6 @@ export function InventoryTable({
 						<TableHead>Categoria</TableHead>
 						<TableHead>Unidade</TableHead>
 						<TableHead>Planeado</TableHead>
-						<TableHead>Salão</TableHead>
 						<TableHead>Actual</TableHead>
 						<TableHead>Em falta</TableHead>
 						<TableHead>Valor</TableHead>

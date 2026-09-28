@@ -1,3 +1,12 @@
+import { MetricStatusList } from "@/shared/components/metrics";
+
+/**
+ * Linha "label — valor" usada nos cards de stats do evento.
+ *
+ * Consolidado sobre a biblioteca de métricas (`shared/components/metrics`):
+ * preferir `MetricStatusList` (suporta status e progresso por linha) em código
+ * novo. Mantido como fachada para os call sites existentes.
+ */
 export function StatRow({
 	label,
 	value,
@@ -5,10 +14,5 @@ export function StatRow({
 	label: string;
 	value: number | string;
 }) {
-	return (
-		<div className="flex items-center justify-between text-sm">
-			<span className="text-muted-foreground">{label}</span>
-			<span className="font-medium">{value}</span>
-		</div>
-	);
+	return <MetricStatusList items={[{ label, value }]} className="space-y-0" />;
 }

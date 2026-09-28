@@ -14,7 +14,6 @@ export type InventoryFormValues = {
 	category: InventoryCategory;
 	unit: InventoryListItem["unit"];
 	plannedQuantity: number;
-	venueQuantity: number;
 	unitPrice: number;
 	notes: string;
 };

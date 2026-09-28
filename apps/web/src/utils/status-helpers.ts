@@ -1,3 +1,5 @@
+import type { StatusTone } from "@/shared/components/status-dot";
+
 export const EVENT_STATUS_LABELS: Record<string, string> = {
 	DRAFT: "Rascunho",
 	PLANNING: "Planeamento",
@@ -76,6 +78,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 	ATM: "Multibanco",
 	CARD: "Cartão",
 	MOBILE_PAYMENT: "Pagamento móvel",
+	MULTICAIXA_EXPRESS: "MULTICAIXA Express",
 	OTHER: "Outro",
 };
 
@@ -173,6 +176,42 @@ export const RSVP_STATUS_LABELS: Record<string, string> = {
 	DECLINED: "Recusado",
 };
 
+export const FOOD_PLAN_CATEGORY_LABELS: Record<string, string> = {
+	STARTER: "Entradas",
+	MAIN_COURSE: "Pratos principais",
+	SIDE_DISH: "Acompanhamentos",
+	DESSERT: "Sobremesas",
+	FRUIT: "Frutas",
+	OTHER: "Outros",
+};
+
+export const FOOD_PLAN_UNIT_LABELS: Record<string, string> = {
+	UNIT: "Unidade",
+	PLATE: "Prato",
+	BOWL: "Tigela",
+	PORTION: "Porção",
+	GRAM: "Grama",
+	KILOGRAM: "Quilograma",
+	LITER: "Litro",
+	GLASS: "Copo",
+	BOTTLE: "Garrafa",
+	PACKAGE: "Pacote",
+	OTHER: "Outro",
+};
+
+export const FOOD_PLAN_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Pendente",
+	IN_PROGRESS: "Em curso",
+	COMPLETED: "Concluído",
+};
+
+export const CHECKLIST_STATUS_LABELS: Record<string, string> = {
+	PENDING: "Pendente",
+	IN_PROGRESS: "Em curso",
+	COMPLETED: "Concluído",
+	CANCELLED: "Cancelado",
+};
+
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 	CONTRACT: "Contrato",
 	RECEIPT: "Recibo",
@@ -197,6 +236,45 @@ export const DEDICATION_VISIBILITY_LABELS: Record<string, string> = {
 	PRIVATE: "Privada",
 	SHARED: "Partilhada",
 };
+
+/**
+ * Semantic tone of a status, for `StatusDot`. Centralized here so every
+ * module renders the same status with the same color, while the component
+ * itself stays domain-agnostic.
+ */
+export function getStatusTone(status: string): StatusTone {
+	const tones: Record<string, StatusTone> = {
+		DRAFT: "neutral",
+		PLANNING: "info",
+		CONFIRMED: "success",
+		ONGOING: "warning",
+		COMPLETED: "success",
+		CANCELLED: "danger",
+		PLANNED: "neutral",
+		PARTIALLY_PAID: "warning",
+		PAID: "success",
+		OVERDUE: "danger",
+		PENDING: "warning",
+		DECLINED: "danger",
+		WAITING: "info",
+		MAYBE: "warning",
+		RESPONDED: "success",
+		OPENED: "info",
+		SENT: "neutral",
+		CREATED: "neutral",
+		EXPIRED: "neutral",
+		TODO: "neutral",
+		IN_PROGRESS: "info",
+		PROSPECT: "neutral",
+		CONTACTED: "info",
+		NEGOTIATING: "warning",
+		NOT_STARTED: "neutral",
+		READY: "success",
+		PRIVATE: "neutral",
+		SHARED: "info",
+	};
+	return tones[status] ?? "neutral";
+}
 
 export function getStatusColor(status: string): string {
 	const colors: Record<string, string> = {
@@ -244,7 +322,9 @@ export function getStatusLabel(
 		| "role"
 		| "document"
 		| "inventory"
-		| "dedication",
+		| "dedication"
+		| "checklist"
+		| "foodPlan",
 ): string {
 	const labels: Record<string, Record<string, string>> = {
 		event: EVENT_STATUS_LABELS,
@@ -257,6 +337,8 @@ export function getStatusLabel(
 		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
 		inventory: INVENTORY_STATUS_LABELS,
 		dedication: DEDICATION_STATUS_LABELS,
+		checklist: CHECKLIST_STATUS_LABELS,
+		foodPlan: FOOD_PLAN_STATUS_LABELS,
 	};
 	return labels[type]?.[status] || status;
 }

@@ -25,6 +25,7 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
+import { StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
 import {
@@ -111,7 +112,7 @@ function TablesPage() {
 			</div>
 
 			{/* Metrics Cards */}
-			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			<StatsGrid columns={4}>
 				<StatsCard title="Total de mesas" value={tableStats?.total ?? 0} />
 
 				<StatsCard
@@ -122,7 +123,7 @@ function TablesPage() {
 				<StatsCard title="Ocupados" value={tableStats?.totalOccupied ?? 0} />
 
 				<StatsCard title="Disponíveis" value={tableStats?.available ?? 0} />
-			</div>
+			</StatsGrid>
 
 			{/* Filters */}
 			<div className="flex flex-wrap items-center gap-3">

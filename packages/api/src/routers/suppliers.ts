@@ -22,12 +22,28 @@ import {
 	resolveSupplierMoney,
 } from "../shared/finance/supplier-money";
 import {
+	assertAgreedAmountExists,
+	assertInstallmentPlanWithinAgreed,
+	assertInstallmentsAllowedOnStatus,
+	assertPaymentAllowedOnStatus,
+	assertPaymentsWithinAgreed,
+	assertStatusTransition,
+	type SupplierRuleStatus,
+} from "../shared/finance/supplier-rules";
+import {
 	parseSupplierCategoryFields,
 	SUPPLIER_CATEGORY_FIELDS,
 	SUPPLIER_CATEGORY_ORDER,
 } from "../shared/schemas/supplier-category-fields";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 import { toJsonInput } from "../shared/utils/json";
+import {
+	hasValidIbanChecksum,
+	normalizeAngolaPhone,
+	validateAngolaPhone,
+	validateIban,
+	validateNif,
+} from "../shared/validation/identifiers";
 import { syncChecklistForSupplier } from "./checklist";
 
 // ── Input schemas ───────────────────────────────────────────────
@@ -86,6 +102,7 @@ const PAYMENT_METHOD_ENUM = z.enum([
 	"ATM",
 	"CARD",
 	"MOBILE_PAYMENT",
+	"MULTICAIXA_EXPRESS",
 	"OTHER",
 ] as [string, ...string[]]);
 
@@ -93,7 +110,7 @@ const PAYMENT_METHOD_ENUM = z.enum([
 const moneyInput = z.coerce
 	.number()
 	.nonnegative()
-	.refine((v) => Number.isFinite(v), "Valor inválido")
+	.refine((v) => Number.isFinite(v), "Montante inválido")
 	.transform((v) => Math.round(v * 100));
 
 const optionalMoneyInput = moneyInput.optional();
@@ -116,6 +133,47 @@ const installmentInput = z.object({
 	dueDate: z.coerce.date(),
 	notes: z.string().trim().optional(),
 });
+
+/** A payment recorded together with the supplier (create flow, optional). */
+const paymentInput = z.object({
+	amount: moneyInput,
+	paymentDate: z.coerce.date(),
+	method: PAYMENT_METHOD_ENUM,
+	reference: z.string().trim().optional(),
+	notes: z.string().trim().optional(),
+});
+
+/**
+ * Optional identifiers, validated only when filled. The IBAN also goes
+ * through the mod-97 check: the API is the authority, the web input is just
+ * fast feedback.
+ */
+const nifInput = z
+	.string()
+	.trim()
+	.toUpperCase()
+	.refine((v) => validateNif(v) === null, "NIF inválido.")
+	.optional()
+	.nullable();
+
+const ibanInput = z
+	.string()
+	.transform((v) => v.replace(/[\s-]/g, "").toUpperCase())
+	.refine((v) => v === "" || validateIban(v) === null, "IBAN inválido.")
+	.refine(
+		(v) => v === "" || hasValidIbanChecksum(v),
+		"O IBAN não passa na verificação de dígitos.",
+	)
+	.optional()
+	.nullable();
+
+const mcxPhoneInput = z
+	.string()
+	.transform((v) => v.trim())
+	.refine((v) => validateAngolaPhone(v) === null, "Telefone inválido.")
+	.transform((v) => (v ? normalizeAngolaPhone(v) : ""))
+	.optional()
+	.nullable();
 
 const installmentUpdateInput = z.object({
 	id: z.string(),
@@ -142,6 +200,15 @@ type SupplierRow = {
 		paidAt: Date | null;
 	}>;
 };
+
+/** Unsettled installments left in an active schedule. */
+function countRemainingInstallments(
+	installments: SupplierRow["installments"],
+): number {
+	return installments.filter(
+		(i) => i.status !== "CANCELLED" && i.status !== "PAID" && !i.paidAt,
+	).length;
+}
 
 /**
  * Projects a supplier row into the shape the client receives, with every money
@@ -172,6 +239,8 @@ function projectSupplier(supplier: SupplierRow, now: Date) {
 		paymentStatus: cancelled ? ("CANCELLED" as const) : money.paymentStatus,
 		nextDueDate: money.nextDueDate,
 		hasInstallments: money.hasInstallments,
+		/** Unsettled installments left — drives the "X parcelas restantes" UI. */
+		remainingInstallments: countRemainingInstallments(supplier.installments),
 		isFullyPaid: isFullyPaid({ price, paid: money.paid, cancelled }),
 	};
 }
@@ -249,32 +318,21 @@ async function recalculateSupplier(
 }
 
 /**
- * Financial integrity guard for an installment schedule.
- *
- * A schedule can never be worth more than the agreed price, and each
- * installment must be worth something. When the price is still unknown the
- * schedule is free to total anything: the guard only applies once there is a
- * price to compare against.
+ * Financial integrity guard for an installment schedule, delegated to the
+ * shared rules module (`assertInstallmentPlanWithinAgreed`). `price` is the
+ * agreed amount in cents; the plan can never exceed it, and an agreed amount
+ * must exist before any installment is planned.
  */
 function assertInstallmentsValid(input: {
 	price: number;
 	installments: Array<{ amount: number }>;
 }) {
-	for (const [index, installment] of input.installments.entries()) {
-		if (installment.amount <= 0) {
-			throw new ValidationError(
-				`A parcela ${index + 1} tem de ter um valor maior que zero.`,
-			);
-		}
-	}
-
-	const total = input.installments.reduce((sum, i) => sum + i.amount, 0);
-
-	if (input.price > 0 && total > input.price) {
-		throw new ValidationError(
-			`A soma das parcelas (${centsToUnits(total)}) excede o preço do fornecedor (${centsToUnits(input.price)}).`,
-		);
-	}
+	assertInstallmentPlanWithinAgreed({
+		agreedCents: input.price,
+		installments: input.installments.map((installment) => ({
+			amountCents: installment.amount,
+		})),
+	});
 }
 
 /**
@@ -288,7 +346,7 @@ function assertInstallmentsValid(input: {
 async function loadInstallment(supplierId: string, installmentId: string) {
 	const supplier = await db.supplier.findUnique({
 		where: { id: supplierId },
-		select: { id: true, eventId: true, price: true },
+		select: { id: true, eventId: true, price: true, status: true },
 	});
 	if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
 
@@ -463,9 +521,15 @@ export const suppliersRouter = {
 				notes: z.string().trim().optional(),
 				status: STATUS_ENUM.optional(),
 				paymentModel: PAYMENT_MODEL_ENUM.optional(),
+				nif: nifInput,
+				iban: ibanInput,
+				hasMcxExpress: z.boolean().optional(),
+				mcxPhone: mcxPhoneInput,
 				categoryFields: categoryFieldsInput,
 				customFields: customFieldsInput,
 				installments: z.array(installmentInput).max(24).optional(),
+				/** Optional first payment, recorded in the same transaction. */
+				payment: paymentInput.optional(),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -495,6 +559,10 @@ export const suppliersRouter = {
 						status: (input.status ?? "PROSPECT") as SupplierStatus,
 						paymentModel: (input.paymentModel ??
 							"FULL") as SupplierPaymentModel,
+						nif: input.nif || null,
+						iban: input.iban || null,
+						hasMcxExpress: input.hasMcxExpress ?? false,
+						mcxPhone: input.mcxPhone || null,
 						categoryFields: toJsonInput(categoryFields),
 						customFields: toJsonInput(input.customFields),
 						installments: {
@@ -507,6 +575,29 @@ export const suppliersRouter = {
 						},
 					},
 				});
+
+				// Optional first payment, guarded by the same rules as addPayment:
+				// confirmed supplier, agreed amount set, within the agreed total.
+				if (input.payment) {
+					assertPaymentAllowedOnStatus(supplier.status);
+					assertAgreedAmountExists(price);
+					assertPaymentsWithinAgreed({
+						agreedCents: price,
+						currentPaidCents: 0,
+						nextAmountCents: input.payment.amount,
+					});
+					await tx.supplierPayment.create({
+						data: {
+							supplierId: supplier.id,
+							amount: fromCents(input.payment.amount),
+							paymentDate: input.payment.paymentDate,
+							method: input.payment.method as never,
+							reference: input.payment.reference || null,
+							notes: input.payment.notes || null,
+							createdBy: context.session.user.id,
+						},
+					});
+				}
 
 				await recalculateSupplier(tx, supplier.id);
 				return supplier;
@@ -528,8 +619,13 @@ export const suppliersRouter = {
 				address: z.string().trim().nullable().optional(),
 				description: z.string().trim().nullable().optional(),
 				notes: z.string().trim().nullable().optional(),
-				status: STATUS_ENUM.optional(),
+				// Status is intentionally not updatable here: it has its own
+				// endpoint (`changeStatus`) so the transition rules have one home.
 				paymentModel: PAYMENT_MODEL_ENUM.optional(),
+				nif: nifInput,
+				iban: ibanInput,
+				hasMcxExpress: z.boolean().optional(),
+				mcxPhone: mcxPhoneInput,
 				categoryFields: categoryFieldsInput,
 				customFields: customFieldsInput,
 			}),
@@ -584,10 +680,14 @@ export const suppliersRouter = {
 								? undefined
 								: input.description || null,
 						notes: input.notes === undefined ? undefined : input.notes || null,
-						status: input.status as SupplierStatus | undefined,
 						paymentModel: input.paymentModel as
 							| SupplierPaymentModel
 							| undefined,
+						nif: input.nif === undefined ? undefined : input.nif || null,
+						iban: input.iban === undefined ? undefined : input.iban || null,
+						hasMcxExpress: input.hasMcxExpress,
+						mcxPhone:
+							input.mcxPhone === undefined ? undefined : input.mcxPhone || null,
 						categoryFields: toJsonInput(categoryFields),
 						customFields: toJsonInput(input.customFields),
 					},
@@ -596,6 +696,47 @@ export const suppliersRouter = {
 				await recalculateSupplier(tx, supplier.id);
 				await syncChecklistForSupplier(tx, supplier.id);
 				return supplier;
+			});
+		}),
+
+	/**
+	 * Dedicated status endpoint (PATCH by contract). Status is a business
+	 * decision with its own transition rules, so it has its own procedure
+	 * instead of living inside the generic update.
+	 */
+	changeStatus: protectedProcedure
+		.input(
+			z.object({
+				id: z.string(),
+				status: STATUS_ENUM,
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("supplier", input.id);
+			if (!eventId) throw new NotFoundError("Fornecedor não encontrado");
+			await requireEventAccess(context.session.user.id, eventId);
+
+			const supplier = await db.supplier.findUnique({
+				where: { id: input.id },
+				select: { id: true, status: true },
+			});
+			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+
+			// Existing transition rules (e.g. a completed supplier cannot reopen)
+			// live in the shared rules module.
+			assertStatusTransition(supplier.status, input.status as SupplierStatus);
+
+			return db.$transaction(async (tx) => {
+				const updated = await tx.supplier.update({
+					where: { id: input.id },
+					data: { status: input.status as SupplierStatus },
+					select: { id: true, status: true, eventId: true },
+				});
+				// Payment status mirrors depend on the supplier status (a
+				// cancelled supplier is never OVERDUE), so recalculate.
+				await recalculateSupplier(tx, supplier.id);
+				await syncChecklistForSupplier(tx, supplier.id);
+				return updated;
 			});
 		}),
 
@@ -616,7 +757,7 @@ export const suppliersRouter = {
 				supplierId: z.string(),
 				amount: moneyInput.refine(
 					(v) => v > 0,
-					"O valor deve ser maior que zero",
+					"O montante pago tem de ser maior que zero",
 				),
 				paymentDate: z.coerce.date(),
 				method: PAYMENT_METHOD_ENUM,
@@ -627,19 +768,22 @@ export const suppliersRouter = {
 		.handler(async ({ context, input }) => {
 			const supplier = await db.supplier.findUnique({
 				where: { id: input.supplierId },
-				select: { id: true, eventId: true, price: true },
+				select: { id: true, eventId: true, price: true, status: true },
 			});
 			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
+			// Business rules, re-checked server side — the disabled button in the
+			// UI is convenience, never the security layer.
+			assertPaymentAllowedOnStatus(supplier.status);
 			const price = toCents(supplier.price);
+			assertAgreedAmountExists(price);
 			const alreadyPaid = await sumPayments(input.supplierId);
-
-			if (price > 0 && alreadyPaid + input.amount > price) {
-				throw new ValidationError(
-					`O pagamento excede o valor em falta. Em falta: ${centsToUnits(Math.max(0, price - alreadyPaid))}.`,
-				);
-			}
+			assertPaymentsWithinAgreed({
+				agreedCents: price,
+				currentPaidCents: alreadyPaid,
+				nextAmountCents: input.amount,
+			});
 
 			return db.$transaction(async (tx) => {
 				const payment = await tx.supplierPayment.create({
@@ -692,11 +836,13 @@ export const suppliersRouter = {
 		.handler(async ({ context, input }) => {
 			const supplier = await db.supplier.findUnique({
 				where: { id: input.supplierId },
-				select: { id: true, eventId: true, price: true },
+				select: { id: true, eventId: true, price: true, status: true },
 			});
 			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
+			// Planning installments requires negotiating or confirmed.
+			assertInstallmentsAllowedOnStatus(supplier.status);
 			const price = toCents(supplier.price);
 			assertInstallmentsValid({ price, installments: input.installments });
 
@@ -728,8 +874,10 @@ export const suppliersRouter = {
 			);
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
+			assertInstallmentsAllowedOnStatus(supplier.status as SupplierRuleStatus);
+
 			// Re-validate the whole schedule, not just the edited row, so an
-			// individual change can never push the plan over the price.
+			// individual change can never push the plan over the agreed amount.
 			const price = toCents(supplier.price);
 			const schedule = await loadInstallmentAmounts(input.supplierId);
 			const next = schedule.map((amount, index) =>

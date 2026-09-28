@@ -1,39 +1,12 @@
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@muxima/ui/components/card";
-import type { ReactNode } from "react";
+import { MetricCard } from "@/shared/components/metrics";
 
-type StatsCardProps = {
-	title: string;
-	value: ReactNode;
-	description?: ReactNode;
-	icon?: ReactNode;
-};
-
-export function StatsCard({ title, value, description, icon }: StatsCardProps) {
-	return (
-		<Card>
-			<CardHeader className="flex flex-row items-center justify-between pb-2">
-				<CardTitle className="font-medium text-muted-foreground text-xs">
-					{title}
-				</CardTitle>
-				{icon && <div className="text-muted-foreground">{icon}</div>}
-			</CardHeader>
-
-			<CardContent>
-				<div className="font-semibold text-2xl">
-					{value}
-
-					{description && (
-						<span className="ml-1 font-normal text-muted-foreground text-xs">
-							{description}
-						</span>
-					)}
-				</div>
-			</CardContent>
-		</Card>
-	);
+/**
+ * Card de KPI simples.
+ *
+ * Consolidado sobre a biblioteca de métricas (`shared/components/metrics`):
+ * esta é agora apenas uma fachada de compatibilidade para os call sites
+ * existentes. Preferir `MetricCard` em código novo.
+ */
+export function StatsCard(props: Parameters<typeof MetricCard>[0]) {
+	return <MetricCard {...props} />;
 }

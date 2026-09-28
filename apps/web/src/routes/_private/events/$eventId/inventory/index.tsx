@@ -67,6 +67,8 @@ function InventoryPage() {
 				onAddItem={() => setShowCreate(true)}
 			/>
 
+			<InventoryStats stats={stats} />
+
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
 				<TabsList>
 					<TabsTrigger value="lista">
@@ -81,8 +83,6 @@ function InventoryPage() {
 
 				<TabsContent value="lista">
 					<div className="space-y-6">
-						<InventoryStats stats={stats} />
-
 						<InventoryFilters
 							search={filters.search}
 							status={filters.status}

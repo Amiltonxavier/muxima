@@ -7,8 +7,10 @@ import {
 	CardTitle,
 } from "@muxima/ui/components/card";
 import { Users } from "lucide-react";
-import { ProgressDonut } from "@/shared/components/charts";
-import { ChartStatItem } from "./chart-stat-item";
+import { PieCenter } from "@/components/charts/pie-center";
+import { PieChart } from "@/components/charts/pie-chart";
+import { PieSlice } from "@/components/charts/pie-slice";
+import { ChartLegend } from "@/shared/components/charts";
 
 interface GuestCapacityChartProps {
 	data?: {
@@ -25,6 +27,14 @@ export function GuestCapacityChart({ data }: GuestCapacityChartProps) {
 		return null;
 	}
 
+	// Invites can exceed the capacity; clamp so the pie stays valid.
+	const remaining = Math.max(data.remaining, 0);
+
+	const chartData = [
+		{ label: "Convidados", value: data.invited },
+		{ label: "Disponíveis", value: remaining },
+	];
+
 	return (
 		<Card>
 			<CardHeader>
@@ -35,25 +45,34 @@ export function GuestCapacityChart({ data }: GuestCapacityChartProps) {
 			</CardHeader>
 
 			<CardContent className="space-y-4">
-				<div className="flex items-center justify-center">
-					<ProgressDonut
-						value={data.invited}
-						max={data.capacity}
-						color="#3b82f6"
-						size={140}
-						centerLabel="convidados"
-					/>
+				<div className="flex justify-center">
+					<PieChart data={chartData} innerRadius={55} size={180}>
+						{chartData.map((slice, index) => (
+							<PieSlice key={slice.label} index={index} />
+						))}
+						<PieCenter defaultLabel="capacidade" />
+					</PieChart>
 				</div>
 
-				<div className="grid grid-cols-2 gap-3">
-					<ChartStatItem label="Capacidade" value={data.capacity} />
-
-					<ChartStatItem label="Convidados" value={data.invited} />
-
-					<ChartStatItem label="Confirmados" value={data.confirmed} />
-
-					<ChartStatItem label="Disponíveis" value={data.remaining} />
-				</div>
+				<ChartLegend
+					items={[
+						{
+							label: "Convidados",
+							color: "var(--chart-1)",
+							value: data.invited,
+						},
+						{
+							label: "Confirmados",
+							color: "var(--chart-2)",
+							value: data.confirmed,
+						},
+						{
+							label: "Disponíveis",
+							color: "var(--chart-3)",
+							value: remaining,
+						},
+					]}
+				/>
 			</CardContent>
 		</Card>
 	);

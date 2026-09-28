@@ -5,10 +5,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@muxima/ui/components/card";
-import { Progress } from "@muxima/ui/components/progress";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, FileText } from "lucide-react";
-import { StatRow } from "./stat-row";
+import { Bar } from "@/components/charts/bar";
+import { BarChart } from "@/components/charts/bar-chart";
+import { BarYAxis } from "@/components/charts/bar-y-axis";
+import { Grid } from "@/components/charts/grid";
+import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 
 interface TasksStatsCardProps {
 	eventId: string;
@@ -28,6 +31,21 @@ export function TasksStatsCard({ eventId, stats }: TasksStatsCardProps) {
 	const completed = stats?.completed ?? 0;
 	const completionRate = stats?.completionRate ?? 0;
 
+	const chartData = [
+		{
+			status: "Por fazer",
+			total: todo,
+		},
+		{
+			status: "Em andamento",
+			total: inProgress,
+		},
+		{
+			status: "Concluídas",
+			total: completed,
+		},
+	];
+
 	return (
 		<Card>
 			<CardHeader>
@@ -43,30 +61,56 @@ export function TasksStatsCard({ eventId, stats }: TasksStatsCardProps) {
 				</CardTitle>
 			</CardHeader>
 
-			<CardContent className="space-y-3">
-				<StatRow label="Por fazer" value={todo} />
-				<StatRow label="Em andamento" value={inProgress} />
-				<StatRow label="Concluídas" value={completed} />
+			<CardContent className="space-y-4">
+				{total > 0 ? (
+					<>
+						<BarChart
+							data={chartData}
+							xDataKey="status"
+							orientation="horizontal"
+							aspectRatio="2.5 / 1"
+							margin={{
+								top: 8,
+								right: 16,
+								bottom: 8,
+								// Room for the `BarYAxis` status labels, which are
+								// capped at 70px and truncate beyond that.
+								left: 76,
+							}}
+						>
+							{/* Bars run horizontally, so the value axis is the x one. */}
+							<Grid horizontal={false} vertical />
 
-				{total > 0 && (
-					<div className="pt-1">
-						<div className="mb-1 flex justify-between text-xs">
-							<span className="text-muted-foreground">Progresso</span>
+							<Bar
+								dataKey="total"
+								fill="var(--chart-line-primary)"
+								lineCap="round"
+							/>
 
-							<span>{completionRate}%</span>
+							<BarYAxis />
+							<ChartTooltip />
+						</BarChart>
+
+						<div className="flex items-center justify-between border-t pt-3 text-xs">
+							<span className="text-muted-foreground">Taxa de conclusão</span>
+
+							<span className="font-medium">{completionRate}%</span>
 						</div>
-
-						<Progress value={completionRate} />
+					</>
+				) : (
+					<div className="flex min-h-32 items-center justify-center text-center text-muted-foreground text-sm">
+						Ainda não existem tarefas
 					</div>
 				)}
 
 				<Button
 					variant="ghost"
 					size="sm"
-					className="mt-1 h-auto p-0"
+					className="h-auto p-0"
 					render={<Link to="/events/$eventId/tasks" params={{ eventId }} />}
 				>
-					Ver tarefas <ArrowRight size={4} />
+					Ver tarefas
+					<ArrowRight className="ml-1 h-4 w-4" />
 				</Button>
 			</CardContent>
 		</Card>

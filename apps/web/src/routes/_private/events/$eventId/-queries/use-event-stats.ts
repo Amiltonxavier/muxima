@@ -3,6 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 
+/**
+ * Compact per-module stats for the event detail cards. Every figure comes
+ * from the API; nothing is aggregated here.
+ */
 export function useEventStats(eventId: string) {
 	const guests = useQuery(
 		orpc.guests.getGuestStats.queryOptions({
@@ -22,8 +26,8 @@ export function useEventStats(eventId: string) {
 		}),
 	);
 
-	const vendors = useQuery(
-		orpc.vendors.getStats.queryOptions({
+	const suppliers = useQuery(
+		orpc.suppliers.getStats.queryOptions({
 			input: { eventId },
 		}),
 	);
@@ -38,7 +42,7 @@ export function useEventStats(eventId: string) {
 		guests,
 		tasks,
 		budget,
-		vendors,
+		suppliers,
 		schedules,
 	};
 }

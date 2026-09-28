@@ -63,10 +63,18 @@ export function EditEventDialog({
 		return date.toISOString().split("T")[0];
 	}
 
+	type EventStatusValue =
+		| "DRAFT"
+		| "PLANNING"
+		| "CONFIRMED"
+		| "ONGOING"
+		| "COMPLETED"
+		| "CANCELLED";
+
 	const form = useForm({
 		defaultValues: {
 			name: event.name || "",
-			status: event.status || "DRAFT",
+			status: (event.status || "DRAFT") as EventStatusValue,
 			eventDate: formatDateForInput(event.eventDate),
 			startTime: event.startTime || "",
 			endTime: event.endTime || "",
@@ -79,8 +87,8 @@ export function EditEventDialog({
 			capacity: event.capacity || 0,
 			description: event.description || "",
 		},
-		onSubmit: async ({ values }) => {
-			await mutateAsync({ id: eventId, ...values }).then(() => {
+		onSubmit: async ({ value }) => {
+			await mutateAsync({ id: eventId, ...value }).then(() => {
 				onClose();
 			});
 		},
@@ -131,8 +139,10 @@ export function EditEventDialog({
 										items={Object.entries(EVENT_STATUS_LABELS).map(
 											([value, label]) => ({ value, label }),
 										)}
-										value={field.state.value ?? ""}
-										onValueChange={(v) => field.handleChange(v ?? "")}
+										value={field.state.value}
+										onValueChange={(v) =>
+											field.handleChange((v ?? "DRAFT") as EventStatusValue)
+										}
 									>
 										<SelectTrigger>
 											<SelectValue />

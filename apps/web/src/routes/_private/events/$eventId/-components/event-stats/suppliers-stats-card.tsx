@@ -6,30 +6,38 @@ import {
 	CardTitle,
 } from "@muxima/ui/components/card";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Package } from "lucide-react";
+import { ArrowRight, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/utils/format-currency";
 import { StatRow } from "./stat-row";
 
-interface VendorsStatsCardProps {
+interface SuppliersStatsCardProps {
 	eventId: string;
 	stats?: {
 		total: number;
-		expenseCount: number;
-		totalExpenses: number;
+		totalPrice: number;
+		totalPaid: number;
+		totalPending: number;
 	};
 }
 
-export function VendorsStatsCard({ eventId, stats }: VendorsStatsCardProps) {
+/**
+ * Compact supplier summary. Every figure comes from `suppliers.getStats`
+ * (computed by the API); this card only renders it.
+ */
+export function SuppliersStatsCard({
+	eventId,
+	stats,
+}: SuppliersStatsCardProps) {
 	const total = stats?.total ?? 0;
-	const expenseCount = stats?.expenseCount ?? 0;
-	const totalExpenses = stats?.totalExpenses ?? 0;
+	const totalPrice = stats?.totalPrice ?? 0;
+	const totalPaid = stats?.totalPaid ?? 0;
 
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle className="flex items-center justify-between text-sm">
 					<span className="flex items-center gap-2">
-						<Package className="h-4 w-4" />
+						<ShoppingCart className="h-4 w-4" />
 						Fornecedores
 					</span>
 
@@ -46,11 +54,11 @@ export function VendorsStatsCard({ eventId, stats }: VendorsStatsCardProps) {
 					</p>
 				) : (
 					<>
-						<StatRow label="Despesas" value={expenseCount} />
-
-						{totalExpenses > 0 && (
-							<StatRow label="Total" value={formatCurrency(totalExpenses)} />
-						)}
+						<StatRow
+							label="Montante contratado"
+							value={formatCurrency(totalPrice)}
+						/>
+						<StatRow label="Pago" value={formatCurrency(totalPaid)} />
 					</>
 				)}
 

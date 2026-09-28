@@ -5,7 +5,11 @@ import {
 	CardTitle,
 } from "@muxima/ui/components/card";
 import { Users, UtensilsCrossed } from "lucide-react";
-import { ProgressDonut } from "@/shared/components/charts";
+import { useMemo } from "react";
+import { PieCenter } from "@/components/charts/pie-center";
+import { PieChart } from "@/components/charts/pie-chart";
+import { PieSlice } from "@/components/charts/pie-slice";
+import { ChartLegend } from "@/shared/components/charts";
 import { QueryState } from "@/shared/components/states";
 import { useGuestStats } from "@/shared/queries/guest-queries";
 import { useTableStats } from "@/shared/queries/table-queries";
@@ -30,6 +34,20 @@ export function EventPreparationAnalytics({
 		!!guests && (guests.totalGuests > 0 || (tables?.total ?? 0) > 0);
 
 	const occupancyRate = tables?.occupancyRate ?? 0;
+
+	// Without an explicit `color` each slice falls back to the chart palette
+	// (`--chart-1` onwards), which is what the legend mirrors.
+	const occupancyData = useMemo(
+		() => [
+			{ label: "Cheias", value: tables?.fullTables ?? 0 },
+			{ label: "Parciais", value: tables?.partialTables ?? 0 },
+			{ label: "Vazias", value: tables?.emptyTables ?? 0 },
+		],
+		[tables?.fullTables, tables?.partialTables, tables?.emptyTables],
+	);
+
+	// A pie of zeros produces NaN arcs, so it only renders once tables exist.
+	const hasTables = (tables?.total ?? 0) > 0;
 
 	return (
 		<QueryState
@@ -60,16 +78,43 @@ export function EventPreparationAnalytics({
 							Capacidade das mesas
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="space-y-2">
-						<div className="flex justify-center">
-							<ProgressDonut
-								value={tables?.totalOccupied ?? 0}
-								max={tables?.totalCapacity ?? 0}
-								color="#10b981"
-								size={140}
-								centerLabel="ocupação"
-							/>
-						</div>
+					<CardContent className="space-y-4">
+						{hasTables ? (
+							<>
+								<div className="flex justify-center">
+									<PieChart data={occupancyData} innerRadius={58} size={180}>
+										{occupancyData.map((slice, index) => (
+											<PieSlice key={slice.label} index={index} />
+										))}
+										<PieCenter defaultLabel="mesas" />
+									</PieChart>
+								</div>
+
+								<ChartLegend
+									items={[
+										{
+											label: "Cheias",
+											color: "var(--chart-1)",
+											value: tables?.fullTables ?? 0,
+										},
+										{
+											label: "Parciais",
+											color: "var(--chart-2)",
+											value: tables?.partialTables ?? 0,
+										},
+										{
+											label: "Vazias",
+											color: "var(--chart-3)",
+											value: tables?.emptyTables ?? 0,
+										},
+									]}
+								/>
+							</>
+						) : (
+							<p className="py-8 text-center text-muted-foreground text-sm">
+								Ainda não existem mesas atribuídas.
+							</p>
+						)}
 
 						<div className="grid grid-cols-3 gap-2 text-center">
 							<div className="border p-2">

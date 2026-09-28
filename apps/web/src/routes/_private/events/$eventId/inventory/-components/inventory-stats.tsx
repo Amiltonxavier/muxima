@@ -1,6 +1,6 @@
 import type { InventoryStats as InventoryStatsDto } from "@muxima/api/shared/types/entities";
+import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
-import { formatCurrency } from "@/utils/format-currency";
 
 /**
  * All KPI values come pre-calculated from the backend stats endpoint — this
@@ -16,45 +16,48 @@ export function InventoryStats({
 	}
 
 	return (
-		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+		<StatsGrid columns={3}>
 			<StatsCard title="Total de produtos" value={stats.totalItems} />
-			<StatsCard title="Qtd. planeada" value={stats.totalQuantity} />
-			<StatsCard
+			{/* A quantidade planeada vive no limite do progresso ("/ N") —
+			    assim a relação adquirido/planeado fica explícita num só card. */}
+			<MetricProgressCard
 				title="Qtd. concluída"
 				value={stats.totalCurrent}
-				description={`de ${stats.totalQuantity}`}
+				limit={stats.totalQuantity}
 			/>
 			<StatsCard title="Em falta" value={stats.totalRemaining} />
-			<StatsCard title="Para o salão" value={stats.totalVenue} />
-			<StatsCard
+			<MetricProgressCard
 				title="Progresso"
-				value={`${stats.completionPercentage}%`}
-				description={`${stats.completedItems}/${stats.totalItems} concluídos`}
+				value={stats.completedItems}
+				limit={stats.totalItems}
+				percentage={stats.completionPercentage}
+				label={`${stats.completionPercentage}%`}
 			/>
-			<StatsCard
-				title="Valor total"
-				value={
-					<span className="text-emerald-600">
-						{formatCurrency(stats.totalValue)}
-					</span>
-				}
-			/>
-			<StatsCard
-				title="Valor concluído"
-				value={
-					<span className="text-blue-600">
-						{formatCurrency(stats.completedValue)}
-					</span>
-				}
-			/>
-			<StatsCard
-				title="Valor pendente"
-				value={
-					<span className="text-amber-600">
-						{formatCurrency(stats.pendingValue)}
-					</span>
-				}
-			/>
-		</div>
+			{/*
+				<StatsCard
+					title="Valor total"
+					value={
+						<span className="text-emerald-600">
+							{formatCurrency(stats.totalValue)}
+						</span>
+					}
+				/>
+				<StatsCard
+					title="Valor concluído"
+					value={
+						<span className="text-blue-600">
+							{formatCurrency(stats.completedValue)}
+						</span>
+					}
+				/>
+				<StatsCard
+					title="Valor pendente"
+					value={
+						<span className="text-amber-600">
+							{formatCurrency(stats.pendingValue)}
+						</span>
+					}
+				/>*/}
+		</StatsGrid>
 	);
 }

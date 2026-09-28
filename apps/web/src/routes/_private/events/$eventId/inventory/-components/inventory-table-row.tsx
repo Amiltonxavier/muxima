@@ -42,7 +42,6 @@ export function InventoryTableRow({
 			</TableCell>
 			<TableCell>{INVENTORY_UNIT_LABELS[item.unit] || item.unit}</TableCell>
 			<TableCell>{item.plannedQuantity}</TableCell>
-			<TableCell>{item.venueQuantity}</TableCell>
 			<TableCell>{item.currentQuantity}</TableCell>
 			<TableCell>{item.remainingQuantity}</TableCell>
 			<TableCell>
