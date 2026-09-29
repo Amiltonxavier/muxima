@@ -6,6 +6,7 @@ import { InvitationGuests } from "./invitation-guests";
 import { InvitationHero } from "./invitation-hero";
 import { InvitationLocation } from "./invitation-location";
 import { InvitationMessage } from "./invitation-message";
+import { InvitationQrCode } from "./invitation-qr-code";
 import { InvitationRsvp } from "./invitation-rsvp";
 
 export function InvitationOpenCard({
@@ -38,6 +39,7 @@ export function InvitationOpenCard({
 					<InvitationLocation invitation={invitation} variants={item} />
 					<InvitationMessage invitation={invitation} variants={item} />
 					<InvitationGuests invitation={invitation} variants={item} />
+					<InvitationQrCode invitation={invitation} variants={item} />
 					<InvitationRsvp
 						invitation={invitation}
 						isResponding={isResponding}

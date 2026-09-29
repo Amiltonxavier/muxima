@@ -6,22 +6,25 @@ import {
 	TabsTrigger,
 } from "@muxima/ui/components/tabs";
 import { createFileRoute } from "@tanstack/react-router";
-import { List, Radar } from "lucide-react";
+import { List, Mail, Radar } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
 import { CompanionManagerDialog } from "./-components/companion-manager-dialog";
 import { DeleteGuestDialog } from "./-components/delete-guest-dialog";
 import { GuestAnalytics } from "./-components/guest-analytics";
 import { GuestDialog } from "./-components/guest-dialog";
+import { GuestsBulkToolbar } from "./-components/guests-bulk-toolbar";
 import { GuestsCapacityAlert } from "./-components/guests-capacity-alert";
 import { GuestsFilters } from "./-components/guests-filters";
 import { GuestsHeader } from "./-components/guests-header";
 import { GuestsStats } from "./-components/guests-stats";
 import { GuestsTable } from "./-components/guests-table";
+import { InvitationsTab } from "./-components/invitation/invitations-tab";
 import { ViewInvitationDialog } from "./-components/invitation/view-invitation-dialog";
 import { ShareInvitationDialog } from "./-components/share-invitation-dialog";
 import { useGuestActions } from "./-hooks/use-guest-actions";
 import { useGuestDialog } from "./-hooks/use-guest-dialog";
+import { useGuestSelection } from "./-hooks/use-guest-selection";
 import { useGuestsFilters } from "./-hooks/use-guests-filters";
 import { useGuestStats, useGuests, useTables } from "./-queries/guest-queries";
 import type { GuestItem } from "./-types/guest.types";
@@ -62,16 +65,13 @@ function GuestsPage() {
 	const tables = tablesQuery.data?.data ?? [];
 	const stats = statsQuery.data;
 	const editingGuest = guestDialog.editingGuest;
+	const selection = useGuestSelection(guests);
 
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
-			<GuestsHeader
-				stats={stats}
-				guestCount={guests.length}
-				onAddGuest={guestDialog.openCreateDialog}
-			/>
+			<GuestsHeader onAddGuest={guestDialog.openCreateDialog} />
 
 			<Tabs
 				value={activeTab}
@@ -82,6 +82,10 @@ function GuestsPage() {
 					<TabsTrigger value="lista">
 						<List className="mr-2 h-4 w-4" />
 						Lista
+					</TabsTrigger>
+					<TabsTrigger value="convites">
+						<Mail className="mr-2 h-4 w-4" />
+						Convites
 					</TabsTrigger>
 					<TabsTrigger value="analytics">
 						<Radar className="mr-2 h-4 w-4" />
@@ -103,10 +107,23 @@ function GuestsPage() {
 						onTypeChange={filters.setType}
 					/>
 
+					<GuestsBulkToolbar
+						eventId={eventId}
+						selectedCount={selection.selectedCount}
+						invitationIdsToPublish={selection.publishableInvitationIds}
+						guestIdsWithoutInvitation={selection.guestsWithoutInvitation.map(
+							(guest) => guest.id,
+						)}
+						onClearSelection={selection.clear}
+					/>
+
 					<GuestsTable
 						guests={guests}
 						isLoading={guestsQuery.isLoading}
 						isError={guestsQuery.isError}
+						selectedIds={selection.selectedIds}
+						onToggleSelected={selection.toggleGuest}
+						onToggleAll={selection.toggleAll}
 						onViewInvitation={setViewingInvitationGuestId}
 						onShareInvitation={setSharingGuest}
 						onEditGuest={guestDialog.openEditDialog}
@@ -122,6 +139,13 @@ function GuestsPage() {
 							disabled={guestsQuery.isLoading}
 						/>
 					)}
+				</TabsContent>
+
+				<TabsContent value="convites" className="space-y-6">
+					<InvitationsTab
+						eventId={eventId}
+						onViewInvitation={setViewingInvitationGuestId}
+					/>
 				</TabsContent>
 
 				<TabsContent value="analytics">

@@ -3,14 +3,21 @@ import { Button } from "@muxima/ui/components/button";
 import { Progress } from "@muxima/ui/components/progress";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
 import { Eye, History, Pencil, Plus, Trash2 } from "lucide-react";
+import { StatusDot } from "@/shared/components/status-dot";
 import { formatCurrency } from "@/utils/format-currency";
 import {
 	getStatusColor,
 	getStatusLabel,
+	getStatusTone,
 	INVENTORY_CATEGORY_LABELS,
 	INVENTORY_UNIT_LABELS,
 } from "@/utils/status-helpers";
 import type { InventoryItem } from "../-types/inventory.types";
+
+/*
+ * Colunas esperadas no cabeçalho da tabela (nesta ordem):
+ * Item | Quantidade | Progresso | Valor | Estado | Acções
+ */
 
 export function InventoryTableRow({
 	item,
@@ -31,37 +38,64 @@ export function InventoryTableRow({
 	// disabled button is only a UX affordance; the backend rejects excess
 	// additions regardless.
 	const cannotAddMore = item.remainingQuantity <= 0;
+	const unitLabel = INVENTORY_UNIT_LABELS[item.unit] || item.unit;
 
 	return (
 		<TableRow>
-			<TableCell className="font-medium">{item.name}</TableCell>
+			{/* Item: nome + categoria + unidade */}
 			<TableCell>
-				<Badge variant="secondary">
-					{INVENTORY_CATEGORY_LABELS[item.category] || item.category}
-				</Badge>
-			</TableCell>
-			<TableCell>{INVENTORY_UNIT_LABELS[item.unit] || item.unit}</TableCell>
-			<TableCell>{item.plannedQuantity}</TableCell>
-			<TableCell>{item.currentQuantity}</TableCell>
-			<TableCell>{item.remainingQuantity}</TableCell>
-			<TableCell>
-				{item.unitPrice !== null ? formatCurrency(item.totalValue) : "—"}
-			</TableCell>
-			<TableCell>
-				<div className="flex min-w-[130px] flex-col gap-1">
-					<div className="flex items-center justify-between gap-2">
-						<span className="text-muted-foreground text-xs">
-							{item.completionPercentage}%
-						</span>
-						<Badge className={getStatusColor(item.status)}>
-							{getStatusLabel(item.status, "inventory")}
+				<div className="flex flex-col gap-1">
+					<span className="font-medium">{item.name}</span>
+					<div className="flex items-center gap-2">
+						<Badge variant="secondary">
+							{INVENTORY_CATEGORY_LABELS[item.category] || item.category}
 						</Badge>
 					</div>
-					<Progress value={item.completionPercentage} className="h-2" />
 				</div>
 			</TableCell>
+
+			{/* Quantidade: actual / planeado, com o que falta por baixo */}
 			<TableCell>
-				<div className="flex gap-1">
+				<div className="flex flex-col gap-0.5 tabular-nums">
+					<span className="font-medium">
+						{item.currentQuantity}
+						<span className="font-normal text-muted-foreground">
+							{" / "}
+							{item.plannedQuantity} {unitLabel}
+						</span>
+					</span>
+					<span className="text-muted-foreground text-xs">
+						{cannotAddMore ? "Completo" : `Em falta: ${item.remainingQuantity}`}
+					</span>
+				</div>
+			</TableCell>
+
+			{/* Progresso: só barra + percentagem */}
+			<TableCell>
+				<div className="flex min-w-[110px] items-center gap-2">
+					<Progress value={item.completionPercentage} className="h-2 flex-1" />
+					<span className="w-9 text-right text-muted-foreground text-xs tabular-nums">
+						{item.completionPercentage}%
+					</span>
+				</div>
+			</TableCell>
+
+			{/* Estado: coluna própria */}
+			<TableCell>
+				<StatusDot
+					label={getStatusLabel(item.status, "inventory")}
+					tone={getStatusTone(item.status)}
+				/>
+			</TableCell>
+
+			{/* Valor */}
+			<TableCell className="tabular-nums">
+				{item.unitPrice !== null ? formatCurrency(item.totalValue) : "—"}
+			</TableCell>
+
+			{/* Acções */}
+			<TableCell>
+				<div className="flex justify-end gap-1">
 					<Button
 						variant="ghost"
 						size="icon-sm"

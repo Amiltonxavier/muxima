@@ -124,26 +124,6 @@ export function useAssignGuestToTable() {
 	);
 }
 
-export function useCreateInvitation() {
-	const queryClient = useQueryClient();
-
-	return useMutation(
-		orpc.guests.createInvitation.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({ queryKey: guestKeys.all });
-			},
-		}),
-	);
-}
-
-export function useInvitation(guestId: string) {
-	return useQuery({
-		...orpc.guests.getInvitation.queryOptions({ input: { guestId } }),
-		queryKey: [...guestKeys.all, "invitation", guestId],
-		enabled: !!guestId,
-	});
-}
-
 export function useGuestStats(eventId: string) {
 	return useQuery({
 		...orpc.guests.getGuestStats.queryOptions({ input: { eventId } }),
@@ -188,14 +168,9 @@ export function useRemoveCompanion() {
 	);
 }
 
-export function useRespondToInvitation() {
-	const queryClient = useQueryClient();
-
-	return useMutation(
-		orpc.guests.respondToInvitation.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({ queryKey: guestKeys.all });
-			},
-		}),
-	);
-}
+/**
+ * Invitation queries/mutations are intentionally NOT defined here: they live in
+ * the guests module (`routes/_private/events/$eventId/guests/-queries/invitation-queries.ts`)
+ * because an invitation is part of the guest journey, not of a generic guest
+ * CRUD screen.
+ */

@@ -7,7 +7,7 @@ export function GuestsCapacityAlert({ stats }: { stats?: GuestStats | null }) {
 	}
 
 	return (
-		<div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+		<div className="flex items-center gap-3 border border-red-200 bg-red-50 p-4">
 			<AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
 			<div>
 				<p className="font-medium text-red-800 text-sm">Capacidade atingida</p>

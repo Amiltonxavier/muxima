@@ -1,7 +1,8 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
+import { Checkbox } from "@muxima/ui/components/checkbox";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
-import { EyeOff, Globe, Share2 } from "lucide-react";
+import { Eye, EyeOff, Globe, QrCode, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/utils/format-date";
 import {
@@ -12,14 +13,23 @@ import {
 import {
 	usePublishInvitation,
 	useUnpublishInvitation,
-} from "../-queries/invitation-queries";
-import type { InvitationItem } from "../-types/invitation.types";
-import { buildInvitationLink } from "../-utils/invitation.utils";
+} from "../../-queries/invitation-queries";
+import type { InvitationItem } from "../../-types/invitation.types";
+import {
+	isInvitationPublishable,
+	resolveInvitationUrl,
+} from "../../-utils/invitation.utils";
 
 export function InvitationTableRow({
 	invitation,
+	isSelected,
+	onToggleSelected,
+	onView,
 }: {
 	invitation: InvitationItem;
+	isSelected: boolean;
+	onToggleSelected: (invitationId: string) => void;
+	onView: (guestId: string) => void;
 }) {
 	const publish = usePublishInvitation();
 	const unpublish = useUnpublishInvitation();
@@ -29,40 +39,56 @@ export function InvitationTableRow({
 		guests.length === 0
 			? "—"
 			: guests.length === 1
-				? guests[0]?.name || "—"
-				: `${guests[0]?.name || "—"} +${guests.length - 1}`;
+				? (guests[0]?.name ?? "—")
+				: `${guests[0]?.name ?? "—"} +${guests.length - 1}`;
 
 	const isPublished = Boolean(invitation.publishedAt);
+	const canPublish = isInvitationPublishable(invitation);
+	const invitationUrl = resolveInvitationUrl(invitation);
+	const primaryGuestId = guests[0]?.id;
 
 	const handleShare = () => {
-		navigator.clipboard.writeText(buildInvitationLink(invitation.code));
+		if (!invitationUrl) return;
+		navigator.clipboard.writeText(invitationUrl);
 		toast.success("Link do convite copiado!");
 	};
 
 	const handleTogglePublish = () => {
 		if (isPublished) {
 			unpublish.mutate(
-				{ invitationId: invitation.id },
+				{ eventId: invitation.eventId, invitationId: invitation.id },
 				{
-					onError: (e) => toast.error(e.message),
+					onError: (e: Error) => toast.error(e.message),
 					onSuccess: () => toast.success("Convite retirado da publicação"),
 				},
 			);
-		} else {
-			publish.mutate(
-				{ invitationId: invitation.id },
-				{
-					onError: (e) => toast.error(e.message),
-					onSuccess: () => toast.success("Convite publicado!"),
-				},
-			);
+			return;
 		}
+
+		publish.mutate(
+			{ eventId: invitation.eventId, invitationId: invitation.id },
+			{
+				onError: (e: Error) =>
+					toast.error(e.message || "Não foi possível publicar o convite"),
+				onSuccess: () => toast.success("Convite publicado!"),
+			},
+		);
 	};
 
 	const isBusy = publish.isPending || unpublish.isPending;
 
 	return (
-		<TableRow>
+		<TableRow
+			data-state={isSelected ? "selected" : undefined}
+			data-testid="invitation-row"
+		>
+			<TableCell className="w-10">
+				<Checkbox
+					checked={isSelected}
+					onCheckedChange={() => onToggleSelected(invitation.id)}
+					aria-label={`Seleccionar convite de ${guestSummary}`}
+				/>
+			</TableCell>
 			<TableCell className="font-medium">{guestSummary}</TableCell>
 			<TableCell>
 				<span className="font-mono text-xs">{invitation.code}</span>
@@ -92,17 +118,34 @@ export function InvitationTableRow({
 				)}
 			</TableCell>
 			<TableCell>
-				<Badge variant={isPublished ? "success" : "secondary"}>
-					{isPublished ? "Publicado" : "Privado"}
-				</Badge>
+				<div className="flex flex-col gap-1">
+					<Badge variant={isPublished ? "success" : "secondary"}>
+						{isPublished ? "Publicado" : "Privado"}
+					</Badge>
+					{invitation.qrCode ? (
+						<span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+							<QrCode className="h-3 w-3" /> QR pronto
+						</span>
+					) : null}
+				</div>
 			</TableCell>
 			<TableCell>
 				<div className="flex gap-1">
+					{primaryGuestId && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title="Ver convite"
+							onClick={() => onView(primaryGuestId)}
+						>
+							<Eye className="h-3.5 w-3.5" />
+						</Button>
+					)}
 					<Button
 						variant="ghost"
 						size="icon-sm"
 						title={isPublished ? "Retirar publicação" : "Publicar convite"}
-						disabled={isBusy}
+						disabled={isBusy || (!isPublished && !canPublish)}
 						onClick={handleTogglePublish}
 					>
 						{isPublished ? (
@@ -115,6 +158,7 @@ export function InvitationTableRow({
 						variant="ghost"
 						size="icon-sm"
 						title="Copiar link do convite"
+						disabled={!invitationUrl}
 						onClick={handleShare}
 					>
 						<Share2 className="h-3.5 w-3.5" />

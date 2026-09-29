@@ -1,93 +1,58 @@
-import { Button } from "@muxima/ui/components/button";
-import { Pagination } from "@muxima/ui/components/pagination";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Link2, MailPlus } from "lucide-react";
-import { useState } from "react";
-import { BackButton } from "@/shared/components/back-to";
-import { InvitationsFilters } from "./-components/invitations-filters";
-import { InvitationsStats } from "./-components/invitations-stats";
-import { InvitationsTable } from "./-components/invitations-table";
-import type { InvitationResponseFilter } from "./-constants/invitation.constants";
+import { buttonVariants } from "@muxima/ui/components/button";
 import {
-	useInvitationStats,
-	useInvitations,
-} from "./-queries/invitation-queries";
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@muxima/ui/components/card";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, Mail } from "lucide-react";
+import { BackButton } from "@/shared/components/back-to";
 
+/**
+ * The invitations module was merged into `guests` — the invitation lifecycle
+ * (creation, QR Code, publication, bulk publish and responses) is one journey
+ * with the guest list, so keeping a second page duplicated both the UI and the
+ * queries.
+ *
+ * The route is intentionally preserved as a notice so old bookmarks and
+ * in-app links do not 404.
+ */
 export const Route = createFileRoute("/_private/events/$eventId/invitations/")({
-	component: InvitationsPage,
+	component: InvitationsMovedNotice,
 });
 
-function InvitationsPage() {
+function InvitationsMovedNotice() {
 	const { eventId } = Route.useParams();
-	const [page, setPage] = useState(1);
-	const [limit, setLimit] = useState(20);
-	const [search, setSearch] = useState("");
-	const [response, setResponse] = useState<InvitationResponseFilter>("ALL");
-
-	const invitationsQuery = useInvitations(eventId, {
-		page,
-		limit,
-		search: search || undefined,
-		response,
-	});
-	const statsQuery = useInvitationStats(eventId);
-
-	const invitations = invitationsQuery.data?.data ?? [];
-	const meta = invitationsQuery.data?.meta;
-	const stats = statsQuery.data;
 
 	return (
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
-			<div className="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<h1 className="font-semibold text-2xl">Convites</h1>
-					<p className="text-muted-foreground text-sm">
-						Gere os convites e acompanha as respostas dos teus convidados.
-					</p>
-				</div>
-				<Button
-					render={<Link to="/events/$eventId/guests" params={{ eventId }} />}
-					variant="outline"
-					size="sm"
-				>
-					<MailPlus className="mr-2 h-4 w-4" />
-					Criar convite
-				</Button>
-			</div>
 
-			<InvitationsStats stats={stats} />
-
-			<InvitationsFilters
-				search={search}
-				response={response}
-				onSearchChange={setSearch}
-				onResponseChange={setResponse}
-			/>
-
-			<InvitationsTable
-				invitations={invitations}
-				isLoading={invitationsQuery.isLoading}
-				isError={invitationsQuery.isError}
-			/>
-
-			{meta && (
-				<Pagination
-					meta={meta}
-					onPageChange={setPage}
-					onLimitChange={setLimit}
-					disabled={invitationsQuery.isLoading}
-				/>
-			)}
-
-			<div className="flex items-start gap-2 bg-muted p-3 text-muted-foreground text-xs">
-				<Link2 className="mt-0.5 h-4 w-4 shrink-0" />
-				<p>
-					Um convite só pode ser acedido pelo convidado depois de{" "}
-					<strong>publicado</strong> (botão de globo). O link público é único e
-					não é indexado por motores de busca.
-				</p>
-			</div>
+			<Card className="mx-auto max-w-xl">
+				<CardHeader className="items-center text-center">
+					<div className="mb-2 rounded-full bg-muted p-3">
+						<Mail className="h-6 w-6" />
+					</div>
+					<CardTitle>Convites foram para dentro de Convidados</CardTitle>
+					<CardDescription>
+						A gestão de convites — criação, QR Code, publicação e estatísticas —
+						agora vive na aba <strong>Convites</strong> do módulo de convidados,
+						evitando duas telas para a mesma informação.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex justify-center">
+					<Link
+						to="/events/$eventId/guests"
+						params={{ eventId }}
+						className={buttonVariants({ className: "rounded-none" })}
+					>
+						Ir para Convidados
+						<ArrowRight className="ml-2 h-4 w-4" />
+					</Link>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

@@ -7,7 +7,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@muxima/ui/components/dialog";
-import { Plus } from "lucide-react";
+import { EyeOff, Globe, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/utils/format-date";
 import {
@@ -17,12 +17,17 @@ import {
 import {
 	useCreateInvitation,
 	useInvitation,
+	usePublishInvitation,
 	useRespondToInvitation,
-} from "../../-queries/guest-queries";
+	useUnpublishInvitation,
+} from "../../-queries/invitation-queries";
+import { resolveInvitationUrl } from "../../-utils/invitation.utils";
 import { InvitationCode } from "./invitation-code";
 import { InvitationEventDetails } from "./invitation-event-details";
 import { InvitationGuests } from "./invitation-guests";
 import { InvitationHost } from "./invitation-host";
+import { InvitationLink } from "./invitation-link";
+import { InvitationQrCode } from "./invitation-qr-code";
 import { InvitationResponse } from "./invitation-response";
 import { InvitationTable } from "./invitation-table";
 import { InvitationWarning } from "./invitation-warning";
@@ -36,9 +41,11 @@ export function ViewInvitationDialog({
 	eventId: string;
 	onClose: () => void;
 }) {
-	const invitationQuery = useInvitation(guestId);
+	const invitationQuery = useInvitation(eventId, guestId);
 	const createInvitation = useCreateInvitation();
 	const respondToInvitation = useRespondToInvitation();
+	const publish = usePublishInvitation();
+	const unpublish = useUnpublishInvitation();
 	const invitation = invitationQuery.data;
 
 	const event = invitation?.event;
@@ -48,9 +55,14 @@ export function ViewInvitationDialog({
 	const tableGuests = firstGuest?.tableGuests ?? [];
 	const table = tableGuests.length > 0 ? tableGuests[0]?.table : null;
 
+	const isPublished = Boolean(invitation?.publishedAt);
+	const invitationUrl = resolveInvitationUrl(invitation ?? null);
+
 	const handleCreate = () => {
 		const guestIds =
-			allGuests.length > 0 ? allGuests.map((ig) => ig.guest?.id) : [guestId];
+			allGuests.length > 0
+				? allGuests.map((ig) => ig.guest?.id).filter((id): id is string => !!id)
+				: [guestId];
 		createInvitation.mutate(
 			{ guestIds, eventId },
 			{
@@ -67,10 +79,41 @@ export function ViewInvitationDialog({
 		}
 	};
 
+	const handleCopyLink = () => {
+		if (invitationUrl) {
+			navigator.clipboard.writeText(invitationUrl);
+			toast.success("Link do convite copiado!");
+		}
+	};
+
+	const handleTogglePublish = () => {
+		if (!invitation) return;
+
+		if (isPublished) {
+			unpublish.mutate(
+				{ eventId, invitationId: invitation.id },
+				{
+					onError: (e: Error) => toast.error(e.message),
+					onSuccess: () => toast.success("Convite retirado da publicação"),
+				},
+			);
+			return;
+		}
+
+		publish.mutate(
+			{ eventId, invitationId: invitation.id },
+			{
+				onError: (e: Error) =>
+					toast.error(e.message || "Não foi possível publicar o convite"),
+				onSuccess: () => toast.success("Convite publicado!"),
+			},
+		);
+	};
+
 	const handleResponse = (response: "CONFIRM" | "DECLINE" | "MAYBE") => {
 		if (!invitation?.code) return;
 		respondToInvitation.mutate(
-			{ code: String(invitation.code), response },
+			{ eventId, code: String(invitation.code), response },
 			{
 				onSuccess: () => {
 					toast.success(
@@ -95,7 +138,7 @@ export function ViewInvitationDialog({
 						Convite
 					</DialogTitle>
 					<DialogDescription className="text-muted-foreground text-sm">
-						Detalhes do convite e informações do evento.
+						Detalhes do convite, QR Code de acesso e informações do evento.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -132,6 +175,38 @@ export function ViewInvitationDialog({
 						<InvitationWarning />
 
 						<InvitationCode code={invitation.code} onCopy={handleCopyCode} />
+
+						{/* QR + public link: the QR is the primary way guests get in. */}
+						<section className="flex flex-col gap-4 border-y py-5 sm:flex-row sm:items-start">
+							<InvitationQrCode qrCode={invitation.qrCode} size={168} />
+							<div className="min-w-0 flex-1 space-y-3">
+								<InvitationLink url={invitationUrl} onCopy={handleCopyLink} />
+								<Button
+									variant={isPublished ? "outline" : "default"}
+									size="sm"
+									className="w-full rounded-none"
+									disabled={publish.isPending || unpublish.isPending}
+									onClick={handleTogglePublish}
+								>
+									{isPublished ? (
+										<>
+											<EyeOff className="mr-2 h-4 w-4" />
+											Retirar publicação
+										</>
+									) : (
+										<>
+											<Globe className="mr-2 h-4 w-4" />
+											Publicar convite
+										</>
+									)}
+								</Button>
+								<p className="text-[11px] text-muted-foreground">
+									{isPublished
+										? `Publicado em ${formatDate(String(invitation.publishedAt))}. Qualquer pessoa com o link consegue abrir o convite.`
+										: "Enquanto não for publicado, apenas tu tens acesso a este convite."}
+								</p>
+							</div>
+						</section>
 
 						<section className="grid grid-cols-2 divide-x border-y">
 							<div className="py-3 pr-4">

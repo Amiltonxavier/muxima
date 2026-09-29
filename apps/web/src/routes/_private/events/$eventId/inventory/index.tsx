@@ -77,7 +77,7 @@ function InventoryPage() {
 					</TabsTrigger>
 					<TabsTrigger value="analytics">
 						<ChartColumn className="mr-2 h-4 w-4" />
-						Analytics
+						Análise de dados
 					</TabsTrigger>
 				</TabsList>
 

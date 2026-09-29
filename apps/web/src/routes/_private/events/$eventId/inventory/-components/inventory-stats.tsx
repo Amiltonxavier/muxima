@@ -16,7 +16,7 @@ export function InventoryStats({
 	}
 
 	return (
-		<StatsGrid columns={3}>
+		<StatsGrid columns={4}>
 			<StatsCard title="Total de produtos" value={stats.totalItems} />
 			{/* A quantidade planeada vive no limite do progresso ("/ N") —
 			    assim a relação adquirido/planeado fica explícita num só card. */}

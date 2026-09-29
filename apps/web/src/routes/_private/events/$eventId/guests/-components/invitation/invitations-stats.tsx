@@ -4,10 +4,12 @@ import { StatsCard } from "@/shared/components/stats-card/stats-card";
 
 export function InvitationsStats({
 	stats,
+	isLoading,
 }: {
 	stats?: InvitationStats | null;
+	isLoading?: boolean;
 }) {
-	if (!stats) {
+	if (isLoading || !stats) {
 		return null;
 	}
 
@@ -21,7 +23,7 @@ export function InvitationsStats({
 			<StatsCard title="Respondidos" value={stats.responded} />
 			<StatsCard
 				title="Sem resposta"
-				value={stats.published - stats.responded}
+				value={Math.max(stats.published - stats.responded, 0)}
 				description={`de ${stats.published} publicados`}
 			/>
 			<StatsCard title="Taxa de resposta" value={`${stats.responseRate}%`} />

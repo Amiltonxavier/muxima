@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { orpc } from "@/utils/orpc";
 
 export const userKeys = {
@@ -22,6 +23,22 @@ export function useUpdateProfile() {
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: userKeys.profile() });
 			},
+		}),
+	);
+}
+
+/**
+ * Blocks the current account.
+ *
+ * The API revokes every session in the same transaction, so after this resolves
+ * the user is signed out everywhere. We do not invalidate the profile query on
+ * success — the user is leaving the app, not re-reading their own data.
+ */
+export function useBlockAccount() {
+	return useMutation(
+		orpc.users.blockAccount.mutationOptions({
+			onError: (err: Error) =>
+				toast.error(err.message || "Não foi possível bloquear a conta"),
 		}),
 	);
 }

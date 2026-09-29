@@ -15,6 +15,20 @@ export function getGuestCompanions(guest: {
 	return guest.companions ?? [];
 }
 
+/**
+ * Latest invitation attached to a guest, as included by `guests.list`.
+ *
+ * Only the fields needed for the table badge and bulk publish are selected —
+ * the QR Code SVG is deliberately excluded from list queries and fetched by the
+ * detail endpoint instead.
+ */
+export function getGuestInvitation(
+	guest: Pick<GuestItem, "invitationGuests">,
+): GuestItem["invitationGuests"][number]["invitation"] | null {
+	const invitationGuest = guest.invitationGuests?.[0];
+	return invitationGuest?.invitation ?? null;
+}
+
 export function getGuestTypeLabel(type?: GuestType | null): string {
 	return GUEST_TYPE_LABELS[type || "FAMILY"] || String(type || "FAMILY");
 }

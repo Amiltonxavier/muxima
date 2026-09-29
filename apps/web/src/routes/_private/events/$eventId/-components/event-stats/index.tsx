@@ -15,8 +15,7 @@ export function EventStats({ eventId }: EventStatsProps) {
 
 	return (
 		<div className="space-y-4">
-			<StatsGrid columns={3}>
-				<CountdownStatsCard eventId={eventId} />
+			<StatsGrid columns={2}>
 				<BudgetStatsCard eventId={eventId} />
 				<SuppliersStatsCard eventId={eventId} stats={stats.suppliers.data} />
 			</StatsGrid>

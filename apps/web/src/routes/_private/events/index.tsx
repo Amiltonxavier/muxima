@@ -5,7 +5,6 @@ import { QueryState } from "@/shared/components/states";
 import { CreateEventDialog } from "./-components/create-event-dialog";
 import { DeleteEventDialog } from "./-components/delete-event-dialog";
 import { EventCard } from "./-components/event-card";
-import { EventsEmptyState } from "./-components/events-empty-state";
 import { EventsFilters } from "./-components/events-filters";
 import { EventsHeader } from "./-components/events-header";
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "./-constants/events.constants";
@@ -89,14 +88,12 @@ function EventsPage() {
 				/>
 			)}
 
-			{isEmpty && (
-				<EventsEmptyState onCreate={() => setShowCreateDialog(true)} />
+			{showCreateDialog && (
+				<CreateEventDialog
+					open={showCreateDialog}
+					onOpenChange={setShowCreateDialog}
+				/>
 			)}
-
-			<CreateEventDialog
-				open={showCreateDialog}
-				onOpenChange={setShowCreateDialog}
-			/>
 
 			<DeleteEventDialog
 				eventId={deleteId}

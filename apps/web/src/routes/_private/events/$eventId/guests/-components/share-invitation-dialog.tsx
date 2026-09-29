@@ -9,11 +9,15 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
-import { useCreateInvitation, useInvitation } from "../-queries/guest-queries";
 import {
-	buildInvitationLink,
+	useCreateInvitation,
+	useInvitation,
+} from "../-queries/invitation-queries";
+import {
 	buildInvitationMessage,
+	resolveInvitationUrl,
 } from "../-utils/invitation.utils";
+import { InvitationQrCode } from "./invitation/invitation-qr-code";
 
 export function ShareInvitationDialog({
 	guest,
@@ -25,12 +29,11 @@ export function ShareInvitationDialog({
 	onClose: () => void;
 }) {
 	const createInvitation = useCreateInvitation();
-	const invitationQuery = useInvitation(guest.id);
+	const invitationQuery = useInvitation(eventId, guest.id);
 	const invitation = invitationQuery.data;
 
-	const invitationLink = invitation
-		? buildInvitationLink(String(invitation.code))
-		: null;
+	// Backend-built URL — the exact payload encoded in the QR Code.
+	const invitationLink = resolveInvitationUrl(invitation ?? null);
 
 	const handleShareWhatsApp = () => {
 		if (invitationLink) {
@@ -73,6 +76,9 @@ export function ShareInvitationDialog({
 					</div>
 				) : invitationLink ? (
 					<div className="space-y-4">
+						<div className="flex flex-col items-center gap-3">
+							<InvitationQrCode qrCode={invitation?.qrCode} size={176} />
+						</div>
 						<div className="border p-3">
 							<p className="mb-1 text-muted-foreground text-xs">
 								Link de convite

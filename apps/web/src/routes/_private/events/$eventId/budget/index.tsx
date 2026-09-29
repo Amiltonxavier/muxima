@@ -9,7 +9,6 @@ import { ChartColumn, List } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
 import { BudgetAnalytics } from "./-components/budget-analytics";
-import { BudgetAvailableCard } from "./-components/budget-available-card";
 import { BudgetHeader } from "./-components/budget-header";
 import { BudgetLinesNote } from "./-components/budget-lines-note";
 import { BudgetLinesTable } from "./-components/budget-lines-table";
@@ -61,8 +60,6 @@ function BudgetPage() {
 			/>
 
 			<BudgetStats totals={totals} isLoading={summaryQuery.isLoading} />
-
-			{totals && <BudgetAvailableCard totals={totals} />}
 
 			<Tabs defaultValue="lista">
 				<TabsList>

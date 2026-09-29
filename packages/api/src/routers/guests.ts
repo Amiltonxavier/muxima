@@ -2,14 +2,19 @@ import db from "@muxima/db";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
-import {
-	createInvitation as createGuestInvitation,
-	respondToInvitation as respondToGuestInvitation,
-} from "../modules/invitations/service";
+/**
+ * NOTE: invitation operations (create / publish / respond / preview / QR Code)
+ * intentionally live in the `invitations` router — the invitation is its own
+ * domain entity. This router used to duplicate `createInvitation` and
+ * `respondToInvitation`; those duplicates were removed during the
+ * guests/invitations migration. The UI consumes `orpc.invitations.*` from the
+ * guests module.
+ */
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
 import { guestListInput, tableListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -52,6 +57,23 @@ export const guestsRouter = {
 					include: {
 						companions: true,
 						tableGuests: { include: { table: true } },
+						// Latest invitation of each guest — enough for the table badge
+						// and for bulk publish by selection. The QR Code is not
+						// included here: it is only fetched by the detail endpoint.
+						invitationGuests: {
+							take: 1,
+							orderBy: { invitation: { createdAt: "desc" } },
+							select: {
+								invitation: {
+									select: {
+										id: true,
+										code: true,
+										status: true,
+										publishedAt: true,
+									},
+								},
+							},
+						},
 					},
 					orderBy: { createdAt: "desc" },
 					skip,
@@ -390,7 +412,31 @@ export const guestsRouter = {
 				guestId: z.string(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			// Both the table and the guest must belong to the same event and the
+			// user must have access to it.
+			const [table, guest] = await Promise.all([
+				db.table.findUnique({
+					where: { id: input.tableId },
+					select: { eventId: true, deletedAt: true },
+				}),
+				db.guest.findUnique({
+					where: { id: input.guestId },
+					select: { eventId: true },
+				}),
+			]);
+
+			if (!table || !guest) {
+				throw new NotFoundError("Mesa ou convidado não encontrado");
+			}
+			if (table.eventId !== guest.eventId) {
+				throw new BadRequestError(
+					"A mesa e o convidado pertencem a eventos diferentes",
+				);
+			}
+
+			await requireEventAccess(context.session.user.id, table.eventId);
+
 			const existing = await db.tableGuest.findFirst({
 				where: {
 					tableId: input.tableId,
@@ -399,7 +445,7 @@ export const guestsRouter = {
 			});
 
 			if (existing) {
-				throw new Error("Convidado já está associado a esta mesa");
+				throw new BadRequestError("Convidado já está associado a esta mesa");
 			}
 
 			const tableGuest = await db.tableGuest.create({
@@ -414,91 +460,26 @@ export const guestsRouter = {
 
 	removeGuestFromTable: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const tableGuest = await db.tableGuest.findUnique({
+				where: { id: input.id },
+				select: { table: { select: { eventId: true } } },
+			});
+
+			if (!tableGuest) {
+				throw new NotFoundError("Associação não encontrada");
+			}
+
+			await requireEventAccess(
+				context.session.user.id,
+				tableGuest.table.eventId,
+			);
+
 			await db.tableGuest.delete({
 				where: { id: input.id },
 			});
 
 			return { success: true };
-		}),
-
-	createInvitation: protectedProcedure
-		.input(
-			z.object({
-				guestIds: z.array(z.string()).min(1),
-				eventId: z.string(),
-			}),
-		)
-		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
-			return createGuestInvitation(db, {
-				eventId: input.eventId,
-				guestIds: input.guestIds,
-			});
-		}),
-
-	getInvitation: protectedProcedure
-		.input(z.object({ guestId: z.string() }))
-		.handler(async ({ context, input }) => {
-			try {
-				const invitationGuest = await db.invitationGuest.findFirst({
-					where: { guestId: input.guestId },
-					include: {
-						invitation: {
-							include: {
-								event: {
-									select: {
-										id: true,
-										name: true,
-										type: true,
-										status: true,
-										eventDate: true,
-										startTime: true,
-										endTime: true,
-										venueName: true,
-										address: true,
-										neighborhood: true,
-										municipality: true,
-										province: true,
-										owner: {
-											select: {
-												id: true,
-												name: true,
-												email: true,
-											},
-										},
-									},
-								},
-								guests: {
-									include: {
-										guest: {
-											include: {
-												tableGuests: {
-													include: { table: true },
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				});
-
-				if (!invitationGuest) {
-					throw new Error("Convite não encontrado");
-				}
-
-				await requireEventAccess(
-					context.session.user.id,
-					invitationGuest.invitation.eventId,
-				);
-
-				return invitationGuest.invitation;
-			} catch (error) {
-				console.error("getInvitation error:", error);
-				throw error;
-			}
 		}),
 
 	updateCompanion: protectedProcedure
@@ -626,17 +607,6 @@ export const guestsRouter = {
 				atCapacity: capacity > 0 && totalConfirmedPeople >= capacity,
 				byType,
 			};
-		}),
-
-	respondToInvitation: protectedProcedure
-		.input(
-			z.object({
-				code: z.string(),
-				response: z.enum(["CONFIRM", "DECLINE", "MAYBE"]),
-			}),
-		)
-		.handler(async ({ input }) => {
-			return respondToGuestInvitation(db, input.code, input.response);
 		}),
 
 	getTableStats: protectedProcedure

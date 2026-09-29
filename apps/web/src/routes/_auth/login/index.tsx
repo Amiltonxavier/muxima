@@ -3,7 +3,7 @@ import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_auth/login/")({
 
 function LoginPage() {
 	const [isLoading, setIsLoading] = useState(false);
+	const [showPassword, setShowPassword] = useState(false);
 
 	const form = useForm({
 		defaultValues: {
@@ -51,11 +52,13 @@ function LoginPage() {
 	});
 
 	return (
-		<div className="rounded-lg border bg-card p-6 shadow-sm">
-			<div className="mb-6 text-center">
-				<h2 className="font-semibold text-lg">Bem-vindo novamente</h2>
+		<div>
+			<div className="mb-8 space-y-1.5">
+				<h2 className="font-semibold text-2xl tracking-tight">
+					Bem-vindo de volta
+				</h2>
 				<p className="text-muted-foreground text-sm">
-					Entre na sua conta para continuar
+					Entre na sua conta para continuar.
 				</p>
 			</div>
 
@@ -65,7 +68,7 @@ function LoginPage() {
 					e.stopPropagation();
 					form.handleSubmit();
 				}}
-				className="space-y-4"
+				className="space-y-5"
 			>
 				<form.Field name="email">
 					{(field) => (
@@ -74,7 +77,9 @@ function LoginPage() {
 							<Input
 								id={field.name}
 								type="email"
+								autoComplete="email"
 								placeholder="seu@email.com"
+								className="h-11"
 								value={field.state.value}
 								onChange={(e) => field.handleChange(e.target.value)}
 								disabled={isLoading}
@@ -91,23 +96,33 @@ function LoginPage() {
 				<form.Field name="password">
 					{(field) => (
 						<div className="space-y-2">
-							<div className="flex items-center justify-between">
-								<Label htmlFor={field.name}>Password</Label>
-								<Link
-									to="/forgot-password"
-									className="text-primary text-xs hover:underline"
+							<Label htmlFor={field.name}>Password</Label>
+							<div className="relative">
+								<Input
+									id={field.name}
+									type={showPassword ? "text" : "password"}
+									autoComplete="current-password"
+									placeholder="••••••••"
+									className="h-10 pr-10"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+								<button
+									type="button"
+									onClick={() => setShowPassword((v) => !v)}
+									aria-label={
+										showPassword ? "Ocultar password" : "Mostrar password"
+									}
+									className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
 								>
-									Esqueci a minha password
-								</Link>
+									{showPassword ? (
+										<EyeOff className="h-4 w-4" />
+									) : (
+										<Eye className="h-4 w-4" />
+									)}
+								</button>
 							</div>
-							<Input
-								id={field.name}
-								type="password"
-								placeholder="••••••••"
-								value={field.state.value}
-								onChange={(e) => field.handleChange(e.target.value)}
-								disabled={isLoading}
-							/>
 							{field.state.meta.errors.length > 0 && (
 								<p className="text-destructive text-xs">
 									{field.state.meta.errors[0]}
@@ -117,17 +132,17 @@ function LoginPage() {
 					)}
 				</form.Field>
 
-				<Button type="submit" className="w-full" disabled={isLoading}>
-					{isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+				<Button type="submit" className="h-11 w-full" disabled={isLoading}>
+					{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 					Entrar
 				</Button>
 			</form>
 
-			<p className="mt-6 text-center text-muted-foreground text-sm">
-				Ainda não possui uma conta?{" "}
+			<p className="mt-8 text-center text-muted-foreground text-sm">
+				Ainda não tem conta?{" "}
 				<Link
 					to="/register"
-					className="font-medium text-primary hover:underline"
+					className="font-medium text-foreground underline-offset-4 hover:underline"
 				>
 					Criar conta
 				</Link>

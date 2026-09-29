@@ -8,6 +8,11 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: z.string().min(32),
 		BETTER_AUTH_URL: z.url(),
 		CORS_ORIGIN: z.url(),
+		/**
+		 * Public origin of the web app. Used to build the public invitation URL
+		 * that the guest QR Code points to. Falls back to CORS_ORIGIN.
+		 */
+		FRONTEND_URL: z.url().optional(),
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),

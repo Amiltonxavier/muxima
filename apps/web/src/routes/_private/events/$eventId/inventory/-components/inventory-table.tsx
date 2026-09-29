@@ -60,15 +60,13 @@ export function InventoryTable({
 			<Table>
 				<TableHeader>
 					<TableRow>
-						<TableHead>Produto</TableHead>
-						<TableHead>Categoria</TableHead>
-						<TableHead>Unidade</TableHead>
-						<TableHead>Planeado</TableHead>
-						<TableHead>Actual</TableHead>
-						<TableHead>Em falta</TableHead>
-						<TableHead>Valor</TableHead>
+						<TableHead>Item</TableHead>
+						<TableHead>Quantidade</TableHead>
 						<TableHead>Progresso</TableHead>
-						<TableHead className="w-44" />
+						<TableHead>Estado</TableHead>
+						<TableHead>Montante</TableHead>
+
+						<TableHead className="text-right">Acções</TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>

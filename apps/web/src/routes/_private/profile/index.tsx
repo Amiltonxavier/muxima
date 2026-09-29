@@ -1,55 +1,52 @@
-import { Button } from "@muxima/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@muxima/ui/components/card";
-import { Input } from "@muxima/ui/components/input";
-import { Label } from "@muxima/ui/components/label";
-import { useForm } from "@tanstack/react-form";
-import { createFileRoute } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 import { QueryState } from "@/shared/components/states";
-import { useProfile, useUpdateProfile } from "./-queries/user-queries";
+import { BlockAccountDialog } from "./-components/block-account-dialog";
+import { ProfileDangerZone } from "./-components/profile-danger-zone";
+import { ProfileDetailsSection } from "./-components/profile-details-section";
+import { ProfileInfoSection } from "./-components/profile-info-section";
+import {
+	useBlockAccount,
+	useProfile,
+	useUpdateProfile,
+} from "./-queries/user-queries";
 
 export const Route = createFileRoute("/_private/profile/")({
 	component: ProfilePage,
 });
 
 function ProfilePage() {
+	const navigate = useNavigate();
 	const profileQuery = useProfile();
 	const updateProfile = useUpdateProfile();
+	const blockAccount = useBlockAccount();
+
+	const [showBlockDialog, setShowBlockDialog] = useState(false);
 	const profile = profileQuery.data;
 
-	const form = useForm({
-		defaultValues: {
-			name: "",
-			email: "",
-		},
-		onSubmit: async ({ value }) => {
-			updateProfile.mutate(value, {
-				onSuccess: () => toast.success("Perfil atualizado com sucesso"),
-				onError: (e) => toast.error(e.message),
-			});
-		},
-	});
-
-	useEffect(() => {
-		if (profile) {
-			form.setFieldValue("name", profile.name || "");
-			form.setFieldValue("email", profile.email || "");
-		}
-	}, [profile, form.setFieldValue]);
+	const handleBlock = (reason?: string) => {
+		blockAccount.mutate(
+			{ confirm: true as const, reason },
+			{
+				onSuccess: (result) => {
+					setShowBlockDialog(false);
+					toast.success(
+						`Conta bloqueada. ${result.revokedSessions} sessão(ões) encerrada(s).`,
+					);
+					// The session no longer exists, so send the user to sign-in.
+					navigate({ to: "/login" });
+				},
+			},
+		);
+	};
 
 	return (
 		<div className="space-y-6">
 			<div>
 				<h1 className="font-semibold text-2xl">Perfil</h1>
 				<p className="text-muted-foreground text-sm">
-					Gerira as suas informações pessoais
+					Gere as suas informações pessoais e a segurança da conta
 				</p>
 			</div>
 
@@ -61,54 +58,37 @@ function ProfilePage() {
 					hasData: !!profile,
 				}}
 			>
-				<Card className="max-w-lg">
-					<CardHeader>
-						<CardTitle>Informações pessoais</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<form
-							onSubmit={(e) => {
-								e.preventDefault();
-								e.stopPropagation();
-								form.handleSubmit();
-							}}
-							className="space-y-4"
-						>
-							<form.Field name="name">
-								{(field) => (
-									<div className="space-y-2">
-										<Label>Nome</Label>
-										<Input
-											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
-											disabled={updateProfile.isPending}
-										/>
-									</div>
-								)}
-							</form.Field>
-							<form.Field name="email">
-								{(field) => (
-									<div className="space-y-2">
-										<Label>Email</Label>
-										<Input
-											type="email"
-											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
-											disabled={updateProfile.isPending}
-										/>
-									</div>
-								)}
-							</form.Field>
-							<Button type="submit" disabled={updateProfile.isPending}>
-								{updateProfile.isPending && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								Guardar alterações
-							</Button>
-						</form>
-					</CardContent>
-				</Card>
+				{profile && (
+					<>
+						<ProfileInfoSection
+							profile={profile}
+							isSaving={updateProfile.isPending}
+							onSubmit={(values) =>
+								updateProfile.mutate(values, {
+									onSuccess: () =>
+										toast.success("Perfil atualizado com sucesso"),
+									onError: (e: Error) => toast.error(e.message),
+								})
+							}
+						/>
+
+						<ProfileDetailsSection profile={profile} />
+
+						<ProfileDangerZone
+							profile={profile}
+							isBlocking={blockAccount.isPending}
+							onBlock={() => setShowBlockDialog(true)}
+						/>
+					</>
+				)}
 			</QueryState>
+
+			<BlockAccountDialog
+				open={showBlockDialog}
+				onClose={() => setShowBlockDialog(false)}
+				onConfirm={handleBlock}
+				isBlocking={blockAccount.isPending}
+			/>
 		</div>
 	);
 }

@@ -22,5 +22,15 @@ export default defineConfig({
 		globals: true,
 		environment: "node",
 		include: ["src/**/*.{test,spec}.{ts,tsx}"],
+		// Unit tests never touch a real database or a real auth instance, but
+		// the modules under test import `@muxima/env/server`, which validates
+		// `process.env` at import time. These values are placeholders used only
+		// to satisfy that validation.
+		env: {
+			DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/muxima_test",
+			BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
+			BETTER_AUTH_URL: "http://localhost:3000",
+			CORS_ORIGIN: "http://localhost:3001",
+		},
 	},
 });

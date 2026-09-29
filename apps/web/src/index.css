@@ -1,1 +1,6 @@
 @import "@muxima/ui/globals.css";
+
+
+@theme {
+	--font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+}

@@ -24,12 +24,14 @@
 		"@orpc/zod": "catalog:",
 		"better-auth": "catalog:",
 		"dotenv": "catalog:",
+		"qrcode": "^1.5.4",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@fastify/cors": "^11.3.0",
 		"@muxima/config": "workspace:*",
 		"@types/node": "catalog:",
+		"@types/qrcode": "^1.5.6",
 		"fastify": "^5.10.0",
 		"typescript": "^6.0.3",
 		"vitest": "catalog:"

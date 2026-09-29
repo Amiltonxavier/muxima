@@ -7,10 +7,8 @@ import {
 	SelectValue,
 } from "@muxima/ui/components/select";
 import { Search } from "lucide-react";
-import {
-	INVITATION_RESPONSE_FILTER_OPTIONS,
-	type InvitationResponseFilter,
-} from "../-constants/invitation.constants";
+import { INVITATION_RESPONSE_FILTER_OPTIONS } from "../../-constants/guest.constants";
+import type { InvitationResponseFilter } from "../../-types/invitation.types";
 
 export function InvitationsFilters({
 	search,

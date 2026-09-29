@@ -1,8 +1,10 @@
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
+import { Checkbox } from "@muxima/ui/components/checkbox";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
 import {
 	Eye,
+	Globe,
 	Mail,
 	Pencil,
 	Phone,
@@ -16,12 +18,15 @@ import { getStatusLabel, getStatusTone } from "@/utils/status-helpers";
 import type { GuestItem } from "../-types/guest.types";
 import {
 	getGuestCompanions,
+	getGuestInvitation,
 	getGuestTableName,
 	getGuestTypeLabel,
 } from "../-utils/guest.utils";
 
 export function GuestsTableRow({
 	guest,
+	isSelected,
+	onToggleSelected,
 	onViewInvitation,
 	onShareInvitation,
 	onEditGuest,
@@ -29,6 +34,8 @@ export function GuestsTableRow({
 	onManageCompanions,
 }: {
 	guest: GuestItem;
+	isSelected: boolean;
+	onToggleSelected: (guestId: string) => void;
 	onViewInvitation: (guestId: string) => void;
 	onShareInvitation: (guest: GuestItem) => void;
 	onEditGuest: (guest: GuestItem) => void;
@@ -38,9 +45,18 @@ export function GuestsTableRow({
 	const tableName = getGuestTableName(guest);
 	const companions = getGuestCompanions(guest);
 	const status = guest.status || "PENDING";
+	const invitation = getGuestInvitation(guest);
+	const isInvitationPublished = Boolean(invitation?.publishedAt);
 
 	return (
-		<TableRow>
+		<TableRow data-state={isSelected ? "selected" : undefined}>
+			<TableCell className="w-10">
+				<Checkbox
+					checked={isSelected}
+					onCheckedChange={() => onToggleSelected(guest.id)}
+					aria-label={`Seleccionar ${guest.name}`}
+				/>
+			</TableCell>
 			<TableCell className="font-medium">{guest.name}</TableCell>
 			<TableCell>
 				<div className="flex flex-col gap-0.5 text-muted-foreground text-xs">
@@ -62,7 +78,7 @@ export function GuestsTableRow({
 			<TableCell>{getGuestTypeLabel(guest.type)}</TableCell>
 			<TableCell>
 				{tableName ? (
-					<Badge className="bg-blue-50 text-blue-700">{tableName}</Badge>
+					<Badge>{tableName}</Badge>
 				) : (
 					<span className="text-muted-foreground text-xs">—</span>
 				)}
@@ -95,8 +111,23 @@ export function GuestsTableRow({
 					tone={getStatusTone(status)}
 				/>
 			</TableCell>
+
 			<TableCell>
-				<div className="flex gap-1">
+				{invitation ? (
+					<Badge
+						variant={isInvitationPublished ? "success" : "secondary"}
+						className="gap-1"
+					>
+						<Globe className="h-3 w-3" />
+						{isInvitationPublished ? "Publicado" : "Privado"}
+					</Badge>
+				) : (
+					<span className="text-muted-foreground text-xs">Sem convite</span>
+				)}
+			</TableCell>
+
+			<TableCell>
+				<div className="flex items-center gap-1">
 					<Button
 						variant="ghost"
 						size="icon-sm"

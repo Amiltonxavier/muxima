@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "@muxima/ui/components/dialog";
 import { cn } from "@muxima/ui/lib/utils";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import {
+	ArrowLeft,
 	Bell,
 	Calendar,
 	ChevronLeft,
@@ -14,16 +15,17 @@ import {
 	Home,
 	LayoutGrid,
 	ListChecks,
-	Mail,
 	Package,
 	Settings,
 	ShoppingCart,
 	TableProperties,
+	User,
 	Users,
 	UtensilsCrossed,
 } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { initials } from "../utils/string";
 
 interface NavItem {
 	label: string;
@@ -95,11 +97,6 @@ const eventNavGroups: NavGroup[] = [
 				icon: <TableProperties className="h-4 w-4" />,
 				to: "/events/$eventId/tables",
 			},
-			{
-				label: "Convites",
-				icon: <Mail className="h-4 w-4" />,
-				to: "/events/$eventId/invitations",
-			},
 		],
 	},
 	{
@@ -153,6 +150,11 @@ const globalNavGroups: NavGroup[] = [
 				label: "Eventos",
 				icon: <Gift className="h-4 w-4" />,
 				to: "/events",
+			},
+			{
+				label: "Perfil",
+				icon: <User className="h-4 w-4" />,
+				to: "/profile",
 			},
 		],
 	},
@@ -214,7 +216,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 						className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground text-xs hover:text-foreground"
 						onClick={onNavigate}
 					>
-						← Trocar evento
+						<ArrowLeft size={12} /> Trocar evento
 					</Link>
 				</div>
 			)}
@@ -272,7 +274,7 @@ function SidebarUserInfo() {
 	return (
 		<div className="flex items-center gap-3 p-4">
 			<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-medium text-sm">
-				{session.user.name?.charAt(0)?.toUpperCase() || "U"}
+				{initials(session.user.name) || "U"}
 			</div>
 			<div className="min-w-0 flex-1">
 				<p className="truncate font-medium text-sm">{session.user.name}</p>

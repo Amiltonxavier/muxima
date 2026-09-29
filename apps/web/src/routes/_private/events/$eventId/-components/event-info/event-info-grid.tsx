@@ -25,7 +25,7 @@ export function EventInfoGrid({ event }: EventInfoGridProps) {
 				label="Data"
 				value={
 					event.eventDate
-						? dateHelper.formatShort(String(event.eventDate))
+						? dateHelper.formatShort(event.eventDate)
 						: "Não definida"
 				}
 			/>
