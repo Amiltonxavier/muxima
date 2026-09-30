@@ -737,6 +737,34 @@ export type AuditLog = {
 	createdAt: Date;
 };
 
+// ── ActivityLog ──────────────────────────────────────────────────
+// The action/resource vocabulary and the `ActivityChange` shape are owned by
+// the activity logger in `@muxima/db` (which is where the write path lives);
+// re-exported here so the web app reaches every shared entity type through the
+// single `@muxima/api/shared/types/entities` entry point, as it already does
+// for `AuditLog` above.
+export type {
+	ActivityAction,
+	ActivityChange,
+	ActivityMetadata,
+	ActivityResource,
+} from "@muxima/db/activity-log";
+
+/** One page of the Profile > History trail, as returned by `activityLogs.list`. */
+export type ActivityLog = {
+	id: string;
+	userId: string;
+	eventId: string | null;
+	action: string;
+	resource: string;
+	resourceId: string | null;
+	description: string;
+	metadata: unknown;
+	ipAddress: string | null;
+	userAgent: string | null;
+	createdAt: Date;
+};
+
 // ── Dedication ───────────────────────────────────────────────────
 export type DedicationType = "WEDDING_VOW" | "ENGAGEMENT_VOW" | "DEDICATION";
 export type DedicationStatus =

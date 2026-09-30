@@ -11,6 +11,10 @@ export default defineConfig({
 			"@muxima/auth": path.resolve(__dirname, "../auth/src/index.ts"),
 			// Longer paths first: a bare "@muxima/db" alias would otherwise
 			// rewrite "@muxima/db/prisma" into "<file>/prisma".
+			"@muxima/db/activity-log": path.resolve(
+				__dirname,
+				"../db/src/activity-log.ts",
+			),
 			"@muxima/db/prisma": path.resolve(
 				__dirname,
 				"../db/prisma/generated/client.ts",

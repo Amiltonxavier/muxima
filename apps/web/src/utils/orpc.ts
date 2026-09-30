@@ -62,6 +62,12 @@ function getServerUrl(url: string) {
 }
 export const link = new RPCLink({
 	url: `${getServerUrl(env.VITE_SERVER_URL)}/rpc`,
+	// `.route({ method: "GET" })` on a procedure changes the generated OpenAPI
+	// spec only. Turning it into a real HTTP GET needs the router instance, which
+	// cannot be imported here: a runtime import of `@muxima/api` would pull
+	// Prisma and the server env into the browser bundle and throw at load. So the
+	// wire stays POST and the GET declaration remains documentation, which is the
+	// pre-existing behaviour of every procedure in this app.
 	fetch(url, options) {
 		return fetch(url, {
 			...options,

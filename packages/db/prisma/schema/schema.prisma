@@ -101,7 +101,8 @@ enum SupplierStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
-}  /// Denormalised mirror of the amount computed by the backend resolver.
+}
+/// Denormalised mirror of the amount computed by the backend resolver.
 /// Never trusted on read: the API always recomputes from price +
 /// installments + payments.
 enum SupplierPaymentStatus {
@@ -347,6 +348,7 @@ model Event {
   inventoryItems   InventoryItem[]
   notifications    Notification[]
   auditLogs        AuditLog[]
+  activityLogs     ActivityLog[]
   dedications      Dedication[]
 
   @@index([ownerId])
@@ -469,8 +471,8 @@ model SupplierPayment {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  creator   User       @relation(fields: [createdBy], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  creator  User     @relation(fields: [createdBy], references: [id])
 
   @@index([supplierId])
   @@index([createdBy])
@@ -489,7 +491,7 @@ model SupplierInstallment {
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
 
-  supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@unique([supplierId, position])
   @@index([supplierId])
@@ -802,6 +804,42 @@ model AuditLog {
   @@index([eventId])
   @@index([userId])
   @@map("audit_log")
+}
+
+/// Append-only trail of what a user did, powering the Profile > History tab.
+///
+/// Distinct from `AuditLog`: that model is the event-scoped audit trail owned by
+/// the dedications module (it requires an `eventId` and stores old/new entity
+/// snapshots). This one covers every action across the whole account — sign-in,
+/// profile edits, password changes, event and guest mutations — so `eventId` is
+/// optional: security events like LOGIN belong to no event at all.
+///
+/// Never store credentials here. `metadata` is free-form context only; the
+/// logger redacts secret-shaped keys before they reach this table.
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String
+  eventId     String?
+  action      String
+  resource    String
+  resourceId  String?
+  /// Human-readable summary rendered directly in the History table.
+  description String
+  /// Free-form context, e.g. `{ changes: [{ field, before, after }] }`.
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // The History tab always filters by owner and sorts by recency, so the
+  // composite index serves both the WHERE and the ORDER BY.
+  @@index([userId, createdAt])
+  @@index([userId, action])
+  @@index([userId, resource])
+  @@map("activity_log")
 }
 
 // Private personal writing (vows, dedications, messages) owned by one event

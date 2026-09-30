@@ -1,6 +1,7 @@
 import type { RouterClient } from "@orpc/server";
 
 import { publicProcedure } from "../index";
+import { activityLogsRouter } from "./activity-logs";
 import { budgetRouter } from "./budget";
 import { checklistRouter } from "./checklist";
 import { dashboardRouter } from "./dashboard";
@@ -34,6 +35,7 @@ export const appRouter = {
 	notifications: notificationsRouter,
 	users: usersRouter,
 	dedications: dedicationsRouter,
+	activityLogs: activityLogsRouter,
 };
 
 export type AppRouter = typeof appRouter;

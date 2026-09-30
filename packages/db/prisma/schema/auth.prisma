@@ -1,18 +1,18 @@
 model User {
-  id            String      @id
+  id            String     @id
   name          String
   email         String
-  emailVerified Boolean     @default(false)
+  emailVerified Boolean    @default(false)
   image         String?
   phone         String?
   /// Lifecycle state of the account. BLOCKED users cannot authenticate and
   /// have every active session revoked.
-  status        UserStatus  @default(ACTIVE)
+  status        UserStatus @default(ACTIVE)
   /// Why/when the account was blocked. Kept for audit purposes.
   blockedAt     DateTime?
   blockedReason String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
   sessions      Session[]
   accounts      Account[]
 
@@ -26,6 +26,7 @@ model User {
   createdMovements        InventoryMovement[]
   notifications           Notification[]
   auditLogs               AuditLog[]
+  activityLogs            ActivityLog[]
   ownedDedications        Dedication[]        @relation("DedicationOwner")
 
   @@unique([email])

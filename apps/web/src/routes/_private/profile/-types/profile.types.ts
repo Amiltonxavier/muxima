@@ -13,3 +13,12 @@ export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
 	ACTIVE: "Ativa",
 	BLOCKED: "Bloqueada",
 };
+
+/**
+ * A role exactly as the backend resolved it from the user's `EventMember` rows.
+ * `name` and `permissions` are display/authorisation data from the server —
+ * the Profile tab renders them as received and never derives them locally.
+ */
+export type ProfileRole = ProfileItem["roles"][number];
+
+export type ProfilePermission = ProfileItem["permissions"][number];

@@ -1,9 +1,14 @@
 import db from "@muxima/db";
+import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { syncEventLifecycle } from "../modules/events/lifecycle";
 import { notifyEventMilestone } from "../modules/events/proximity-notifier";
+import {
+	buildActivityLog,
+	submittedValues,
+} from "../shared/activity/activity-context";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 import { validateTimeString } from "../shared/validation/angola";
@@ -211,6 +216,18 @@ export const eventsRouter = {
 				});
 			}
 
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "EVENT_CREATED",
+					resource: "EVENT",
+					resourceId: event.id,
+					eventId: event.id,
+					description: `Evento "${event.name}" criado`,
+					metadata: { name: event.name, status: event.status },
+				}),
+			);
+
 			return event;
 		}),
 
@@ -324,6 +341,29 @@ export const eventsRouter = {
 				},
 			});
 
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "EVENT_UPDATED",
+					resource: "EVENT",
+					resourceId: event.id,
+					eventId: event.id,
+					description: `Evento "${updatedEvent.name}" atualizado`,
+					metadata: {
+						name: updatedEvent.name,
+						changes: buildChanges(event, submittedValues(updatedEvent, input), [
+							"name",
+							"status",
+							"eventDate",
+							"startTime",
+							"endTime",
+							"venueName",
+							"capacity",
+						]),
+					},
+				}),
+			);
+
 			return updatedEvent;
 		}),
 
@@ -353,6 +393,19 @@ export const eventsRouter = {
 			await db.event.delete({
 				where: { id: input.id },
 			});
+
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "EVENT_DELETED",
+					resource: "EVENT",
+					resourceId: event.id,
+					// The event row is gone, so `eventId` is deliberately left unset:
+					// the FK cascades and would delete this log along with it.
+					description: `Evento "${event.name}" eliminado`,
+					metadata: { name: event.name, status: event.status },
+				}),
+			);
 
 			return { success: true };
 		}),

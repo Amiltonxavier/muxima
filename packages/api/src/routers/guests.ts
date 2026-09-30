@@ -1,7 +1,9 @@
 import db from "@muxima/db";
+import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { buildActivityLog } from "../shared/activity/activity-context";
 /**
  * NOTE: invitation operations (create / publish / respond / preview / QR Code)
  * intentionally live in the `invitations` router — the invitation is its own
@@ -168,6 +170,18 @@ export const guestsRouter = {
 				});
 			}
 
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "GUEST_CREATED",
+					resource: "GUEST",
+					resourceId: guest.id,
+					eventId: input.eventId,
+					description: `Convitado "${guest.name}" adicionado`,
+					metadata: { name: guest.name, type: guest.type },
+				}),
+			);
+
 			return guest;
 		}),
 
@@ -202,6 +216,11 @@ export const guestsRouter = {
 				await requireEventAccess(context.session.user.id, eventId);
 			}
 
+			const previous = await db.guest.findUnique({
+				where: { id: input.id },
+				select: { name: true, status: true, type: true, group: true },
+			});
+
 			const guest = await db.guest.update({
 				where: { id: input.id },
 				data: {
@@ -215,6 +234,28 @@ export const guestsRouter = {
 					status: input.status,
 				},
 			});
+
+			if (previous) {
+				await createActivityLog(
+					buildActivityLog(context, {
+						userId: context.session.user.id,
+						action: "GUEST_UPDATED",
+						resource: "GUEST",
+						resourceId: guest.id,
+						eventId,
+						description: `Convitado "${guest.name}" atualizado`,
+						metadata: {
+							name: guest.name,
+							changes: buildChanges(previous, input, [
+								"name",
+								"status",
+								"type",
+								"group",
+							]),
+						},
+					}),
+				);
+			}
 
 			return guest;
 		}),
@@ -230,6 +271,18 @@ export const guestsRouter = {
 			await db.guest.delete({
 				where: { id: input.id },
 			});
+
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "GUEST_DELETED",
+					resource: "GUEST",
+					resourceId: input.id,
+					eventId,
+					description: "Convitado eliminado",
+					metadata: { guestId: input.id },
+				}),
+			);
 
 			return { success: true };
 		}),

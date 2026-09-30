@@ -199,3 +199,35 @@ export const dedicationListInput = paginationInput.merge(
 	dedicationFiltersSchema,
 );
 export type DedicationListInput = z.infer<typeof dedicationListInput>;
+
+// ── Activity logs ────────────────────────────────────────────────
+// `action` and `resource` are bounded strings rather than enums on purpose: the
+// action vocabulary is a plain string union (see `ACTIVITY_ACTIONS`) and grows
+// without migrations, so an older client must not be the reason a newly added
+// action becomes unfilterable. The bounds still reject junk before it reaches
+// the database.
+const activityFilterValue = z.string().trim().min(1).max(64);
+
+export const activityLogFiltersSchema = z.object({
+	/**
+	 * Target another user's trail. Omitted by the History screen, which only ever
+	 * shows the caller. Supplying it is the *only* way to read someone else's
+	 * logs, and the handler rejects it unless the caller holds
+	 * `activity.read.all` — so the escalation is an explicit, authorized,
+	 * testable act rather than a side effect of omitting a filter.
+	 */
+	userId: z.string().trim().min(1).optional(),
+	action: activityFilterValue.optional(),
+	resource: activityFilterValue.optional(),
+	/** ISO-8601 date-time; inclusive lower bound on `createdAt`. */
+	from: z.coerce.date().optional(),
+	/** ISO-8601 date-time; inclusive upper bound on `createdAt`. */
+	to: z.coerce.date().optional(),
+});
+
+export type ActivityLogFilters = z.infer<typeof activityLogFiltersSchema>;
+
+export const activityLogListInput = paginationInput.merge(
+	activityLogFiltersSchema,
+);
+export type ActivityLogListInput = z.infer<typeof activityLogListInput>;
