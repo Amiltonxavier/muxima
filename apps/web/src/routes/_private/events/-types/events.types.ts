@@ -27,7 +27,14 @@ export interface CreateEventFormValues {
 	name: string;
 	type: CreatableEventType;
 	eventDate: string;
+	startTime: string;
+	endTime: string;
 	venueName: string;
+	address: string;
+	province: string;
+	municipality: string;
+	neighborhood: string;
+	reference: string;
 	description: string;
 	capacity: number;
 	budgetAmount: number;

@@ -90,6 +90,7 @@ function BudgetPage() {
 
 				<TabsContent value="analytics">
 					<BudgetAnalytics
+						eventId={eventId}
 						summary={summaryQuery.data}
 						isLoading={summaryQuery.isLoading}
 						isError={summaryQuery.isError}

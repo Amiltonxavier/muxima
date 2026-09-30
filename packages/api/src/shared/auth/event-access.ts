@@ -36,7 +36,6 @@ export async function getEventIdForResource(
 		| "task"
 		| "supplier"
 		| "inventoryItem"
-		| "document"
 		| "foodPlan"
 		| "checklistItem"
 		| "schedule",
@@ -70,13 +69,6 @@ export async function getEventIdForResource(
 				select: { eventId: true },
 			});
 			return i?.eventId ?? null;
-		}
-		case "document": {
-			const d = await db.document.findUnique({
-				where: { id: resourceId },
-				select: { eventId: true },
-			});
-			return d?.eventId ?? null;
 		}
 		case "foodPlan": {
 			const f = await db.foodPlan.findUnique({

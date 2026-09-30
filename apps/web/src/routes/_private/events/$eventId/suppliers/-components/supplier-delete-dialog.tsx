@@ -28,7 +28,7 @@ export function SupplierDeleteDialog({
 				<DialogHeader>
 					<DialogTitle>Eliminar fornecedor</DialogTitle>
 					<DialogDescription>
-						Os pagamentos, parcelas, documentos e itens de checklist ligados a{" "}
+						Os pagamentos, parcelas e itens de checklist ligados a{" "}
 						<strong>{supplier.name}</strong> serão eliminados. Esta acção não
 						pode ser desfeita.
 					</DialogDescription>

@@ -1,3 +1,4 @@
+import { validateTimeString } from "@muxima/api/shared/validation/angola";
 import { z } from "zod";
 
 const today = new Date();
@@ -10,6 +11,18 @@ export const futureDateRefine = (val: string | undefined | null) => {
 	return d >= today;
 };
 
+/**
+ * Horário de parede obrigatório ("HH:mm") na criação, espelhando o contrato do
+ * backend. `field` só personaliza a mensagem de erro.
+ */
+const eventTimeSchema = (field: "início" | "fim") =>
+	z
+		.string({ error: `O horário de ${field} é obrigatório` })
+		.min(1, `O horário de ${field} é obrigatório`)
+		.refine((v) => validateTimeString(v) === null, {
+			message: "Formato de hora inválido. Use HH:mm.",
+		});
+
 export const createEventSchema = z.object({
 	type: z.enum(["ENGAGEMENT", "WEDDING"], {
 		message: "Tipo de evento é obrigatório",
@@ -21,8 +34,8 @@ export const createEventSchema = z.object({
 	eventDate: z.string().optional().refine(futureDateRefine, {
 		message: "A data do evento não pode ser no passado",
 	}),
-	startTime: z.string().optional(),
-	endTime: z.string().optional(),
+	startTime: eventTimeSchema("início"),
+	endTime: eventTimeSchema("fim"),
 	venueName: z.string().optional(),
 	address: z.string().optional(),
 	province: z.string().optional(),

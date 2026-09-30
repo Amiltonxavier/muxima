@@ -1,3 +1,4 @@
+import { ANGOLA_PROVINCES } from "@muxima/api/shared/validation/angola";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
@@ -29,7 +30,14 @@ const EMPTY_FORM: CreateEventFormValues = {
 	name: "",
 	type: "WEDDING",
 	eventDate: "",
+	startTime: "",
+	endTime: "",
 	venueName: "",
+	address: "",
+	province: "",
+	municipality: "",
+	neighborhood: "",
+	reference: "",
 	description: "",
 	capacity: 0,
 	budgetAmount: 0,
@@ -55,6 +63,12 @@ export function CreateEventDialog({
 			return;
 		}
 
+		// O fim tem de ser posterior ao início ("HH:mm" compara-se como string).
+		if (result.data.endTime <= result.data.startTime) {
+			toast.error("O horário de fim deve ser posterior ao horário de início");
+			return;
+		}
+
 		createEvent.mutate(result.data, {
 			onSuccess: () => {
 				toast.success("Evento criado com sucesso");
@@ -66,7 +80,7 @@ export function CreateEventDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Criar evento</DialogTitle>
 					<DialogDescription>
@@ -153,35 +167,159 @@ function CreateEventForm({
 				)}
 			</form.Field>
 
-			<form.Field name="eventDate">
-				{(field) => (
-					<div className="space-y-2">
-						<Label htmlFor={field.name}>Data do evento</Label>
-						<Input
-							id={field.name}
-							type="date"
-							value={field.state.value}
-							onChange={(e) => field.handleChange(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-				)}
-			</form.Field>
+			<div className="grid grid-cols-2 gap-4">
+				<form.Field name="eventDate">
+					{(field) => (
+						<div className="space-y-2">
+							<Label htmlFor={field.name}>Data do evento</Label>
+							<Input
+								id={field.name}
+								type="date"
+								value={field.state.value}
+								onChange={(e) => field.handleChange(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+					)}
+				</form.Field>
 
-			<form.Field name="venueName">
-				{(field) => (
-					<div className="space-y-2">
-						<Label htmlFor={field.name}>Local</Label>
-						<Input
-							id={field.name}
-							placeholder="Ex: Hotel Talatona"
-							value={field.state.value}
-							onChange={(e) => field.handleChange(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-				)}
-			</form.Field>
+				<div className="grid grid-cols-2 gap-4">
+					<form.Field name="startTime">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Início</Label>
+								<Input
+									id={field.name}
+									type="time"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="endTime">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Fim</Label>
+								<Input
+									id={field.name}
+									type="time"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+				</div>
+			</div>
+
+			<fieldset className="space-y-4 rounded border p-4">
+				<legend className="px-1 font-medium text-sm">Localização</legend>
+
+				<form.Field name="venueName">
+					{(field) => (
+						<div className="space-y-2">
+							<Label htmlFor={field.name}>Local</Label>
+							<Input
+								id={field.name}
+								placeholder="Ex: Hotel Talatona"
+								value={field.state.value}
+								onChange={(e) => field.handleChange(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+					)}
+				</form.Field>
+
+				<div className="grid grid-cols-2 gap-4">
+					<form.Field name="address">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Morada</Label>
+								<Input
+									id={field.name}
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="province">
+						{(field) => (
+							<div className="space-y-2">
+								<Label>Província</Label>
+								<Select
+									value={field.state.value}
+									onValueChange={(v) => {
+										if (v) field.handleChange(v);
+									}}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Selecionar província" />
+									</SelectTrigger>
+									<SelectContent>
+										{ANGOLA_PROVINCES.map((province) => (
+											<SelectItem key={province} value={province}>
+												{province}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						)}
+					</form.Field>
+				</div>
+
+				<div className="grid grid-cols-2 gap-4">
+					<form.Field name="municipality">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Município</Label>
+								<Input
+									id={field.name}
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="neighborhood">
+						{(field) => (
+							<div className="space-y-2">
+								<Label htmlFor={field.name}>Bairro</Label>
+								<Input
+									id={field.name}
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									disabled={isLoading}
+								/>
+							</div>
+						)}
+					</form.Field>
+				</div>
+
+				<form.Field name="reference">
+					{(field) => (
+						<div className="space-y-2">
+							<Label htmlFor={field.name}>Referência</Label>
+							<Input
+								id={field.name}
+								placeholder="Ex: junto ao Lago Talatona"
+								value={field.state.value}
+								onChange={(e) => field.handleChange(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+					)}
+				</form.Field>
+			</fieldset>
 
 			<form.Field name="capacity">
 				{(field) => (

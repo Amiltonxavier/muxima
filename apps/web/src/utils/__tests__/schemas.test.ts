@@ -127,6 +127,8 @@ describe("createEventSchema", () => {
 		const result = createEventSchema.safeParse({
 			type: "WEDDING",
 			name: "Casamento João e Maria",
+			startTime: "14:00",
+			endTime: "23:00",
 		});
 		expect(result.success).toBe(true);
 	});
@@ -139,6 +141,8 @@ describe("createEventSchema", () => {
 			type: "ENGAGEMENT",
 			name: "Noivado",
 			eventDate: dateStr,
+			startTime: "18:30",
+			endTime: "23:59",
 			venueName: "Hotel Tropical",
 			capacity: 200,
 			budgetAmount: 5000000,
@@ -147,18 +151,76 @@ describe("createEventSchema", () => {
 	});
 
 	it("rejects missing type", () => {
-		const result = createEventSchema.safeParse({ name: "Event" });
+		const result = createEventSchema.safeParse({
+			name: "Event",
+			startTime: "14:00",
+			endTime: "23:00",
+		});
 		expect(result.success).toBe(false);
 	});
 
 	it("rejects empty name", () => {
-		const result = createEventSchema.safeParse({ type: "WEDDING", name: "" });
+		const result = createEventSchema.safeParse({
+			type: "WEDDING",
+			name: "",
+			startTime: "14:00",
+			endTime: "23:00",
+		});
 		expect(result.success).toBe(false);
 	});
 
 	it("rejects short name", () => {
-		const result = createEventSchema.safeParse({ type: "WEDDING", name: "A" });
+		const result = createEventSchema.safeParse({
+			type: "WEDDING",
+			name: "A",
+			startTime: "14:00",
+			endTime: "23:00",
+		});
 		expect(result.success).toBe(false);
+	});
+
+	// O horário é obrigatório na criação, no cliente e no servidor.
+	it("rejects a missing start time", () => {
+		const result = createEventSchema.safeParse({
+			type: "WEDDING",
+			name: "Casamento",
+			endTime: "23:00",
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0].message).toBe(
+				"O horário de início é obrigatório",
+			);
+		}
+	});
+
+	it("rejects a missing end time", () => {
+		const result = createEventSchema.safeParse({
+			type: "WEDDING",
+			name: "Casamento",
+			startTime: "14:00",
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0].message).toBe(
+				"O horário de fim é obrigatório",
+			);
+		}
+	});
+
+	it("rejects a malformed time", () => {
+		const result = createEventSchema.safeParse({
+			type: "WEDDING",
+			name: "Casamento",
+			startTime: "25:00",
+			endTime: "23:00",
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0].message).toBe(
+				"Formato de hora inválido. Use HH:mm.",
+			);
+		}
 	});
 });
 

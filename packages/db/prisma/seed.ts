@@ -5,7 +5,7 @@
  * exactly 40 events (30 weddings + 10 engagements) with full relational data
  * across every module (members, budget targets, suppliers with their payments
  * and installments, food plan, checklist, guests, tables, tasks, schedules,
- * inventory, documents, notifications, audits).
+ * inventory, notifications, audits).
  *
  * Idempotent: deletes the seeded rows and recreates them — safe to re-run
  * without a `db reset` (or with `pnpm db:reset`, which forces a full wipe).
@@ -1289,7 +1289,7 @@ async function main() {
 	await prisma.invitationGuest.deleteMany({});
 	await prisma.guestCompanion.deleteMany({});
 	await prisma.tableGuest.deleteMany({});
-	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "document", "checklist_item", "food_plan_item", "food_plan", "supplier_installment", "supplier_payment", "supplier", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
+	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "checklist_item", "food_plan_item", "food_plan", "supplier_installment", "supplier_payment", "supplier", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
 	await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
 
 	// ── 1. USERS + CREDENTIALS ────────────────────────────────────────
@@ -2240,11 +2240,10 @@ async function main() {
 		`  ✅ Inventory (${inventoryRecords.length}) / Movements (${movementRecords.length})`,
 	);
 
-	// ── 10. FOOD PLAN + CHECKLIST + DOCUMENTS ──────────────────────────
+	// ── 10. FOOD PLAN + CHECKLIST ──────────────────────────────────────
 	const foodPlanRecords: Prisma.FoodPlanCreateManyInput[] = [];
 	const foodPlanItemRecords: Prisma.FoodPlanItemCreateManyInput[] = [];
 	const checklistRecords: Prisma.ChecklistItemCreateManyInput[] = [];
-	const documentRecords: Prisma.DocumentCreateManyInput[] = [];
 
 	for (const plan of plans) {
 		// ── Food plan: one per event, at most one catering supplier ──
@@ -2380,46 +2379,12 @@ async function main() {
 					status === "COMPLETED" ? daysAgo(randInt(rngF, 1, 20)) : null,
 			});
 		}
-
-		// ── Documents: contracts and receipts, attached to the supplier ──
-		const rngD = mulberry32(1201 + plan.index * 167);
-		const eventSuppliers = supplierRecords
-			.map((supplier, supplierIndex) => ({ supplier, supplierIndex }))
-			.filter(
-				({ supplier }) =>
-					supplier.eventId === plan.id && supplier.status !== "PROSPECT",
-			);
-		for (const { supplier, supplierIndex } of eventSuppliers) {
-			const payment = supplierPaymentRecords.find(
-				(pay) => pay.supplierId === supplier.id,
-			);
-			if (!payment) continue;
-			if (rngD() > 0.55) continue;
-
-			const isReceipt = supplier.paymentStatus === "PAID";
-			documentRecords.push({
-				id: `doc_${pad(plan.index + 1)}_${supplierIndex + 1}_${SEED_PREFIX}`,
-				eventId: plan.id,
-				supplierId: supplier.id,
-				supplierPaymentId: isReceipt ? (payment.id ?? null) : null,
-				name: isReceipt
-					? `Recibo — ${supplier.name}`
-					: `Contrato — ${supplier.name}`,
-				type: isReceipt ? "RECEIPT" : "CONTRACT",
-				reference: `${isReceipt ? "REC" : "CT"}-2026-${pad(plan.index + 1)}-${pad(supplierIndex + 1)}`,
-				url: `https://documentos.muxima.ao/${plan.id}/${supplierIndex + 1}/${isReceipt ? "recibo" : "contrato"}.pdf`,
-				mimeType: "application/pdf",
-				status: "ACTIVE",
-				createdBy: plan.ownerId,
-			});
-		}
 	}
 	await prisma.foodPlan.createMany({ data: foodPlanRecords });
 	await prisma.foodPlanItem.createMany({ data: foodPlanItemRecords });
 	await prisma.checklistItem.createMany({ data: checklistRecords });
-	await prisma.document.createMany({ data: documentRecords });
 	console.log(
-		`  ✅ Food Plans (${foodPlanRecords.length}) / Items (${foodPlanItemRecords.length}) / Checklist (${checklistRecords.length}) / Documents (${documentRecords.length})`,
+		`  ✅ Food Plans (${foodPlanRecords.length}) / Items (${foodPlanItemRecords.length}) / Checklist (${checklistRecords.length})`,
 	);
 
 	// ── 11. NOTIFICATIONS + AUDIT LOGS ─────────────────────────────────
@@ -2690,7 +2655,6 @@ async function main() {
 	console.log(`   Food Plans:     ${foodPlanRecords.length}`);
 	console.log(`   Food Plan Items:${foodPlanItemRecords.length}`);
 	console.log(`   Checklist:      ${checklistRecords.length}`);
-	console.log(`   Documents:      ${documentRecords.length}`);
 	console.log(`   Notifications:  ${notificationRecords.length}`);
 	console.log(`   Audit Logs:     ${auditRecords.length}`);
 	console.log(`   Dedications:    ${dedicationRecords.length}`);

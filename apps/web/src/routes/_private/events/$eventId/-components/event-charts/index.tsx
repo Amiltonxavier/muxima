@@ -15,7 +15,7 @@ export function EventCharts({ eventId }: EventChartsProps) {
 	}
 
 	return (
-		<div className="grid gap-4 sm:grid-cols-2">
+		<div>
 			<GuestCapacityChart data={guestData} />
 		</div>
 	);

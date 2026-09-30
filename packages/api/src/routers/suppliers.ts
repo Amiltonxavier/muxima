@@ -458,10 +458,8 @@ export const suppliersRouter = {
 				include: {
 					payments: {
 						orderBy: { paymentDate: "desc" },
-						include: { documents: true },
 					},
 					installments: { orderBy: { position: "asc" } },
-					documents: true,
 				},
 			});
 			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");

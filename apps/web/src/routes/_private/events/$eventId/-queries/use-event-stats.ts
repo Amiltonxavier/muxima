@@ -20,12 +20,6 @@ export function useEventStats(eventId: string) {
 		}),
 	);
 
-	const budget = useQuery(
-		orpc.budget.getStats.queryOptions({
-			input: { eventId },
-		}),
-	);
-
 	const suppliers = useQuery(
 		orpc.suppliers.getStats.queryOptions({
 			input: { eventId },
@@ -41,7 +35,6 @@ export function useEventStats(eventId: string) {
 	return {
 		guests,
 		tasks,
-		budget,
 		suppliers,
 		schedules,
 	};

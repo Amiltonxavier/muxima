@@ -2,6 +2,7 @@ import db from "@muxima/db";
 import { z } from "zod";
 
 import { protectedProcedure } from "../index";
+import { getExpenseAnalytics } from "../modules/budget/expense-analytics";
 import {
 	getBudgetLines,
 	getBudgetSnapshot,
@@ -114,6 +115,29 @@ export const budgetRouter = {
 				plannedAmount: Number(budget.plannedAmount),
 				reserveAmount: Number(budget.reserveAmount ?? 0),
 				notes: budget.notes,
+			};
+		}),
+
+	/**
+	 * Gastos do evento ao longo do tempo (dia/mês), agregados no servidor
+	 * dentro do período automático do evento. Ver `expense-analytics.ts`.
+	 */
+	getExpenseAnalytics: protectedProcedure
+		.input(eventInput)
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+			const result = await getExpenseAnalytics(input.eventId);
+
+			return {
+				period: result.period,
+				daily: result.daily.map((point) => ({
+					date: point.date,
+					amount: centsToUnits(point.amount),
+				})),
+				monthly: result.monthly.map((point) => ({
+					month: point.month,
+					amount: centsToUnits(point.amount),
+				})),
 			};
 		}),
 

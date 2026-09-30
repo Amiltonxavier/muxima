@@ -6,6 +6,22 @@ import { syncEventLifecycle } from "../modules/events/lifecycle";
 import { notifyEventMilestone } from "../modules/events/proximity-notifier";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
+import { validateTimeString } from "../shared/validation/angola";
+
+/**
+ * Horário de parede obrigatório ("HH:mm"), reutilizando o validador já existente
+ * em `shared/validation/angola`. `field` só personaliza a mensagem de erro.
+ */
+function eventTimeSchema(field: "início" | "fim") {
+	const required = `O horário de ${field} é obrigatório`;
+
+	return z
+		.string({ error: required })
+		.min(1, required)
+		.refine((v) => validateTimeString(v) === null, {
+			message: "Formato de hora inválido. Use HH:mm.",
+		});
+}
 
 export const eventsRouter = {
 	list: protectedProcedure
@@ -133,8 +149,8 @@ export const eventsRouter = {
 						},
 						{ message: "A data do evento não pode ser no passado" },
 					),
-				startTime: z.string().optional(),
-				endTime: z.string().optional(),
+				startTime: eventTimeSchema("início"),
+				endTime: eventTimeSchema("fim"),
 				venueName: z.string().optional(),
 				address: z.string().optional(),
 				province: z.string().optional(),
@@ -148,6 +164,14 @@ export const eventsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
+			// Horário coerente: ambos são obrigatórios e o fim tem de ser
+			// estritamente posterior ao início ("HH:mm" compara-se como string).
+			if (input.endTime <= input.startTime) {
+				throw new Error(
+					"O horário de fim deve ser posterior ao horário de início",
+				);
+			}
+
 			const event = await db.event.create({
 				data: {
 					ownerId: context.session.user.id,
@@ -209,8 +233,18 @@ export const eventsRouter = {
 						},
 						{ message: "A data do evento não pode ser no passado" },
 					),
-				startTime: z.string().optional(),
-				endTime: z.string().optional(),
+				startTime: z
+					.string()
+					.optional()
+					.refine((v) => !v || validateTimeString(v) === null, {
+						message: "Formato de hora inválido. Use HH:mm.",
+					}),
+				endTime: z
+					.string()
+					.optional()
+					.refine((v) => !v || validateTimeString(v) === null, {
+						message: "Formato de hora inválido. Use HH:mm.",
+					}),
 				venueName: z.string().optional(),
 				address: z.string().optional(),
 				province: z.string().optional(),
@@ -252,6 +286,22 @@ export const eventsRouter = {
 
 			if (!isMember) {
 				throw new Error("Não tem permissão para editar este evento");
+			}
+
+			// Horário efectivo: campos não enviados mantêm o valor guardado.
+			const effectiveStartTime = input.startTime ?? event.startTime;
+			const effectiveEndTime = input.endTime ?? event.endTime;
+
+			// Horário coerente: quando ambos presentes, o fim tem de ser
+			// estritamente posterior ao início ("HH:mm" compara-se como string).
+			if (
+				effectiveStartTime &&
+				effectiveEndTime &&
+				effectiveEndTime <= effectiveStartTime
+			) {
+				throw new Error(
+					"O horário de fim deve ser posterior ao horário de início",
+				);
 			}
 
 			const updatedEvent = await db.event.update({

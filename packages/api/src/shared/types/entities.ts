@@ -151,8 +151,6 @@ export type MovementType =
 	| "LOSS"
 	| "RETURN";
 export type InventoryStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
-export type DocumentType = "CONTRACT" | "RECEIPT" | "QUOTE" | "OTHER";
-export type DocumentStatus = "ACTIVE" | "ARCHIVED" | "DELETED";
 export type NotificationType =
 	| "FINANCE"
 	| "TASKS"
@@ -713,26 +711,6 @@ export type InventoryStats = {
 	movementCount: number;
 };
 
-// ── Document ─────────────────────────────────────────────────────
-export type Document = {
-	id: string;
-	eventId: string;
-	name: string;
-	type: DocumentType;
-	reference: string | null;
-	supplierId: string | null;
-	supplierPaymentId: string | null;
-	supplierInstallmentId: string | null;
-	status: DocumentStatus;
-	createdBy: string;
-	createdAt: Date;
-	updatedAt: Date;
-};
-
-export type DocumentWithRelations = Document & {
-	supplier: Supplier | null;
-};
-
 // ── Notification ─────────────────────────────────────────────────
 export type Notification = {
 	id: string;
@@ -1071,16 +1049,6 @@ export type CreateInventoryItemInput = {
 	unitPrice?: number;
 	notes?: string;
 	customFields?: Record<string, unknown>;
-};
-
-export type CreateDocumentInput = {
-	eventId: string;
-	name: string;
-	type: DocumentType;
-	reference?: string;
-	supplierId?: string;
-	supplierPaymentId?: string;
-	supplierInstallmentId?: string;
 };
 
 export type CreateScheduleInput = {

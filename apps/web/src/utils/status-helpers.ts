@@ -212,13 +212,6 @@ export const CHECKLIST_STATUS_LABELS: Record<string, string> = {
 	CANCELLED: "Cancelado",
 };
 
-export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-	CONTRACT: "Contrato",
-	RECEIPT: "Recibo",
-	QUOTE: "Orçamento",
-	OTHER: "Outro",
-};
-
 export const DEDICATION_TYPE_LABELS: Record<string, string> = {
 	WEDDING_VOW: "Votos de casamento",
 	ENGAGEMENT_VOW: "Votos de noivado",
@@ -320,7 +313,6 @@ export function getStatusLabel(
 		| "supplierPayment"
 		| "installment"
 		| "role"
-		| "document"
 		| "inventory"
 		| "dedication"
 		| "checklist"
@@ -334,7 +326,6 @@ export function getStatusLabel(
 		supplierPayment: SUPPLIER_PAYMENT_STATUS_LABELS,
 		installment: INSTALLMENT_STATUS_LABELS,
 		role: MEMBER_ROLE_LABELS,
-		document: { ACTIVE: "Ativo", ARCHIVED: "Arquivado", DELETED: "Eliminado" },
 		inventory: INVENTORY_STATUS_LABELS,
 		dedication: DEDICATION_STATUS_LABELS,
 		checklist: CHECKLIST_STATUS_LABELS,

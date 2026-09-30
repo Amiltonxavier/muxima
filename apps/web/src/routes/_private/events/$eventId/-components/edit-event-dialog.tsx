@@ -1,3 +1,4 @@
+import { ANGOLA_PROVINCES } from "@muxima/api/shared/validation/angola";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
@@ -250,11 +251,24 @@ export function EditEventDialog({
 							{(field) => (
 								<div className="space-y-2">
 									<Label>Província</Label>
-									<Input
+									<Select
 										value={field.state.value}
-										onChange={(e) => field.handleChange(e.target.value)}
+										onValueChange={(v) => {
+											if (v) field.handleChange(v);
+										}}
 										disabled={isPending}
-									/>
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Selecionar província" />
+										</SelectTrigger>
+										<SelectContent>
+											{ANGOLA_PROVINCES.map((province) => (
+												<SelectItem key={province} value={province}>
+													{province}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</div>
 							)}
 						</form.Field>

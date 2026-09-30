@@ -116,17 +116,6 @@ export const VALID_INVENTORY_STATUSES = [
 	"IN_PROGRESS",
 	"COMPLETED",
 ] as const;
-export const VALID_DOCUMENT_TYPES = [
-	"CONTRACT",
-	"RECEIPT",
-	"QUOTE",
-	"OTHER",
-] as const;
-export const VALID_DOCUMENT_STATUSES = [
-	"ACTIVE",
-	"ARCHIVED",
-	"DELETED",
-] as const;
 export const VALID_NOTIFICATION_TYPES = [
 	"FINANCE",
 	"TASKS",

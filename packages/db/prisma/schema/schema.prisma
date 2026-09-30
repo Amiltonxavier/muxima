@@ -270,19 +270,6 @@ enum InventoryStatus {
   COMPLETED
 }
 
-enum DocumentType {
-  CONTRACT
-  RECEIPT
-  QUOTE
-  OTHER
-}
-
-enum DocumentStatus {
-  ACTIVE
-  ARCHIVED
-  DELETED
-}
-
 enum NotificationType {
   FINANCE
   TASKS
@@ -358,7 +345,6 @@ model Event {
   tasks            Task[]
   schedules        Schedule[]
   inventoryItems   InventoryItem[]
-  documents        Document[]
   notifications    Notification[]
   auditLogs        AuditLog[]
   dedications      Dedication[]
@@ -462,7 +448,6 @@ model Supplier {
   event          Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
   payments       SupplierPayment[]
   installments   SupplierInstallment[]
-  documents      Document[]
   foodPlans      FoodPlan[]
   checklistItems ChecklistItem[]
 
@@ -486,7 +471,6 @@ model SupplierPayment {
 
   supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   creator   User       @relation(fields: [createdBy], references: [id])
-  documents Document[]
 
   @@index([supplierId])
   @@index([createdBy])
@@ -506,7 +490,6 @@ model SupplierInstallment {
   updatedAt  DateTime          @updatedAt
 
   supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  documents Document[]
 
   @@unique([supplierId, position])
   @@index([supplierId])
@@ -781,37 +764,6 @@ model InventoryMovement {
   @@index([inventoryItemId])
   @@index([createdBy])
   @@map("inventory_movement")
-}
-
-model Document {
-  id                    String         @id @default(uuid())
-  eventId               String
-  name                  String
-  type                  DocumentType
-  reference             String?
-  /// Where the file lives. The API only accepts the formats below.
-  url                   String?
-  mimeType              String?
-  supplierId            String?
-  supplierPaymentId     String?
-  supplierInstallmentId String?
-  status                DocumentStatus @default(ACTIVE)
-  createdBy             String
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-
-  event               Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  supplier            Supplier?            @relation(fields: [supplierId], references: [id])
-  supplierPayment     SupplierPayment?     @relation(fields: [supplierPaymentId], references: [id])
-  supplierInstallment SupplierInstallment? @relation(fields: [supplierInstallmentId], references: [id])
-  creator             User                 @relation(fields: [createdBy], references: [id])
-
-  @@index([eventId])
-  @@index([supplierId])
-  @@index([supplierPaymentId])
-  @@index([supplierInstallmentId])
-  @@index([createdBy])
-  @@map("document")
 }
 
 model Notification {

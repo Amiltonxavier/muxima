@@ -12,6 +12,7 @@ import { EventLocation } from "./-components/event-location";
 import { EventMembers } from "./-components/event-members";
 import { EventNotFound } from "./-components/event-not-found";
 import { EventStats } from "./-components/event-stats";
+import { ExpenseAnalytics } from "./-components/expense-analytics";
 
 export const Route = createFileRoute("/_private/events/$eventId/")({
 	component: EventDetailPage,
@@ -37,7 +38,8 @@ function EventDetailPage() {
 	const members = event.members ?? [];
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-8">
+			{/* Identidade: cabeçalho e factos do evento */}
 			<EventHeader
 				eventId={eventId}
 				name={event.name}
@@ -48,22 +50,31 @@ function EventDetailPage() {
 				onDelete={() => setShowDeleteDialog(true)}
 			/>
 
-			<EventInfoGrid event={event} />
+			<div className="space-y-4">
+				<EventInfoGrid event={event} />
 
-			<EventLocation
-				address={event.address}
-				neighborhood={event.neighborhood}
-				municipality={event.municipality}
-				province={event.province}
-				reference={event.reference}
-			/>
+				<EventLocation
+					address={event.address}
+					neighborhood={event.neighborhood}
+					municipality={event.municipality}
+					province={event.province}
+					reference={event.reference}
+				/>
+			</div>
 
+			{/* Números operacionais */}
 			<EventStats eventId={eventId} />
 
-			<EventCharts eventId={eventId} />
+			{/* Análises: financeiro, preparação e capacidade */}
+			<div className="space-y-4">
+				<ExpenseAnalytics eventId={eventId} />
 
-			<EventPreparationAnalytics eventId={eventId} />
+				<EventPreparationAnalytics eventId={eventId} />
 
+				<EventCharts eventId={eventId} />
+			</div>
+
+			{/* Equipa */}
 			<EventMembers members={members} />
 
 			{showEditDialog && (

@@ -136,19 +136,6 @@ export type InventoryFilters = z.infer<typeof inventoryFiltersSchema>;
 export const inventoryListInput = paginationInput.merge(inventoryFiltersSchema);
 export type InventoryListInput = z.infer<typeof inventoryListInput>;
 
-// ── Documents ────────────────────────────────────────────────────
-export const documentFiltersSchema = z.object({
-	search: z.string().trim().optional(),
-	type: z.enum(["CONTRACT", "RECEIPT", "QUOTE", "OTHER"]).optional(),
-	status: z.enum(["ACTIVE", "ARCHIVED", "DELETED"]).optional(),
-	supplierId: z.string().uuid().optional(),
-});
-
-export type DocumentFilters = z.infer<typeof documentFiltersSchema>;
-
-export const documentListInput = paginationInput.merge(documentFiltersSchema);
-export type DocumentListInput = z.infer<typeof documentListInput>;
-
 // ── Tables ───────────────────────────────────────────────────────
 export const tableFiltersSchema = z.object({
 	search: z.string().trim().optional(),

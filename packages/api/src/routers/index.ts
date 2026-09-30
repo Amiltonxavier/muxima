@@ -5,7 +5,6 @@ import { budgetRouter } from "./budget";
 import { checklistRouter } from "./checklist";
 import { dashboardRouter } from "./dashboard";
 import { dedicationsRouter } from "./dedications";
-import { documentsRouter } from "./documents";
 import { eventsRouter } from "./events";
 import { foodPlanRouter } from "./food-plan";
 import { guestsRouter } from "./guests";
@@ -31,7 +30,6 @@ export const appRouter = {
 	invitations: invitationsRouter,
 	tasks: tasksRouter,
 	inventory: inventoryRouter,
-	documents: documentsRouter,
 	members: membersRouter,
 	notifications: notificationsRouter,
 	users: usersRouter,

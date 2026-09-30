@@ -8,7 +8,9 @@ import {
 import { Progress } from "@muxima/ui/components/progress";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CreditCard } from "lucide-react";
-import { StatChart } from "@/shared/components/charts";
+import { PieChart } from "@/components/charts/pie-chart";
+import { PieSlice } from "@/components/charts/pie-slice";
+import { ChartLegend } from "@/shared/components/charts";
 import { QueryState } from "@/shared/components/states";
 import { useBudgetSummary } from "@/shared/queries/budget-queries";
 import { formatCurrency } from "@/utils/format-currency";
@@ -21,10 +23,19 @@ interface BudgetStatsCardProps {
 /**
  * Compact budget summary for the event detail page. Every figure — planned,
  * spent, pending, per-module breakdown — is computed by the API; the card only
- * renders it. The chart shows how much each module contributes to the total.
+ * renders it. The pie shows how much each budget source contributes to the
+ * total, from the same backend breakdown the totals come from.
  */
 export function BudgetStatsCard({ eventId }: BudgetStatsCardProps) {
 	const summaryQuery = useBudgetSummary(eventId);
+
+	// O `PieChart` distributes slices by index; a source planned at 0 adds no
+	// information and would only dilute the reading.
+	const sourceDistribution = (summaryQuery.data?.breakdown.bySource ?? [])
+		.filter((entry) => entry.planned > 0)
+		.map((entry) => ({ label: entry.label, value: entry.planned }));
+
+	const hasSourceBreakdown = sourceDistribution.length > 0;
 
 	return (
 		<Card>
@@ -68,16 +79,30 @@ export function BudgetStatsCard({ eventId }: BudgetStatsCardProps) {
 							/>
 						</div>
 
-						{(summaryQuery.data?.breakdown.bySource.length ?? 0) > 0 && (
-							<StatChart
-								height={120}
-								data={(summaryQuery.data?.breakdown.bySource ?? []).map(
-									(entry) => ({
-										label: entry.label,
-										value: entry.planned,
-									}),
-								)}
-							/>
+						{hasSourceBreakdown && (
+							<div className="space-y-3 border-t pt-3">
+								<p className="text-muted-foreground text-xs">
+									Distribuição por fonte
+								</p>
+
+								<div className="flex justify-center">
+									<PieChart data={sourceDistribution} size={180}>
+										{sourceDistribution.map((slice, index) => (
+											<PieSlice key={slice.label} index={index} />
+										))}
+									</PieChart>
+								</div>
+
+								{/* A legenda espelha a paleta que o `PieChart` usa por
+								    ordem de índice, para que cor e rótulo coincidam. */}
+								<ChartLegend
+									items={sourceDistribution.map((slice, index) => ({
+										label: slice.label,
+										color: `var(--chart-${(index % 5) + 1})`,
+										value: formatCurrency(slice.value),
+									}))}
+								/>
+							</div>
 						)}
 					</div>
 				</QueryState>
@@ -88,7 +113,7 @@ export function BudgetStatsCard({ eventId }: BudgetStatsCardProps) {
 					className="mt-1 h-auto p-0"
 					render={<Link to="/events/$eventId/budget" params={{ eventId }} />}
 				>
-					Ver orçamento <ArrowRight size={4} />
+					Ver orçamento <ArrowRight className="ml-1 h-4 w-4" />
 				</Button>
 			</CardContent>
 		</Card>

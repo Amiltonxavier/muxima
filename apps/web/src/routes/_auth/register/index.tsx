@@ -38,17 +38,18 @@ function RegisterPage() {
 					email: value.email,
 					password: value.password,
 				});
-
 				if (error) {
 					toast.error(error.message || "Erro ao criar conta");
 					return;
 				}
 
-				// Sign out after registration to ensure single auth point at /login
+				// O registo não redirecciona: a sessão criada é terminada para o
+				// utilizador entrar com a conta acabada de criar, e o sucesso é
+				// comunicado sem sair da página.
 				await authClient.signOut();
+				form.reset();
 
-				toast.success("Conta criada com sucesso");
-				window.location.href = "/login";
+				toast.success("Conta criada com sucesso.");
 			} catch {
 				toast.error("Erro ao criar conta");
 			} finally {

@@ -10,7 +10,6 @@ import {
 	ChevronRight,
 	CreditCard,
 	Feather,
-	FileText,
 	Gift,
 	Home,
 	LayoutGrid,
@@ -116,16 +115,6 @@ const eventNavGroups: NavGroup[] = [
 				label: "Inventário",
 				icon: <Package className="h-4 w-4" />,
 				to: "/events/$eventId/inventory",
-			},
-		],
-	},
-	{
-		label: "",
-		items: [
-			{
-				label: "Documentos",
-				icon: <FileText className="h-4 w-4" />,
-				to: "/events/$eventId/documents",
 			},
 		],
 	},

@@ -13,6 +13,8 @@ export const budgetKeys = {
 	stats: (eventId: string) => [...budgetKeys.all, "stats", eventId] as const,
 	lines: (eventId: string, source?: BudgetSource) =>
 		[...budgetKeys.all, "lines", eventId, source ?? "all"] as const,
+	expenseAnalytics: (eventId: string) =>
+		[...budgetKeys.all, "expense-analytics", eventId] as const,
 };
 
 /**
@@ -42,6 +44,18 @@ export function useBudgetStats(eventId: string) {
 	return useQuery({
 		...orpc.budget.getStats.queryOptions({ input: { eventId } }),
 		queryKey: budgetKeys.stats(eventId),
+		enabled: !!eventId,
+	});
+}
+
+/**
+ * Gastos do evento ao longo do tempo, agregados pelo backend dentro do período
+ * automático do evento. Séries diária e mensal prontas a grafar.
+ */
+export function useExpenseAnalytics(eventId: string) {
+	return useQuery({
+		...orpc.budget.getExpenseAnalytics.queryOptions({ input: { eventId } }),
+		queryKey: budgetKeys.expenseAnalytics(eventId),
 		enabled: !!eventId,
 	});
 }

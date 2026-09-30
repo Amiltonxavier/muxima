@@ -1,5 +1,12 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// O ExpenseAnalytics traz a sua própria query; o que se testa aqui é a
+// composição do BudgetAnalytics, por isso o substituímos por um stub.
+vi.mock("../../../-components/expense-analytics", () => ({
+	ExpenseAnalytics: () => null,
+}));
+
 import type { BudgetSummary } from "../../-queries/budget-queries";
 import { BudgetAnalytics } from "../budget-analytics";
 
@@ -101,14 +108,19 @@ const summary: BudgetSummary = {
 
 describe("BudgetAnalytics", () => {
 	it("keeps the loading state while the summary is in flight", () => {
-		render(<BudgetAnalytics isLoading isError={false} />);
+		render(<BudgetAnalytics eventId="e1" isLoading isError={false} />);
 
 		expect(screen.getByText("A carregar dados...")).toBeDefined();
 	});
 
 	it("falls back to the empty state when there is no money yet", () => {
 		render(
-			<BudgetAnalytics summary={null} isLoading={false} isError={false} />,
+			<BudgetAnalytics
+				eventId="e1"
+				summary={null}
+				isLoading={false}
+				isError={false}
+			/>,
 		);
 
 		expect(screen.getByText("Nenhum registo encontrado.")).toBeDefined();
@@ -116,7 +128,12 @@ describe("BudgetAnalytics", () => {
 
 	it("renders the backend totals as given, without re-deriving them", () => {
 		render(
-			<BudgetAnalytics summary={summary} isLoading={false} isError={false} />,
+			<BudgetAnalytics
+				eventId="e1"
+				summary={summary}
+				isLoading={false}
+				isError={false}
+			/>,
 		);
 
 		expect(screen.getByText("Aproveitamento do orçamento")).toBeDefined();
@@ -134,7 +151,12 @@ describe("BudgetAnalytics", () => {
 
 	it("names every breakdown the API returned and keeps the overdue table", () => {
 		render(
-			<BudgetAnalytics summary={summary} isLoading={false} isError={false} />,
+			<BudgetAnalytics
+				eventId="e1"
+				summary={summary}
+				isLoading={false}
+				isError={false}
+			/>,
 		);
 
 		expect(screen.getByText("Por origem")).toBeDefined();
@@ -155,6 +177,7 @@ describe("BudgetAnalytics", () => {
 	it("explains each breakdown that came back empty instead of drawing it blank", () => {
 		render(
 			<BudgetAnalytics
+				eventId="e1"
 				summary={{
 					...summary,
 					breakdown: {
@@ -187,6 +210,7 @@ describe("BudgetAnalytics", () => {
 	it("warns when the plan overshoots the available budget", () => {
 		render(
 			<BudgetAnalytics
+				eventId="e1"
 				summary={{
 					...summary,
 					totals: { ...totals, remaining: -120_000, usagePercentage: 104 },

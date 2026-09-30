@@ -1,4 +1,5 @@
 import { QueryState } from "@/shared/components/states";
+import { ExpenseAnalytics } from "../../-components/expense-analytics";
 import type { BudgetSummary } from "../-queries/budget-queries";
 import { BudgetCategoryChart } from "./analytics/budget-category-chart";
 import { BudgetOverviewRing } from "./analytics/budget-overview-ring";
@@ -24,7 +25,8 @@ export function BudgetAnalytics({
 	summary,
 	isLoading,
 	isError,
-}: BudgetAnalyticsProps) {
+	eventId,
+}: BudgetAnalyticsProps & { eventId: string }) {
 	const totals = summary?.totals;
 	const breakdown = summary?.breakdown;
 
@@ -44,6 +46,8 @@ export function BudgetAnalytics({
 		>
 			{totals && breakdown && (
 				<div className="space-y-4">
+					<ExpenseAnalytics eventId={eventId} />
+
 					<div className="grid gap-4 lg:grid-cols-3">
 						<div className="lg:col-span-2">
 							<BudgetOverviewRing totals={totals} />
