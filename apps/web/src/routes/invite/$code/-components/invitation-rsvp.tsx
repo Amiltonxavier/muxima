@@ -1,7 +1,8 @@
 import type { PublicInvitation } from "@muxima/api/shared/types/entities";
-import { Check, Share2 } from "lucide-react";
+import { Check, Download, Share2 } from "lucide-react";
 import type { Variants } from "motion/react";
 import { motion } from "motion/react";
+import { InvitationPdfButton } from "@/shared/components/invitation-pdf-button";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { RSVP_OPTIONS } from "../-constants/invitation.constants";
 import { InviteOrnament } from "./invite-ornament";
@@ -19,7 +20,15 @@ export function InvitationRsvp({
 	onShare?: () => void;
 	variants: Variants;
 }) {
-	const { canRespond, response, respondedAt } = invitation;
+	const { canRespond, rsvpBlockedReason, response, respondedAt } = invitation;
+	const blockedLabel =
+		rsvpBlockedReason === "EVENT_CANCELLED"
+			? "Este evento foi cancelado — já não é possível responder ao convite."
+			: rsvpBlockedReason === "EVENT_FINISHED"
+				? "Este evento já aconteceu — agradecemos o teu carinho."
+				: rsvpBlockedReason === "EVENT_NOT_CONFIRMED"
+					? "As respostas abrem assim que o evento for confirmado pelo anfitrião."
+					: "Já não é possível responder a este convite.";
 	const respondedLabel =
 		response === "CONFIRM"
 			? "Confirmei a minha presença"
@@ -103,7 +112,7 @@ export function InvitationRsvp({
 			) : (
 				<div className="mt-10 w-full rounded-lg border border-[color:var(--ip-line)] px-6 py-6 text-center">
 					<p className="invite-serif text-[15px] text-[color:var(--ip-ink-soft)] italic">
-						Já não é possível alterar a resposta a este convite.
+						{blockedLabel}
 					</p>
 				</div>
 			)}
@@ -115,16 +124,25 @@ export function InvitationRsvp({
 				</p>
 			)}
 
-			{onShare && (
-				<button
-					type="button"
-					onClick={onShare}
-					className="mt-8 flex items-center gap-2 text-[11px] text-[color:var(--ip-accent)] uppercase tracking-[0.2em] transition-opacity hover:opacity-70"
-				>
-					<Share2 className="h-3.5 w-3.5" />
-					Partilhar
-				</button>
-			)}
+			<div className="mt-8 flex flex-wrap items-center gap-4">
+				{onShare && (
+					<button
+						type="button"
+						onClick={onShare}
+						className="flex items-center gap-2 text-[11px] text-[color:var(--ip-accent)] uppercase tracking-[0.2em] transition-opacity hover:opacity-70"
+					>
+						<Share2 className="h-3.5 w-3.5" />
+						Partilhar
+					</button>
+				)}
+
+				<InvitationPdfButton
+					code={invitation.code}
+					variant="ghost"
+					size="sm"
+					className="h-auto p-0 text-[11px] text-[color:var(--ip-accent)] uppercase tracking-[0.2em] transition-opacity hover:opacity-70"
+				/>
+			</div>
 		</motion.section>
 	);
 }

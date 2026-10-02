@@ -1,12 +1,16 @@
 import { Button } from "@muxima/ui/components/button";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { Plus } from "lucide-react";
 
 export function ScheduleHeader({
+	eventId,
 	activityCount,
 	onAddActivity,
 }: {
+	eventId: string;
 	activityCount: number;
 	onAddActivity: () => void;
+	
 }) {
 	return (
 		<div className="flex items-center justify-between">
@@ -16,10 +20,14 @@ export function ScheduleHeader({
 					{activityCount} atividade{activityCount !== 1 ? "s" : ""}
 				</p>
 			</div>
-			<Button onClick={onAddActivity}>
+			<div className="flex gap-2">
+				<ExportMenu eventId={eventId} module="schedule" />
+
+				<Button onClick={onAddActivity}>
 				<Plus className="mr-2 h-4 w-4" />
 				Adicionar atividade
 			</Button>
+			</div>
 		</div>
 	);
 }

@@ -19,6 +19,7 @@ import {
 import { InvitationsFilters } from "./invitations-filters";
 import { InvitationsStats } from "./invitations-stats";
 import { InvitationsTable } from "./invitations-table";
+import { ExportMenu } from "@/shared/components/export-menu";
 
 /**
  * "Convites" tab — the invitations half of the guests module.
@@ -87,6 +88,8 @@ export function InvitationsTab({
 			/>
 
 			<div className="flex flex-wrap items-center justify-end gap-2">
+				<ExportMenu eventId={eventId} module="invitations" size="sm" />
+
 				<Button
 					variant="outline"
 					size="sm"

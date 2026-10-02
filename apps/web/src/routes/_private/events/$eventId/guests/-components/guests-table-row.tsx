@@ -47,6 +47,12 @@ export function GuestsTableRow({
 	const status = guest.status || "PENDING";
 	const invitation = getGuestInvitation(guest);
 	const isInvitationPublished = Boolean(invitation?.publishedAt);
+	// Companion rule: a guest whose invitation was declined may still have
+	// companions added; other states keep the existing limit behaviour. The
+	// backend enforces the same rule — this only shapes the UI.
+	const canAddCompanion =
+		invitation?.rsvpStatus === "DECLINED" ||
+		companions.length < (guest.companionsLimit ?? 0);
 
 	return (
 		<TableRow data-state={isSelected ? "selected" : undefined}>
@@ -100,8 +106,18 @@ export function GuestsTableRow({
 						size="icon-sm"
 						className="h-7 text-muted-foreground"
 						onClick={() => onManageCompanions(guest)}
+						title={
+							canAddCompanion
+								? "Adicionar acompanhante"
+								: "Convite recusado — adicionar acompanhante"
+							}
+						aria-label={`Gerir acompanhantes de ${guest.name}`}
 					>
-						<Plus className="h-3.5 w-3.5" />
+						<Plus
+							className={`h-3.5 w-3.5 ${
+								canAddCompanion ? "" : "opacity-70"
+							}`}
+						/>
 					</Button>
 				)}
 			</TableCell>

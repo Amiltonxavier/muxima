@@ -1,5 +1,6 @@
 import { Button } from "@muxima/ui/components/button";
 import { Pagination } from "@muxima/ui/components/pagination";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { createFileRoute } from "@tanstack/react-router";
 import { Feather, Plus } from "lucide-react";
 import { BackButton } from "@/shared/components/back-to";
@@ -32,10 +33,14 @@ function DedicationsPage() {
 						Escreva os votos e deduque palavras a quem importa.
 					</p>
 				</div>
-				<Button onClick={() => page.openDialog({ kind: "create" })}>
-					<Plus className="mr-2 h-4 w-4" />
-					Nova dedicatória
-				</Button>
+				<div className="flex gap-2">
+					<ExportMenu eventId={eventId} module="event" />
+
+					<Button onClick={() => page.openDialog({ kind: "create" })}>
+						<Plus className="mr-2 h-4 w-4" />
+						Nova dedicatória
+					</Button>
+				</div>
 			</div>
 
 			<DedicationsFilters

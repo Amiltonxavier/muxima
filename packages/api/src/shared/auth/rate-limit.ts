@@ -52,3 +52,9 @@ export const publicInvitationRespondLimiter = createMemoryRateLimiter({
 	limit: 10,
 	windowMs: 10 * 60 * 1000,
 });
+
+/** Same abuse profile as the code lookup: a public, unauthenticated read. */
+export const publicInvitationScheduleLimiter = createMemoryRateLimiter({
+	limit: 30,
+	windowMs: 10 * 60 * 1000,
+});

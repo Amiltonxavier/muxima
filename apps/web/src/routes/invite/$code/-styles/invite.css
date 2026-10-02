@@ -149,6 +149,198 @@
 		var(--ip-paper);
 }
 
+/* ============================================================
+   Convite aberto como caderno (book)
+   ============================================================ */
+
+/* o caderno controla a própria altura; o body não rola por causa dele */
+.invite-book {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	justify-content: center;
+}
+
+.invite-book__mobile {
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+}
+
+/* wrapper do AnimatePresence + página ativa ocupam a altura disponível */
+.invite-book__mobile > div {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	flex-direction: column;
+}
+
+.invite-book__mobile .invite-book__page {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* ---- spread: duas páginas frente a frente (desktop/tablet) ---- */
+.invite-book__spread {
+	display: none;
+	position: relative;
+	width: 100%;
+	max-width: 1080px;
+	height: 100%;
+	min-height: 0;
+	grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+	grid-template-areas: "left spine right";
+}
+
+@media (min-width: 900px) {
+	.invite-book__spread {
+		display: grid;
+	}
+	.invite-book__mobile {
+		display: none;
+	}
+}
+
+.invite-book__page {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	position: relative;
+	overflow: hidden;
+	border-radius: 6px;
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 0.8) inset,
+		0 30px 70px -42px var(--ip-shadow),
+		0 8px 24px -18px var(--ip-shadow-soft);
+}
+
+.invite-book__page--left {
+	grid-area: left;
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.invite-book__page--right {
+	grid-area: right;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+	background: var(--ip-paper);
+}
+
+/* ---- dobra central subtil ---- */
+.invite-book__spine {
+	grid-area: spine;
+	position: relative;
+	background: linear-gradient(
+		90deg,
+		var(--ip-paper) 0%,
+		var(--ip-paper-deep) 35%,
+		rgba(84, 66, 41, 0.14) 50%,
+		var(--ip-paper-deep) 65%,
+		var(--ip-paper) 100%
+	);
+}
+
+.invite-book__spine::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		90deg,
+		rgba(84, 66, 41, 0.05),
+		transparent 22%,
+		transparent 78%,
+		rgba(84, 66, 41, 0.05)
+	);
+	pointer-events: none;
+}
+
+/* ---- scroll interno por página (o body nunca rola) ---- */
+.invite-book__scroll {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	padding: 0.75rem 1rem 1.25rem;
+	scrollbar-width: thin;
+	scrollbar-color: var(--ip-line) transparent;
+}
+
+@media (min-width: 640px) {
+	.invite-book__scroll {
+		padding: 1rem 1.5rem 1.75rem;
+	}
+}
+
+/* ---- navegação entre páginas ---- */
+.invite-book__nav-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1.4rem;
+	border: 1px solid var(--ip-line);
+	background: var(--ip-paper);
+	font-size: 10px;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--ip-ink);
+	transition:
+		background-color 200ms ease,
+		border-color 200ms ease;
+}
+
+.invite-book__nav-btn:hover {
+	background: rgba(168, 135, 63, 0.08);
+	border-color: var(--ip-accent-soft);
+}
+
+.invite-book__nav-btn:focus-visible {
+	outline: 2px solid var(--ip-accent);
+	outline-offset: 3px;
+}
+
+.invite-book__mobile-nav {
+	display: flex;
+	justify-content: center;
+	padding: 0.75rem 0 1.5rem;
+}
+
+.invite-book__desktop-nav {
+	display: flex;
+	justify-content: center;
+	padding-top: 1.5rem;
+	padding-bottom: 0.25rem;
+}
+
+@media (min-width: 900px) {
+	.invite-book__desktop-nav--right {
+		/* cola o botão à dobra, apontando para a página do programa */
+		justify-content: flex-end;
+		padding-right: 1.5rem;
+	}
+	.invite-book__desktop-nav--left {
+		justify-content: flex-start;
+		padding-left: 1.5rem;
+	}
+}
+
+/* ============================================================
+   Reduced motion: troca de página no mobile sem animação
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+	.invite-book__mobile [data-page-flip] {
+		transition: none !important;
+		animation: none !important;
+	}
+}
+
 /* ---- fundo: textura de papel do convite aberto ---- */
 .invite-paper {
 	background:
@@ -165,17 +357,6 @@
 			transparent 28px
 		),
 		var(--ip-paper);
-}
-
-/* ---- convite aberto ---- */
-.invite-card {
-	width: 100%;
-	max-width: 540px;
-	border-radius: 6px;
-	box-shadow:
-		0 1px 0 rgba(255, 255, 255, 0.8) inset,
-		0 30px 70px -42px var(--ip-shadow),
-		0 8px 24px -18px var(--ip-shadow-soft);
 }
 
 .invite-rule {

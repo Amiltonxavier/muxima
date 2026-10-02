@@ -3,6 +3,10 @@ import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import {
+	getGuestAnalytics,
+	getTableAnalytics,
+} from "../modules/guests/analytics";
 import { buildActivityLog } from "../shared/activity/activity-context";
 /**
  * NOTE: invitation operations (create / publish / respond / preview / QR Code)
@@ -16,7 +20,11 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
-import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
+import {
+	BadRequestError,
+	ForbiddenError,
+	NotFoundError,
+} from "../shared/errors/app-error";
 import { guestListInput, tableListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -72,6 +80,9 @@ export const guestsRouter = {
 										code: true,
 										status: true,
 										publishedAt: true,
+										// Drives the companion rule in the table row UI; the
+										// authoritative check lives in `addCompanion`.
+										rsvpStatus: true,
 									},
 								},
 							},
@@ -299,6 +310,39 @@ export const guestsRouter = {
 			const eventId = await getEventIdForResource("guest", input.guestId);
 			if (eventId) {
 				await requireEventAccess(context.session.user.id, eventId);
+			}
+
+			// Companion rule (mirrored in the table row UI, but authoritative
+			// here): a guest whose latest invitation is DECLINED may still have
+			// companions added; every other RSVP state keeps the current
+			// companionsLimit guard. The invitation state comes from the database,
+			// never from the client payload.
+			const guest = await db.guest.findUnique({
+				where: { id: input.guestId },
+				select: {
+					companionsLimit: true,
+					_count: { select: { companions: true } },
+					invitationGuests: {
+						take: 1,
+						orderBy: { invitation: { createdAt: "desc" } },
+						select: { invitation: { select: { rsvpStatus: true } } },
+					},
+				},
+			});
+
+			if (!guest) {
+				throw new NotFoundError("Convidado não encontrado");
+			}
+
+			const invitationRsvp = guest.invitationGuests[0]?.invitation.rsvpStatus;
+			const canAddCompanion =
+				invitationRsvp === "DECLINED" ||
+				guest._count.companions < guest.companionsLimit;
+
+			if (!canAddCompanion) {
+				throw new ForbiddenError(
+					"Não é possível adicionar acompanhante a este convidado",
+				);
 			}
 
 			const companion = await db.guestCompanion.create({
@@ -570,148 +614,13 @@ export const guestsRouter = {
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-
-			const event = await db.event.findUnique({
-				where: { id: input.eventId },
-				select: { capacity: true, limitGuestCapacity: true },
-			});
-
-			const [
-				totalGuests,
-				confirmed,
-				pending,
-				declined,
-				waiting,
-				maybe,
-				cancelled,
-			] = await Promise.all([
-				db.guest.count({ where: { eventId: input.eventId } }),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "CONFIRMED" },
-				}),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "PENDING" },
-				}),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "DECLINED" },
-				}),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "WAITING" },
-				}),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "MAYBE" },
-				}),
-				db.guest.count({
-					where: { eventId: input.eventId, status: "CANCELLED" },
-				}),
-			]);
-
-			const totalCompanions = await db.guestCompanion.count({
-				where: { guest: { eventId: input.eventId } },
-			});
-
-			const confirmedCompanions = await db.guestCompanion.count({
-				where: { guest: { eventId: input.eventId }, status: "CONFIRMED" },
-			});
-
-			const totalConfirmedPeople = confirmed + confirmedCompanions;
-			const capacity = event?.capacity ?? 0;
-			const limitGuestCapacity = event?.limitGuestCapacity ?? false;
-			const confirmationRate =
-				totalGuests > 0 ? Math.round((confirmed / totalGuests) * 100) : 0;
-
-			const typeRows = await db.guest.groupBy({
-				by: ["type", "status"],
-				where: { eventId: input.eventId },
-				_count: { _all: true },
-			});
-
-			const byType = {
-				FAMILY: { total: 0, confirmed: 0, pending: 0, declined: 0 },
-				FRIEND: { total: 0, confirmed: 0, pending: 0, declined: 0 },
-				COLLEAGUE: { total: 0, confirmed: 0, pending: 0, declined: 0 },
-				VIP: { total: 0, confirmed: 0, pending: 0, declined: 0 },
-				OTHER: { total: 0, confirmed: 0, pending: 0, declined: 0 },
-			};
-
-			for (const row of typeRows) {
-				const stats = byType[row.type];
-				const count = row._count._all;
-				stats.total += count;
-				if (row.status === "CONFIRMED") stats.confirmed += count;
-				else if (row.status === "PENDING") stats.pending += count;
-				else if (row.status === "DECLINED") stats.declined += count;
-			}
-
-			return {
-				totalGuests,
-				confirmed,
-				pending,
-				declined,
-				waiting,
-				maybe,
-				cancelled,
-				totalCompanions,
-				confirmedCompanions,
-				totalConfirmedPeople,
-				confirmationRate,
-				capacity,
-				limitGuestCapacity,
-				atCapacity: capacity > 0 && totalConfirmedPeople >= capacity,
-				byType,
-			};
+			return getGuestAnalytics(db, input.eventId);
 		}),
 
 	getTableStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-
-			const [total, totalCapacity, totalOccupied] = await Promise.all([
-				db.table.count({
-					where: { eventId: input.eventId, deletedAt: null },
-				}),
-				db.table.aggregate({
-					where: { eventId: input.eventId, deletedAt: null },
-					_sum: { capacity: true },
-				}),
-				db.tableGuest.count({
-					where: { table: { eventId: input.eventId, deletedAt: null } },
-				}),
-			]);
-
-			const tableRows = await db.table.findMany({
-				where: { eventId: input.eventId, deletedAt: null },
-				select: {
-					capacity: true,
-					_count: { select: { tableGuests: true } },
-				},
-			});
-
-			let fullTables = 0;
-			let partialTables = 0;
-			let emptyTables = 0;
-
-			for (const table of tableRows) {
-				const occupied = table._count.tableGuests;
-				if (occupied >= table.capacity) fullTables += 1;
-				else if (occupied > 0) partialTables += 1;
-				else emptyTables += 1;
-			}
-
-			const capacity = totalCapacity._sum.capacity ?? 0;
-			const available = capacity - totalOccupied;
-
-			return {
-				total,
-				totalCapacity: capacity,
-				totalOccupied,
-				available: available > 0 ? available : 0,
-				fullTables,
-				partialTables,
-				emptyTables,
-				occupancyRate:
-					capacity > 0 ? Math.round((totalOccupied / capacity) * 100) : 0,
-			};
+			return getTableAnalytics(db, input.eventId);
 		}),
 };

@@ -9,11 +9,13 @@ import {
 	MAX_BULK_INVITATION_IDS,
 } from "../modules/invitations/schemas";
 import {
+	canRespondToInvitation,
 	createInvitation,
 	generateInvitationCode,
 	getInvitationById,
 	getInvitationStats,
 	getPublicInvitation,
+	getPublicSchedule,
 	listInvitations,
 	publishInvitation,
 	publishInvitationsBatch,
@@ -24,6 +26,7 @@ import { requireEventAccess } from "../shared/auth/event-access";
 import {
 	publicInvitationCodeLimiter,
 	publicInvitationRespondLimiter,
+	publicInvitationScheduleLimiter,
 } from "../shared/auth/rate-limit";
 import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
 import { paginationInput } from "../shared/schemas/filters";
@@ -50,6 +53,20 @@ export const invitationsRouter = {
 					`${input.code}:${context.ip ?? "unknown"}`,
 				);
 				return getPublicInvitation(db, input.code);
+			}),
+
+		/**
+		 * Read-only public programme of the event an invitation belongs to.
+		 * Only a GET-style read: create/update/delete stay behind
+		 * `requireEventAccess` in the private tasks router.
+		 */
+		schedule: publicProcedure
+			.input(z.object({ code: invitationCodeSchema }))
+			.handler(async ({ context, input }) => {
+				publicInvitationScheduleLimiter.check(
+					`${input.code}:${context.ip ?? "unknown"}`,
+				);
+				return getPublicSchedule(db, input.code);
 			}),
 
 		respond: publicProcedure
@@ -223,6 +240,40 @@ export const invitationsRouter = {
 			}
 
 			return respondToInvitation(db, input.code, input.response);
+		}),
+
+	/**
+	 * Whether the RSVP flow would currently accept a response for an
+	 * invitation. Admin-side convenience that reuses the exact same rule as
+	 * the public flow — one business rule, two consumers.
+	 */
+	rsvpEligibility: protectedProcedure
+		.input(z.object({ eventId: z.string(), code: invitationCodeSchema }))
+		.handler(async ({ context, input }) => {
+			await requireEventAccess(context.session.user.id, input.eventId);
+
+			const invitation = await db.guestInvitation.findUnique({
+				where: { code: input.code },
+				select: {
+					status: true,
+					expiresAt: true,
+					eventId: true,
+					event: {
+						select: {
+							status: true,
+							eventDate: true,
+							startTime: true,
+							endTime: true,
+						},
+					},
+				},
+			});
+
+			if (!invitation || invitation.eventId !== input.eventId) {
+				throw new NotFoundError("Convite não encontrado");
+			}
+
+			return canRespondToInvitation(invitation, invitation.event);
 		}),
 };
 

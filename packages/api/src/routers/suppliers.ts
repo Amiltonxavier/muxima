@@ -7,7 +7,7 @@ import type {
 } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
-import { loadSuppliersWithMoney } from "../modules/budget/repository";
+import { getSupplierAnalytics } from "../modules/suppliers/analytics";
 import {
 	getEventIdForResource,
 	requireEventAccess,
@@ -926,53 +926,7 @@ export const suppliersRouter = {
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const now = new Date();
-			const suppliers = await loadSuppliersWithMoney(input.eventId, now);
-
-			const sum = (pick: (s: (typeof suppliers)[number]) => number) =>
-				suppliers.reduce((total, s) => total + pick(s), 0);
-
-			const byCategory = new Map<
-				string,
-				{ key: string; count: number; planned: number; pending: number }
-			>();
-			for (const supplier of suppliers) {
-				const entry = byCategory.get(supplier.category) ?? {
-					key: supplier.category,
-					count: 0,
-					planned: 0,
-					pending: 0,
-				};
-				entry.count += 1;
-				entry.planned += supplier.price;
-				entry.pending += supplier.pending;
-				byCategory.set(supplier.category, entry);
-			}
-
-			const byStatus = new Map<string, number>();
-			for (const supplier of suppliers) {
-				byStatus.set(
-					supplier.paymentStatus,
-					(byStatus.get(supplier.paymentStatus) ?? 0) + 1,
-				);
-			}
-
-			return {
-				total: suppliers.length,
-				totalPrice: centsToUnits(sum((s) => s.price)),
-				totalPaid: centsToUnits(sum((s) => s.paid)),
-				totalPending: centsToUnits(sum((s) => s.pending)),
-				overdueCount: suppliers.filter((s) => s.paymentStatus === "OVERDUE")
-					.length,
-				byCategory: [...byCategory.values()]
-					.map((entry) => ({
-						...entry,
-						planned: centsToUnits(entry.planned),
-						pending: centsToUnits(entry.pending),
-					}))
-					.sort((a, b) => b.planned - a.planned),
-				byPaymentStatus: Object.fromEntries(byStatus),
-			};
+			return getSupplierAnalytics(db, input.eventId);
 		}),
 };
 

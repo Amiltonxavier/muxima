@@ -14,7 +14,10 @@ import type {
 	InvitationStats,
 	PublicInvitation,
 	PublicInvitationLookup,
+	PublicScheduleItem,
+	PublicScheduleLookup,
 } from "../../shared/types/entities";
+import { composeEndAt } from "../events/lifecycle";
 import { buildInvitationQrPayload, buildInvitationUrl } from "./qr-code";
 import { MAX_BULK_INVITATION_IDS } from "./schemas";
 
@@ -70,17 +73,31 @@ export type GuestInvitationListItem = Prisma.GuestInvitationGetPayload<{
 export type GuestInvitationCreated = GuestInvitationListItem;
 
 // ── Invitation code generation ───────────────────────────────────
-// Ambiguous characters (0, O, I, 1, L) excluded so codes are easy to share.
+// Public code format: MUX-XXXX-XXXX.
+//
+// Both segments come from cryptographically secure randomness (`randomBytes`),
+// never from ids, counters, timestamps or creation order, so codes cannot be
+// enumerated. Ambiguous characters (0, O, I, 1, L) are excluded so codes are
+// easy to read aloud and share.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 8;
+const CODE_SEGMENT_LENGTH = 4;
+const CODE_PREFIX = "MUX";
 const CODE_MAX_ATTEMPTS = 5;
 
 export function generateInvitationCode(): string {
-	const bytes = randomBytes(CODE_LENGTH);
-	return Array.from(
-		bytes,
-		(byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length],
-	).join("");
+	const bytes = randomBytes(CODE_SEGMENT_LENGTH * 2);
+	const next = (offset: number, max: number): number => {
+		const byte = bytes[offset];
+		if (byte === undefined) return 0;
+		return byte % max;
+	};
+	const segment = (offset: number) =>
+		Array.from(
+			{ length: CODE_SEGMENT_LENGTH },
+			(_, i) => CODE_ALPHABET[next(offset + i, CODE_ALPHABET.length)],
+		).join("");
+
+	return `${CODE_PREFIX}-${segment(0)}-${segment(CODE_SEGMENT_LENGTH)}`;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -197,6 +214,8 @@ export async function getPublicInvitation(
 export function buildPublicInvitation(
 	invitation: GuestInvitationWithEvent,
 ): PublicInvitation {
+	const eligibility = canRespondToInvitation(invitation, invitation.event);
+
 	return {
 		id: invitation.id,
 		code: invitation.code,
@@ -206,7 +225,10 @@ export function buildPublicInvitation(
 		respondedAt: invitation.respondedAt,
 		expiresAt: invitation.expiresAt,
 		publishedAt: invitation.publishedAt,
-		canRespond: !isInvitationExpired(invitation),
+		// Same single rule the respond endpoint enforces — the frontend only
+		// mirrors it for UX, it is never the authority.
+		canRespond: eligibility.responseable,
+		rsvpBlockedReason: eligibility.reason,
 		// Backfilled for invitations created before the QR Code feature existed.
 		url: invitation.url ?? buildInvitationUrl(invitation.code),
 		qrCode: invitation.qrCode,
@@ -239,6 +261,124 @@ export function buildPublicInvitation(
 	};
 }
 
+// ── RSVP eligibility (single business rule) ──────────────────────
+/**
+ * The one and only source of truth for "can this invitation still be
+ * responded to?". Both the public read (`canRespond`) and the public write
+ * (`respondToInvitation`) go through here, so the two can never drift.
+ *
+ * An invitation is responseable while:
+ *   - the invitation itself is not cancelled/expired, AND
+ *   - the event is not DRAFT / PLANNING / CANCELLED / COMPLETED, AND
+ *   - the event has not finished yet (end-of-day when there is no endTime).
+ */
+export function canRespondToInvitation(
+	invitation: {
+		status: string;
+		expiresAt: Date | null;
+	},
+	event: {
+		status: string;
+		eventDate: Date | null;
+		startTime: string | null;
+		endTime: string | null;
+	},
+	now = new Date(),
+): { responseable: boolean; reason: string | null } {
+	if (invitation.status === "CANCELLED") {
+		return { responseable: false, reason: "CANCELLED" };
+	}
+	if (isInvitationExpired(invitation, now)) {
+		return { responseable: false, reason: "EXPIRED" };
+	}
+
+	switch (event.status) {
+		case "DRAFT":
+			return { responseable: false, reason: "EVENT_NOT_CONFIRMED" };
+		case "PLANNING":
+			return { responseable: false, reason: "EVENT_NOT_CONFIRMED" };
+		case "CANCELLED":
+			return { responseable: false, reason: "EVENT_CANCELLED" };
+		case "COMPLETED":
+			return { responseable: false, reason: "EVENT_FINISHED" };
+	}
+
+	const endAt = composeEndAt(event);
+	if (endAt !== null && endAt.getTime() <= now.getTime()) {
+		return { responseable: false, reason: "EVENT_FINISHED" };
+	}
+
+	return { responseable: true, reason: null };
+}
+
+const RSVP_BLOCKED_MESSAGES: Record<string, string> = {
+	CANCELLED: "Este convite foi cancelado pelo anfitrião.",
+	EXPIRED: "O prazo para responder a este convite já terminou.",
+	EVENT_NOT_CONFIRMED:
+		"Este evento ainda não está confirmado — as respostas abrem em breve.",
+	EVENT_CANCELLED: "Este evento foi cancelado e já não aceita respostas.",
+	EVENT_FINISHED: "Este evento já aconteceu — obrigado pelo teu carinho.",
+};
+
+// ── Public schedule (read-only) ──────────────────────────────
+/**
+ * Public, read-only schedule for one invitation.
+ *
+ * The `code` is resolved exactly like `getPublicInvitation` — an unpublished,
+ * cancelled or expired invitation is indistinguishable from a non-existent
+ * one, so the endpoint cannot be used to enumerate codes or reach another
+ * event's programme (IDOR/BOLA). The response carries presentation fields
+ * only: no internal ids, no admin metadata, no private info.
+ */
+export async function getPublicSchedule(
+	prisma: InvitationDb,
+	code: string,
+): Promise<PublicScheduleLookup> {
+	const invitation = await prisma.guestInvitation.findUnique({
+		where: { code },
+		select: {
+			publishedAt: true,
+			status: true,
+			expiresAt: true,
+			event: { select: { id: true } },
+		},
+	});
+
+	if (
+		!invitation ||
+		invitation.publishedAt === null ||
+		invitation.status === "CANCELLED" ||
+		isInvitationExpired(invitation)
+	) {
+		return { result: "NOT_FOUND" };
+	}
+
+	const items = await prisma.schedule.findMany({
+		where: { eventId: invitation.event.id, status: { not: "CANCELLED" } },
+		orderBy: { startAt: "asc" },
+		select: {
+			title: true,
+			description: true,
+			startAt: true,
+			endAt: true,
+			location: true,
+		},
+	});
+
+	return {
+		result: "AVAILABLE",
+		items: items.map(
+			(item): PublicScheduleItem => ({
+				title: item.title,
+				description: item.description,
+				startAt: item.startAt,
+				endAt: item.endAt,
+				location: item.location,
+			}),
+		),
+	};
+}
+
 // ── Respond ──────────────────────────────────────────────────────
 export async function respondToInvitation(
 	prisma: InvitationDb,
@@ -250,7 +390,14 @@ export async function respondToInvitation(
 		where: { code },
 		include: {
 			event: {
-				select: { capacity: true, limitGuestCapacity: true },
+				select: {
+					capacity: true,
+					limitGuestCapacity: true,
+					status: true,
+					eventDate: true,
+					startTime: true,
+					endTime: true,
+				},
 			},
 			guests: { include: { guest: true } },
 		},
@@ -264,12 +411,15 @@ export async function respondToInvitation(
 		throw new NotFoundError("Convite não encontrado");
 	}
 
-	if (invitation.status === "CANCELLED") {
-		throw new BadRequestError("Este convite foi cancelado");
-	}
-
-	if (isInvitationExpired(invitation)) {
-		throw new BadRequestError("Este convite expirou");
+	// The backend is the authority on RSVP eligibility. Every blocked reason
+	// (event cancelled, event finished, event not confirmed, invitation
+	// expired/cancelled) is rejected here — the frontend check is only UX.
+	const eligibility = canRespondToInvitation(invitation, invitation.event);
+	if (!eligibility.responseable) {
+		throw new BadRequestError(
+			RSVP_BLOCKED_MESSAGES[eligibility.reason ?? ""] ??
+				"Este convite já não está disponível para resposta.",
+		);
 	}
 
 	if (response === "CONFIRM") {

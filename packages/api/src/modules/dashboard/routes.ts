@@ -10,7 +10,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
 				.status(401)
 				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
 		const { eventId } = request.params as { eventId: string };
-		const summary = await DashboardService.getEventSummary(eventId);
+		const summary = await DashboardService.getEventSummary(eventId, userId);
 		return successResponse(summary);
 	});
 }

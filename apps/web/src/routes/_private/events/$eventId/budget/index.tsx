@@ -55,6 +55,7 @@ function BudgetPage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
 			<BudgetHeader
+				eventId={eventId}
 				hasBudget={!!budget}
 				onEditTarget={() => setShowTargetDialog(true)}
 			/>

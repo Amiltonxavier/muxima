@@ -63,6 +63,26 @@ export type InvitationQrPayload = {
 };
 
 /**
+ * Raster variant of the QR Code, as base64 PNG without the data-URL prefix.
+ *
+ * The persisted `qrCode` is SVG because the browser scales it for free; PDF and
+ * XLSX encoders need real raster bytes. It is derived from the *same* public
+ * URL, so the printed code always resolves to the same page as the on-screen
+ * one — and nothing extra is encoded.
+ */
+export async function generateInvitationQrCodePng(
+	url: string,
+): Promise<string> {
+	return QRCode.toDataURL(url, {
+		type: "image/png",
+		errorCorrectionLevel: QR_DEFAULTS.errorCorrectionLevel,
+		margin: QR_DEFAULTS.margin,
+		width: QR_DEFAULTS.width,
+		color: { dark: "#000000", light: "#ffffff" },
+	}).then((dataUrl) => dataUrl.slice(dataUrl.indexOf(",") + 1));
+}
+
+/**
  * Builds everything an invitation needs to be shareable: the public URL and
  * its QR Code. Called on creation and whenever an invitation has to be
  * (re)generated — never on render.

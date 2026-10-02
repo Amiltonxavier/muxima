@@ -232,6 +232,27 @@ export const DedicationService = {
 	},
 
 	/**
+	 * Same authorization as `get`, without the read side effects.
+	 *
+	 * Exporting a dedication is not opening it: the PDF is produced for the
+	 * requester, and a download must not silently rewrite `lastOpenedAt`, the
+	 * viewer's own timestamp, or the OPENED audit history. Authorization stays
+	 * identical — `loadForRead` still decides owner-only vs viewer grant.
+	 */
+	async getForExport(
+		db: DedicationDb,
+		params: { eventId: string; dedicationId: string; userId: string },
+	): Promise<DedicationDetail> {
+		const { dedication } = await loadForRead(db, params);
+
+		return {
+			...toListItem(dedication as DedicationRecord, params.userId),
+			content: dedication.content as RichTextNode,
+			viewerLastOpenedAt: null,
+		};
+	},
+
+	/**
 	 * Opening a dedication *is* reading it: the last-open timestamps and the
 	 * OPENED audit entry are written here so callers never forget.
 	 */

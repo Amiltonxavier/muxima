@@ -1,10 +1,13 @@
 import { Button } from "@muxima/ui/components/button";
 import { Pencil } from "lucide-react";
+import { ExportMenu } from "@/shared/components/export-menu";
 
 export function BudgetHeader({
+	eventId,
 	hasBudget,
 	onEditTarget,
 }: {
+	eventId: string;
 	hasBudget: boolean;
 	onEditTarget: () => void;
 }) {
@@ -17,13 +20,17 @@ export function BudgetHeader({
 					Aqui só define a meta.
 				</p>
 			</div>
-			<Button
-				variant={hasBudget ? "outline" : "default"}
-				onClick={onEditTarget}
-			>
-				<Pencil className="mr-2 h-4 w-4" />
-				{hasBudget ? "Editar meta" : "Definir meta"}
-			</Button>
+			<div className="flex gap-2">
+				<ExportMenu eventId={eventId} module="budget" />
+
+				<Button
+					variant={hasBudget ? "outline" : "default"}
+					onClick={onEditTarget}
+				>
+					<Pencil className="mr-2 h-4 w-4" />
+					{hasBudget ? "Editar meta" : "Definir meta"}
+				</Button>
+			</div>
 		</div>
 	);
 }

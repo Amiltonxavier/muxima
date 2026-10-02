@@ -66,6 +66,7 @@ import {
 	getStatusLabel,
 	toSelectItems,
 } from "@/utils/status-helpers";
+import { ExportMenu } from "@/shared/components/export-menu";
 
 export const Route = createFileRoute("/_private/events/$eventId/checklist/")({
 	component: ChecklistPage,
@@ -146,6 +147,8 @@ function ChecklistPage() {
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
+					<ExportMenu eventId={eventId} module="checklist" />
+
 					<Button
 						variant="outline"
 						onClick={() =>

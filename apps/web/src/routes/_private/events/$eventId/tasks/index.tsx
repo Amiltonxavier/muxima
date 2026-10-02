@@ -73,6 +73,7 @@ import {
 } from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
 import { TaskAnalytics } from "./-components/task-analytics";
+import { ExportMenu } from "@/shared/components/export-menu";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
 	component: TasksPage,
@@ -229,10 +230,14 @@ function TasksPage() {
 						{tasks.length} tarefa{tasks.length !== 1 ? "s" : ""}
 					</p>
 				</div>
-				<Button onClick={() => setShowCreateDialog(true)}>
-					<Plus className="mr-2 h-4 w-4" />
-					Criar tarefa
-				</Button>
+				<div className="flex gap-2">
+					<ExportMenu eventId={eventId} module="tasks" />
+
+					<Button onClick={() => setShowCreateDialog(true)}>
+						<Plus className="mr-2 h-4 w-4" />
+						Criar tarefa
+					</Button>
+				</div>
 			</div>
 
 			{/* Filters */}

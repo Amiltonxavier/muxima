@@ -69,6 +69,7 @@ import {
 	useUpdateFoodPlanNotes,
 } from "@/shared/queries/food-plan-queries";
 import { useSuppliers } from "@/shared/queries/supplier-queries";
+import { ExportMenu } from "@/shared/components/export-menu";
 import {
 	FOOD_PLAN_CATEGORY_LABELS,
 	FOOD_PLAN_STATUS_LABELS,
@@ -148,6 +149,8 @@ function FoodPlanPage() {
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
+					<ExportMenu eventId={eventId} module="food-plan" />
+
 					<Button variant="outline" onClick={() => setShowNotesDialog(true)}>
 						Notas
 					</Button>

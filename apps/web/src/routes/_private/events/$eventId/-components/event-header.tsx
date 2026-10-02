@@ -5,6 +5,7 @@ import type { EventType } from "@muxima/api/shared/types/entities";
 import { Button } from "@muxima/ui/components/button";
 import { Pencil, Trash2 } from "lucide-react";
 import { BackButton } from "@/shared/components/back-to";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { EventTypeBadge } from "./event-type-badge";
 import { UpdateEventStatus } from "./update-event-status";
 
@@ -53,6 +54,9 @@ export function EventHeader({
 			</div>
 
 			<div className="flex gap-2">
+				{/* The full aggregate report of this event. */}
+				<ExportMenu eventId={eventId} module="event" />
+
 				<Button variant="outline" size="sm" onClick={onEdit}>
 					<Pencil className="mr-2 h-3.5 w-3.5" />
 					Editar

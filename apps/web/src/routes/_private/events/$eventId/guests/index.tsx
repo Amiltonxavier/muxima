@@ -71,7 +71,10 @@ function GuestsPage() {
 		<div className="space-y-6">
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
-			<GuestsHeader onAddGuest={guestDialog.openCreateDialog} />
+			<GuestsHeader
+				eventId={eventId}
+				onAddGuest={guestDialog.openCreateDialog}
+			/>
 
 			<Tabs
 				value={activeTab}

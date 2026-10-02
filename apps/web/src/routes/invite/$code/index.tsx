@@ -122,7 +122,10 @@ function InvitePage() {
 						/>
 					</motion.div>
 				) : (
-					<motion.div key="card" className="flex w-full flex-col items-center">
+					<motion.div
+						key="card"
+						className="flex min-h-0 w-full flex-1 flex-col items-center"
+					>
 						<InvitationOpenCard
 							invitation={invitation}
 							reduceMotion={opening.reduceMotion}

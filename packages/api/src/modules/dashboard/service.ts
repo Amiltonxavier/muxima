@@ -1,48 +1,38 @@
 import db from "@muxima/db";
+
 import { centsToUnits } from "../../shared/finance/money";
-import { getBudgetSnapshot } from "../budget/repository";
+import { getEventSummaryAnalytics } from "./event-analytics";
 
 /**
- * Legacy REST summary, kept for the dashboard endpoint. The money figures come
- * from the shared budget aggregator so this route cannot drift from the oRPC
- * dashboard router.
+ * Legacy REST summary, kept for the dashboard endpoint.
+ *
+ * It no longer derives anything: every figure is read from the shared event
+ * aggregation, so this route cannot drift from the oRPC routers nor from the
+ * event summary report. New consumers should read `getEventSummaryAnalytics`
+ * directly instead of adding fields here.
  */
 export const DashboardService = {
-	async getEventSummary(eventId: string) {
-		const event = await db.event.findUnique({ where: { id: eventId } });
-		if (!event) return null;
+	async getEventSummary(eventId: string, userId: string) {
+		const summary = await getEventSummaryAnalytics(db, eventId, userId);
+		if (!summary) return null;
 
-		const [snapshot, guests, tasks, inventoryItems, suppliers] =
-			await Promise.all([
-				getBudgetSnapshot(eventId),
-				db.guest.aggregate({ where: { eventId }, _count: true }),
-				db.task.aggregate({ where: { eventId, status: "TODO" }, _count: true }),
-				db.inventoryItem.count({ where: { eventId } }),
-				db.supplier.count({ where: { eventId } }),
-			]);
-
-		const daysRemaining = event.eventDate
-			? Math.max(
-					0,
-					Math.ceil(
-						(event.eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-					),
-				)
-			: null;
+		const { event, guests, budget, tasks, inventory, suppliers, countdown } =
+			summary;
 
 		return {
 			event,
-			daysRemaining,
-			budget: centsToUnits(snapshot.totals.totalBudget),
-			planned: centsToUnits(snapshot.totals.planned),
-			totalSpent: centsToUnits(snapshot.totals.spent),
-			totalPending: centsToUnits(snapshot.totals.pending),
-			totalOverdue: centsToUnits(snapshot.totals.overdue),
-			currency: snapshot.totals.currency,
-			totalGuests: guests._count,
-			pendingTasks: tasks._count,
-			inventoryCount: inventoryItems,
-			supplierCount: suppliers,
+			daysRemaining:
+				countdown.hasDate && !countdown.isPast ? countdown.daysRemaining : null,
+			budget: centsToUnits(budget.totalBudget),
+			planned: centsToUnits(budget.planned),
+			totalSpent: centsToUnits(budget.spent),
+			totalPending: centsToUnits(budget.pending),
+			totalOverdue: centsToUnits(budget.overdue),
+			currency: budget.currency,
+			totalGuests: guests.totalGuests,
+			pendingTasks: tasks.byStatus.TODO,
+			inventoryCount: inventory.totalItems,
+			supplierCount: suppliers.total,
 		};
 	},
 };

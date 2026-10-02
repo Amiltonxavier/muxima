@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { dashboardRoutes } from "./modules/dashboard/routes";
 import { eventRoutes } from "./modules/events/routes";
+import { exportRoutes } from "./modules/exports/routes";
 import { guestRoutes } from "./modules/guests/routes";
 import { inventoryRoutes } from "./modules/inventory/routes";
 import { memberRoutes } from "./modules/members/routes";
@@ -17,4 +18,5 @@ export async function registerRoutes(app: FastifyInstance) {
 	await app.register(notificationRoutes);
 	await app.register(dashboardRoutes);
 	await app.register(userRoutes);
+	await app.register(exportRoutes);
 }

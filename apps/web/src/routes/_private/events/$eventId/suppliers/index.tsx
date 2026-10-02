@@ -64,6 +64,7 @@ function SuppliersPage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
 			<SupplierHeader
+				eventId={eventId}
 				total={stats?.total ?? 0}
 				onAddSupplier={() => setShowCreate(true)}
 			/>

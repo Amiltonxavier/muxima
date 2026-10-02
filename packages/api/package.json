@@ -10,6 +10,7 @@
 		}
 	},
 	"scripts": {
+		"check-types": "tsc --noEmit",
 		"test": "vitest",
 		"test:run": "vitest run"
 	},
@@ -24,6 +25,8 @@
 		"@orpc/zod": "catalog:",
 		"better-auth": "catalog:",
 		"dotenv": "catalog:",
+		"exceljs": "^4.4.0",
+		"jspdf": "^4.2.1",
 		"qrcode": "^1.5.4",
 		"zod": "catalog:"
 	},

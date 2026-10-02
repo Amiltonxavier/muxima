@@ -2,18 +2,15 @@ import db from "@muxima/db";
 import type { ChecklistStatus, Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { getChecklistAnalytics } from "../modules/checklist/analytics";
 import {
 	resolveInventoryChecklistStatus,
 	resolveSupplierChecklistStatus,
 } from "../modules/checklist/rules";
-import { getFoodPlanStats } from "../modules/food-plan/stats";
 import { requireEventAccess } from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
 import { toCents } from "../shared/finance/money";
-import {
-	isOverdue,
-	resolveSupplierMoney,
-} from "../shared/finance/supplier-money";
+import { resolveSupplierMoney } from "../shared/finance/supplier-money";
 
 /**
  * Checklist lives on the event and can be linked to a supplier or an inventory
@@ -352,51 +349,6 @@ export const checklistRouter = {
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-
-			const [items, foodPlan] = await Promise.all([
-				db.checklistItem.findMany({
-					where: { eventId: input.eventId },
-					select: {
-						status: true,
-						autoManaged: true,
-						supplierId: true,
-						inventoryItemId: true,
-						dueDate: true,
-					},
-				}),
-				getFoodPlanStats(input.eventId),
-			]);
-
-			const now = new Date();
-			const total = items.length;
-			const completed = items.filter((i) => i.status === "COMPLETED").length;
-
-			return {
-				total,
-				completed,
-				pending: items.filter((i) => i.status === "PENDING").length,
-				inProgress: items.filter((i) => i.status === "IN_PROGRESS").length,
-				cancelled: items.filter((i) => i.status === "CANCELLED").length,
-				completionPercentage:
-					total === 0 ? 0 : Math.round((completed / total) * 100),
-				autoManaged: items.filter((i) => i.autoManaged).length,
-				linkedToSupplier: items.filter((i) => i.supplierId).length,
-				linkedToInventory: items.filter((i) => i.inventoryItemId).length,
-				// Same rule as the money modules, never a second implementation.
-				overdue: items.filter(
-					(i) =>
-						i.dueDate !== null &&
-						isOverdue(
-							i.dueDate,
-							i.status === "COMPLETED" || i.status === "CANCELLED",
-							now,
-						),
-				).length,
-				foodPlan: {
-					totalItems: foodPlan.totalItems,
-					completedItems: foodPlan.completedItems,
-					completionPercentage: foodPlan.completionPercentage,
-				},
-			};
+			return getChecklistAnalytics(db, input.eventId);
 		}),
 };

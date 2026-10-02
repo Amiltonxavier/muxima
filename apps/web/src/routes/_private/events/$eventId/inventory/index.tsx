@@ -62,6 +62,7 @@ function InventoryPage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
 			<InventoryHeader
+				eventId={eventId}
 				stats={stats}
 				itemCount={meta?.total ?? 0}
 				onAddItem={() => setShowCreate(true)}

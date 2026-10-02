@@ -43,6 +43,7 @@ function SchedulePage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
 			<ScheduleHeader
+				eventId={eventId}
 				activityCount={schedules.length}
 				onAddActivity={() => setShowCreate(true)}
 			/>

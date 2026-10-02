@@ -19,8 +19,8 @@ function LoginPage() {
 
 	const form = useForm({
 		defaultValues: {
-			email: "ana@muxima.ao",
-			password: "Muxima@2024",
+			email: "amilton.seed@muxima.test",
+			password: "Muxima@2026Seed01",
 		},
 		onSubmit: async ({ value }) => {
 			const result = loginSchema.safeParse(value);

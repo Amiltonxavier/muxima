@@ -2,6 +2,7 @@ import db from "@muxima/db";
 import { z } from "zod";
 
 import { protectedProcedure } from "../index";
+import { getBudgetAnalytics } from "../modules/budget/analytics";
 import { getExpenseAnalytics } from "../modules/budget/expense-analytics";
 import {
 	getBudgetLines,
@@ -146,20 +147,6 @@ export const budgetRouter = {
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
 			await requireEventAccess(context.session.user.id, input.eventId);
-			const { totals } = await getBudgetSnapshot(input.eventId);
-
-			return {
-				totalBudget: centsToUnits(totals.totalBudget),
-				reserve: centsToUnits(totals.reserve),
-				available: centsToUnits(totals.available),
-				planned: centsToUnits(totals.planned),
-				spent: centsToUnits(totals.spent),
-				pending: centsToUnits(totals.pending),
-				overdue: centsToUnits(totals.overdue),
-				remaining: centsToUnits(totals.remaining),
-				usagePercentage: totals.usagePercentage,
-				paymentPercentage: totals.paymentPercentage,
-				currency: totals.currency,
-			};
+			return getBudgetAnalytics(db, input.eventId);
 		}),
 };

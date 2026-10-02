@@ -1,21 +1,28 @@
 /**
  * Prisma Seed Script — Muxima
  *
- * Populates the database with a deterministic, realistic dataset:
- * exactly 40 events (30 weddings + 10 engagements) with full relational data
- * across every module (members, budget targets, suppliers with their payments
- * and installments, food plan, checklist, guests, tables, tasks, schedules,
- * inventory, notifications, audits).
+ * Deterministic, realistic dataset: exactly 30 events (24 weddings + 6
+ * engagements) with full relational data across every module (members,
+ * budget target, suppliers with payments and installments, guests with
+ * companions and invitations, tables, tasks, schedules, inventory with
+ * movements, food plan, checklist, notifications, audits, dedications).
  *
- * Idempotent: deletes the seeded rows and recreates them — safe to re-run
- * without a `db reset` (or with `pnpm db:reset`, which forces a full wipe).
+ * Idempotent: every existing row is deleted in FK-safe order and recreated,
+ * so the seed can run repeatedly without leftovers or duplicates.
  *
- * Capacity invariants enforced:
- *   - confirmedGuests + confirmedCompanions <= event.capacity
- *   - sum(table.capacity) <= event.capacity
- *   - DECLINED guests never get companions
+ * Invariants (asserted before insert, so a violation fails loudly):
+ *   - confirmed guests + confirmed companions <= event.capacity
+ *   - every table's assigned guests <= table.capacity
+ *   - DECLINED guests never have companions
+ *   - money: suppliers + inventory <= budget.plannedAmount
  *
- * Run: npx tsx packages/db/prisma/seed.ts
+ * Login accounts are created exactly the way Better Auth persists them:
+ * a `user` row plus a `credential` account whose password is scrypt
+ * (N=16384, r=16, dkLen=64, NFKC) stored as `salt:key` hex — the same
+ * format `verifyPassword` expects — with issuer `local:credential` and
+ * accountId equal to the user id (see better-auth sign-in lookup).
+ *
+ * Run: pnpm db:seed (or npx tsx prisma/seed.ts)
  */
 
 import { scrypt as nodeScrypt, randomBytes } from "node:crypto";
@@ -28,16 +35,21 @@ import dotenv from "dotenv";
 import {
 	type ChecklistStatus,
 	type CompanionStatus,
+	type DedicationStatus,
+	type DedicationType,
+	type EventStatus,
+	type EventType,
 	type FoodPlanCategory,
 	type FoodPlanStatus,
 	type FoodPlanUnit,
-	type GuestInvitationStatus,
+	type GuestStatus,
+	type GuestType,
 	type InventoryCategory,
 	type InventoryStatus,
 	type InventoryUnit,
 	type MemberRole,
 	type MemberStatus,
-	type NotificationType,
+	type MovementType,
 	type Prisma,
 	PrismaClient,
 	type RsvpStatus,
@@ -47,75 +59,42 @@ import {
 	type SupplierPaymentStatus,
 	type SupplierStatus,
 	type TaskCategory,
+	type TaskPriority,
 	type TaskStatus,
 } from "../prisma/generated/client";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-	// Overwrite nothing: allow an externally provided DATABASE_URL (CI/clean
-	// DB runs) to win over the one baked into apps/server/.env.
+	// Overwrite nothing: an externally provided DATABASE_URL (CI/clean DB)
+	// wins over the one baked into apps/server/.env.
 	path: path.resolve(__dirname, "../../../apps/server/.env"),
 	override: false,
 });
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL não definida no ambiente.");
-const adapter = new PrismaPg({ connectionString: databaseUrl });
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({
+	adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 
-// ── Timestamps ──────────────────────────────────────────────────────
+// ── Time helpers ────────────────────────────────────────────────────
 const now = new Date();
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
 const daysAhead = (d: number) => new Date(now.getTime() + d * 86_400_000);
-const monthsAgo = (m: number) => {
-	const d = new Date(now);
-	d.setMonth(d.getMonth() - m);
-	return d;
-};
 const monthsAhead = (m: number) => {
 	const d = new Date(now);
 	d.setMonth(d.getMonth() + m);
 	return d;
 };
+const monthsAgo = (m: number) => {
+	const d = new Date(now);
+	d.setMonth(d.getMonth() - m);
+	return d;
+};
 const pad = (n: number, len = 3) => String(n).padStart(len, "0");
 
-// Marker used in generated ids so seeded rows are recognizable.
-const SEED_PREFIX = "seed";
-
-// Password partilhada por todos os utilizadores de seed (Better Auth,
-// provider "credential"). O hash fica na tabela `account` (scrypt
-// `salt:key` hex) — formato usado pelo `verifyPassword` do better-auth.
-const SEED_PASSWORD = "Muxima@2024";
-
-/**
- * The salt is the hex string stored in the credential, exactly like better-auth
- * builds it, so the salt is passed to scrypt as a string and not as bytes:
- * re-hashing the same password with the stored salt has to reproduce the key.
- */
-function scryptAsync(
-	password: string,
-	salt: string,
-	keylen: number,
-): Promise<Buffer> {
-	return new Promise((resolve, reject) => {
-		nodeScrypt(
-			password,
-			salt,
-			keylen,
-			{ N: 16384, r: 16, p: 1, maxmem: 128 * 16384 * 16 * 2 },
-			(err, key) => (err ? reject(err) : resolve(key)),
-		);
-	});
-}
-
-async function hashSeedPassword(password: string) {
-	const salt = randomBytes(16).toString("hex");
-	const key = await scryptAsync(password.normalize("NFKC"), salt, 64);
-	return `${salt}:${key.toString("hex")}`;
-}
-
-// ── Deterministic PRNG (mulberry32) ────────────────────────────────
+// ── Deterministic PRNG (mulberry32) ─────────────────────────────────
 type Rng = () => number;
 function mulberry32(seed: number): Rng {
 	let a = seed >>> 0;
@@ -132,7 +111,210 @@ const pick = <T>(rng: Rng, arr: readonly T[]): T =>
 const randInt = (rng: Rng, min: number, max: number) =>
 	Math.floor(rng() * (max - min + 1)) + min;
 
-// ── Name pools (realistic PT / Angolan) ────────────────────────────
+// ── Login accounts ──────────────────────────────────────────────────
+// The exact users required for manual testing. Passwords are hashed with
+// the same scrypt parameters Better Auth uses, so sign-in works right
+// after seeding.
+const SEED_USERS = [
+	{
+		name: "Amilton Xavier",
+		email: "amilton.seed@muxima.test",
+		password: "Muxima@2026Seed01",
+	},
+	{
+		name: "Ana Manuel",
+		email: "ana.seed@muxima.test",
+		password: "Muxima@2026Seed02",
+	},
+	{
+		name: "Carlos Domingos",
+		email: "carlos.seed@muxima.test",
+		password: "Muxima@2026Seed03",
+	},
+	{
+		name: "Maria José",
+		email: "maria.seed@muxima.test",
+		password: "Muxima@2026Seed04",
+	},
+	{
+		name: "João Pedro",
+		email: "joao.seed@muxima.test",
+		password: "Muxima@2026Seed05",
+	},
+	{
+		name: "Isabel António",
+		email: "isabel.seed@muxima.test",
+		password: "Muxima@2026Seed06",
+	},
+] as const;
+
+const USER_IDS = SEED_USERS.map((_, i) => `usr_seed_${pad(i + 1, 2)}`);
+
+/** Indexed access under `noUncheckedIndexedAccess` needs an explicit guard. */
+function userIdAt(index: number): string {
+	const id = USER_IDS[index];
+	if (!id) throw new Error(`No seed user defined for index ${index}`);
+	return id;
+}
+
+/** scrypt with Better Auth's exact parameters (password.node.mjs). */
+function scryptAsync(password: string, salt: string): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
+		nodeScrypt(
+			password.normalize("NFKC"),
+			salt,
+			64,
+			{
+				N: 16384,
+				r: 16,
+				p: 1,
+				maxmem: 128 * 16384 * 16 * 2,
+			},
+			(err, key) => (err ? reject(err) : resolve(key)),
+		);
+	});
+}
+
+async function hashPassword(password: string): Promise<string> {
+	const salt = randomBytes(16).toString("hex");
+	const key = await scryptAsync(password, salt);
+	return `${salt}:${key.toString("hex")}`;
+}
+
+// ── Event plan: 30 events, ~80% wedding / 20% engagement ────────────
+// Exactly six engagements placed so that, together, both types cover every
+// EventStatus (DRAFT 4, PLANNING 9, CONFIRMED 8, COMPLETED 6, CANCELLED 3).
+// The remaining 24 indexes are weddings: 24/30 = 80%.
+const ENGAGEMENT_INDEXES = new Set([3, 9, 11, 16, 20, 26]);
+const EVENT_BLUEPRINT: ReadonlyArray<{
+	status: EventStatus;
+	fill: [number, number] | null; // confirmed/capacity range, null for DRAFT/CANCELLED
+}> = [
+	// 0-4
+	{ status: "COMPLETED", fill: [0.9, 0.95] },
+	{ status: "PLANNING", fill: [0.55, 0.7] },
+	{ status: "CONFIRMED", fill: [0.75, 0.85] },
+	{ status: "DRAFT", fill: null },
+	{ status: "CANCELLED", fill: null },
+	// 5-9
+	{ status: "COMPLETED", fill: [0.86, 0.92] },
+	{ status: "PLANNING", fill: [0.4, 0.6] },
+	{ status: "CONFIRMED", fill: [0.62, 0.75] },
+	{ status: "DRAFT", fill: null },
+	{ status: "PLANNING", fill: [0.35, 0.5] },
+	// 10-14
+	{ status: "COMPLETED", fill: [0.88, 0.95] },
+	{ status: "PLANNING", fill: [0.5, 0.65] },
+	{ status: "CONFIRMED", fill: [0.7, 0.84] },
+	{ status: "DRAFT", fill: null },
+	{ status: "PLANNING", fill: [0.45, 0.6] },
+	// 15-19
+	{ status: "COMPLETED", fill: [0.86, 0.93] },
+	{ status: "CANCELLED", fill: null },
+	{ status: "COMPLETED", fill: [0.9, 0.95] },
+	{ status: "CONFIRMED", fill: [0.65, 0.8] },
+	{ status: "PLANNING", fill: [0.38, 0.55] },
+	// 20-24
+	{ status: "CONFIRMED", fill: [0.72, 0.85] },
+	{ status: "COMPLETED", fill: [0.87, 0.94] },
+	{ status: "PLANNING", fill: [0.5, 0.68] },
+	{ status: "DRAFT", fill: null },
+	{ status: "PLANNING", fill: [0.4, 0.58] },
+	// 25-29
+	{ status: "CONFIRMED", fill: [0.6, 0.78] },
+	{ status: "COMPLETED", fill: [0.88, 0.95] },
+	{ status: "CANCELLED", fill: null },
+	{ status: "CONFIRMED", fill: [0.68, 0.8] },
+	{ status: "PLANNING", fill: [0.35, 0.5] },
+];
+
+const WEDDING_CAPACITIES = [
+	250, 180, 320, 140, 220, 400, 150, 280, 90, 350, 200, 260, 120, 300, 170, 380,
+	230, 410, 160, 340, 250, 110, 290, 190, 420, 180, 320, 220, 260, 340,
+] as const;
+
+const ENGAGEMENT_CAPACITIES = [120, 80, 150, 100, 90, 140] as const;
+
+interface EventPlan {
+	index: number;
+	id: string;
+	type: EventType;
+	status: EventStatus;
+	capacity: number;
+	confirmedGuests: number;
+	fillRatio: number;
+	ownerId: string;
+	partnerId: string;
+	eventDate: Date;
+}
+
+/** Reads a capacity by index, failing loudly instead of seeding without seats. */
+function capacityAt(values: readonly number[], index: number): number {
+	const value = values[index];
+	if (value === undefined)
+		throw new Error(`No capacity defined for index ${index}`);
+	return value;
+}
+
+function buildEventPlans(): EventPlan[] {
+	return EVENT_BLUEPRINT.map((blueprint, i) => {
+		const type: EventType = ENGAGEMENT_INDEXES.has(i)
+			? "ENGAGEMENT"
+			: "WEDDING";
+		let capacity: number;
+		if (type === "WEDDING") {
+			capacity = capacityAt(WEDDING_CAPACITIES, i);
+		} else {
+			// The k-th engagement reads the k-th engagement capacity.
+			let k = 0;
+			for (const index of ENGAGEMENT_INDEXES) {
+				if (index === i) break;
+				k += 1;
+			}
+			capacity = capacityAt(ENGAGEMENT_CAPACITIES, k);
+		}
+		const rng = mulberry32(1000 + i * 733);
+		const confirmedGuests = blueprint.fill
+			? Math.floor(
+					capacity *
+						(blueprint.fill[0] +
+							rng() * (blueprint.fill[1] - blueprint.fill[0])),
+				)
+			: 0;
+
+		const eventDate = (() => {
+			switch (blueprint.status) {
+				case "COMPLETED":
+					return monthsAgo(randInt(rng, 1, 6));
+				case "CONFIRMED":
+					return daysAhead(randInt(rng, 15, 60));
+				case "PLANNING":
+					return monthsAhead(randInt(rng, 2, 12));
+				case "CANCELLED":
+					return daysAhead(randInt(rng, 20, 200));
+				case "DRAFT":
+					return monthsAhead(randInt(rng, 6, 18));
+				case "ONGOING":
+					return daysAhead(1);
+			}
+		})();
+
+		return {
+			index: i,
+			id: `evt_seed_${pad(i + 1, 2)}`,
+			type,
+			status: blueprint.status,
+			capacity,
+			confirmedGuests,
+			fillRatio: capacity > 0 ? confirmedGuests / capacity : 0,
+			ownerId: userIdAt(i % USER_IDS.length),
+			partnerId: userIdAt((i + 1) % USER_IDS.length),
+			eventDate,
+		};
+	});
+}
+
+// ── Name pools (realistic PT / Angolan) ─────────────────────────────
 const MALE_NAMES = [
 	"António",
 	"Carlos",
@@ -163,12 +345,9 @@ const MALE_NAMES = [
 	"Edson",
 	"Cláudio",
 	"Délcio",
-	"Katito",
-	"Mavungo",
 	"Samuel",
 	"Bernardo",
 	"Garcia",
-	"Nelo",
 ] as const;
 
 const FEMALE_NAMES = [
@@ -198,15 +377,15 @@ const FEMALE_NAMES = [
 	"Felismina",
 	"Lurdes",
 	"Neusa",
-	"Quissola",
 	"Rute",
 	"Telma",
 	"Verónica",
 	"Yolanda",
 	"Zulmira",
-	"Etelvina",
 	"Vera",
 ] as const;
+
+const ALL_FIRST_NAMES: readonly string[] = [...MALE_NAMES, ...FEMALE_NAMES];
 
 const SURNAMES = [
 	"Fernandes",
@@ -233,28 +412,18 @@ const SURNAMES = [
 	"Baptista",
 	"Gomes",
 	"Domingos",
-	"João",
-	"Manuel",
 	"Kiala",
-	"Luemba",
-	"Sousa Júnior",
 	"Ndala",
-	"Cahy",
 ] as const;
 
-// ── Venues ─────────────────────────────────────────────────────────
-interface Venue {
-	name: string;
-	address: string;
-	province: string;
-	municipality: string;
-	neighborhood: string;
-	reference: string;
-	lat: number;
-	lng: number;
-}
+const personName = (rng: Rng) =>
+	`${pick(rng, rng() > 0.5 ? MALE_NAMES : FEMALE_NAMES)} ${pick(rng, SURNAMES)}`;
 
-const VENUES: Venue[] = [
+const phone = (rng: Rng) =>
+	`+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`;
+
+// ── Venues ──────────────────────────────────────────────────────────
+const VENUES = [
 	{
 		name: "Convento de São Francisco",
 		address: "Rua Major Kanhangulo",
@@ -346,32 +515,12 @@ const VENUES: Venue[] = [
 		lng: 13.4101,
 	},
 	{
-		name: "Espaço Kwanza Sul",
-		address: "Rua da Canata",
-		province: "Huambo",
-		municipality: "Huambo",
-		neighborhood: "Calumbo",
-		reference: "Saída para o Bailundo",
-		lat: -12.7761,
-		lng: 15.7392,
-	},
-	{
-		name: "Quinta Vista Alegre",
-		address: "Bairro Cambiore",
-		province: "Huambo",
-		municipality: "Huambo",
-		neighborhood: "Cambiore",
-		reference: "Estrada do Aeroporto",
-		lat: -12.8111,
-		lng: 15.7314,
-	},
-	{
 		name: "Hotel Serra da Chela",
 		address: "Rua do Governo",
 		province: "Huíla",
 		municipality: "Lubango",
 		neighborhood: "Central",
-		reference: "Miradouro da Lua",
+		reference: "Miradouro da Tundavala",
 		lat: -14.917,
 		lng: 13.492,
 	},
@@ -384,26 +533,6 @@ const VENUES: Venue[] = [
 		reference: "Miradouro da Tundavala",
 		lat: -14.837,
 		lng: 13.3793,
-	},
-	{
-		name: "Salão Cabinda",
-		address: "Rua das Margaridas",
-		province: "Cabinda",
-		municipality: "Cabinda",
-		neighborhood: "Chinganji",
-		reference: "Junto ao Estádio",
-		lat: -5.55,
-		lng: 12.2,
-	},
-	{
-		name: "Complexo da Praia Chiloango",
-		address: "Marginal de Cabinda",
-		province: "Cabinda",
-		municipality: "Cabinda",
-		neighborhood: "Fútila",
-		reference: "Vista para o mar",
-		lat: -5.5533,
-		lng: 12.1925,
 	},
 	{
 		name: "Quinta Ferrovia",
@@ -436,16 +565,6 @@ const VENUES: Venue[] = [
 		lng: 13.4019,
 	},
 	{
-		name: "Espaço Vila N'Gola",
-		address: "Rua da Missão",
-		province: "Luanda",
-		municipality: "Cacuaco",
-		neighborhood: "Cacuaco Velho",
-		reference: "Junto ao Mercado",
-		lat: -8.7874,
-		lng: 13.3759,
-	},
-	{
 		name: "Complexo Kamati",
 		address: "Avenida Fidel Castro",
 		province: "Luanda",
@@ -465,27 +584,16 @@ const VENUES: Venue[] = [
 		lat: -15.1961,
 		lng: 12.1522,
 	},
-	{
-		name: "Espaço Kuito",
-		address: "Rua da Circular",
-		province: "Bié",
-		municipality: "Kuito",
-		neighborhood: "Zona Baixa",
-		reference: "Centro do Kuito",
-		lat: -12.3842,
-		lng: 16.9397,
-	},
 ] as const;
 
-// ── Vendor business names per category ─────────────────────────────
-const SUPPLIER_NAMES: Record<string, readonly string[]> = {
+// ── Supplier business names per category ────────────────────────────
+const SUPPLIER_NAMES: Record<SupplierCategory, readonly string[]> = {
 	VENUE: [
 		"Jardim das Flores",
 		"Quinta do Mussulo",
 		"Espaço Belas",
 		"Palácio Central",
 		"Quinta Vista Alegre",
-		"Complexo Ferrovia",
 	],
 	DECORATION: [
 		"Arte & Flor",
@@ -493,28 +601,12 @@ const SUPPLIER_NAMES: Record<string, readonly string[]> = {
 		"Flor de Lótus",
 		"Eventos Dourados",
 		"Atelier das Flores",
-		"Mãos Criativas",
 	],
-	MUSIC: [
-		"Som & Arte",
-		"Kizomba Hits",
-		"DJ Kamba",
-		"Banda Luar",
-		"Ritmo Vivo",
-		"Afro Fusion",
-	],
-	PHOTOGRAPHER: [
-		"Olhar Fotográfico",
-		"Luz & Sombra",
-		"Fotografia Horizonte",
-		"Kiss Glow",
-		"Lente Mágica",
-	],
-	VIDEOGRAPHER: [
-		"CineMuxima",
-		"Vídeo Nota",
-		"Filmes do Mussulo",
-		"Câmara & História",
+	FLORIST: [
+		"Botânica Aura",
+		"Flores do Kwanza",
+		"Rosa d'Ouro",
+		"Jardim Suspenso",
 	],
 	CATERING: [
 		"Chef Ngola",
@@ -523,56 +615,67 @@ const SUPPLIER_NAMES: Record<string, readonly string[]> = {
 		"Catering Kwanza Sul",
 		"Bom Gosto",
 	],
-	CAKE: [
-		"Doce Momento",
-		"Bolos & Sonhos",
-		"Casa do Bolo",
-		"Confeitaria Vivi",
-		"Doçaria Real",
-	],
+	CAKE: ["Doce Momento", "Bolos & Sonhos", "Casa do Bolo", "Confeitaria Vivi"],
 	SWEETS_AND_SAVOURIES: [
-		"Bebidas Kwanza",
-		"Sommelier Luanda",
-		"Bar Central",
-		"Águas do Bengo",
-		"Vinho & Prosa",
+		"Mesa Doce Kwanza",
+		"Doces da Kanda",
+		"Petiscos & Cia",
+		"Tentação Doce",
+	],
+	PHOTOGRAPHER: [
+		"Olhar Fotográfico",
+		"Luz & Sombra",
+		"Fotografia Horizonte",
+		"Kiss Glow",
+	],
+	VIDEOGRAPHER: [
+		"CineMuxima",
+		"Vídeo Nota",
+		"Filmes do Mussulo",
+		"Câmara & História",
+	],
+	DJ: ["DJ Kamba", "DJ Som Luanda", "DJ Nzaji", "DJ Kizomba"],
+	BAND: ["Banda Luar", "Semba Real", "Banda Kandengue", "Ritmo Vivo"],
+	MUSIC: ["Som & Arte", "Kizomba Hits", "Áudio Prime", "Sonoplastia Total"],
+	ENTERTAINMENT: [
+		"Animação Total",
+		"Foguetes Reais",
+		"Show & Luzes",
+		"Djambo Animação",
 	],
 	TRANSPORT: [
 		"Transportes Reais",
 		"Reis da Estrada",
 		"Frota Kwanza",
 		"Excelência Rides",
-		"Carros de Luxo",
 	],
 	BEAUTY: [
 		"Beleza Noiva",
 		"Studio Kissange",
 		"Magia & Make",
 		"Cabelo & Glamour",
-		"Toque de Rainha",
 	],
-	SECURITY: [
-		"Segurança Total",
-		"Vigilância Kwanza",
-		"Guardiões VIP",
-		"Proteção Real",
+	BRIDE_ATTIRE: [
+		"Atelier Noiva Real",
+		"Seda & Renda",
+		"Casa da Noiva",
+		"Véu & Grinalda",
 	],
-	ENTERTAINMENT: [
-		"Animação Total",
-		"Foguetes Reais",
-		"Entretenimento Kizomba",
-		"Show & Luzes",
-		"Djambo Animação",
+	GROOM_ATTIRE: ["Alfaiate Nobre", "Fato & Laço", "Elegância Masculina"],
+	RINGS: ["Ouro & Prata", "Alianças do Sul", "Joalharia Kwanza"],
+	WEDDING_PLANNER: ["Muxima Planner", "Eventos Perfeitos", "Dia Único"],
+	OFFICIANT: [
+		"Padre João Baptista",
+		"Celebrante Unitário",
+		"Pastor David Nzinga",
 	],
-	OTHER: [
-		"Papelaria Muxima",
-		"Lembranças & Detalhes",
-		"Eventos & Cia",
-		"Serviços de Apoio",
-	],
-} as const;
+	FAVOURS: ["Lembranças & Detalhes", "Recordar é Viver", "Mimos Muxima"],
+	ACCOMMODATION: ["Hotel Alvorada", "Pousada da Serra", "Resort Mussulo"],
+	SECURITY: ["Segurança Total", "Vigilância Kwanza", "Guardiões VIP"],
+	OTHER: ["Papelaria Muxima", "Serviços de Apoio", "Eventos & Cia"],
+};
 
-const CATEGORY_LABEL: Record<string, string> = {
+const CATEGORY_LABEL: Partial<Record<SupplierCategory, string>> = {
 	VENUE: "Espaço",
 	DECORATION: "Decoração",
 	FLORIST: "Flores",
@@ -583,7 +686,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 	VIDEOGRAPHER: "Vídeo",
 	DJ: "DJ",
 	BAND: "Banda",
-	MUSIC: "Música",
+	MUSIC: "Som",
 	ENTERTAINMENT: "Animação",
 	TRANSPORT: "Transportes",
 	BEAUTY: "Beleza",
@@ -597,328 +700,77 @@ const CATEGORY_LABEL: Record<string, string> = {
 	SECURITY: "Segurança",
 	OTHER: "Serviços",
 };
-// ── Seed users (Better Auth schema) ────────────────────────────────
-const SEED_USERS: Prisma.UserCreateManyInput[] = [
-	{
-		id: "usr_owner_001",
-		name: "Ana Fernandes",
-		email: "ana@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 001",
-	},
-	{
-		id: "usr_partner_002",
-		name: "Carlos Mendes",
-		email: "carlos@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 002",
-	},
-	{
-		id: "usr_admin_003",
-		name: "Sofia Neto",
-		email: "sofia@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 003",
-	},
-	{
-		id: "usr_editor_004",
-		name: "Miguel Tavares",
-		email: "miguel@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 004",
-	},
-	{
-		id: "usr_viewer_005",
-		name: "Laura Simões",
-		email: "laura@muxima.ao",
-		emailVerified: false,
-		image: null,
-		phone: "+244 923 100 005",
-	},
-	{
-		id: "usr_friend_006",
-		name: "Diogo Inocêncio",
-		email: "diogo@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 006",
-	},
-	{
-		id: "usr_friend_007",
-		name: "Marisa Cabral",
-		email: "marisa@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 007",
-	},
-	{
-		id: "usr_padrinho_008",
-		name: "Nuno Pires",
-		email: "nuno@muxima.ao",
-		emailVerified: true,
-		image: null,
-		phone: "+244 923 100 008",
-	},
-];
 
-const USER_IDS = SEED_USERS.map((u) => u.id);
-
-// ── Event distribution (exactly 40) ────────────────────────────────
-// 30 WEDDING (indices 0-29) + 10 ENGAGEMENT (indices 30-39).
-// PLANNING 14 · CONFIRMED 10 · COMPLETED 9 · DRAFT 4 · CANCELLED 3.
-const EVENT_STATUSES = [
-	// 0-9
-	"COMPLETED",
-	"PLANNING",
-	"CONFIRMED",
-	"COMPLETED",
-	"PLANNING",
-	"DRAFT",
-	"CONFIRMED",
-	"PLANNING",
-	"COMPLETED",
-	"CANCELLED",
-	// 10-19
-	"PLANNING",
-	"CONFIRMED",
-	"PLANNING",
-	"COMPLETED",
-	"PLANNING",
-	"DRAFT",
-	"CONFIRMED",
-	"COMPLETED",
-	"PLANNING",
-	"CONFIRMED",
-	// 20-29
-	"PLANNING",
-	"COMPLETED",
-	"CONFIRMED",
-	"PLANNING",
-	"CONFIRMED",
-	"DRAFT",
-	"COMPLETED",
-	"PLANNING",
-	"CONFIRMED",
-	"CANCELLED",
-	// 30-39 (engagements)
-	"PLANNING",
-	"CONFIRMED",
-	"COMPLETED",
-	"PLANNING",
-	"DRAFT",
-	"CONFIRMED",
-	"COMPLETED",
-	"PLANNING",
-	"PLANNING",
-	"CANCELLED",
-] as const;
-
-const WEDDING_CAPACITIES = [
-	250, 180, 320, 140, 220, 400, 150, 280, 90, 350, 200, 260, 120, 300, 170, 380,
-	230, 410, 160, 340, 250, 110, 290, 190, 420, 180, 320, 220, 260, 340,
-] as const;
-
-const ENGAGEMENT_CAPACITIES = [
-	120, 80, 150, 100, 90, 140, 110, 70, 160, 130,
-] as const;
-
-interface EventPlan {
-	index: number;
-	id: string;
-	type: "WEDDING" | "ENGAGEMENT";
-	status: (typeof EVENT_STATUSES)[number];
-	capacity: number;
-	limitGuestCapacity: boolean;
-	fillRatio: number;
-	ownerId: string;
-	partnerId: string;
-}
-
-/**
- * Reads a capacity by index, failing loudly when the plan grows past the
- * capacity tables instead of silently creating an event with no seats.
- */
-function capacityAt(values: readonly number[], index: number): number {
-	const value = values[index];
-	if (value === undefined) {
-		throw new Error(`No capacity defined for event index ${index}`);
-	}
-	return value;
-}
-
-function buildEventPlans(): EventPlan[] {
-	return EVENT_STATUSES.map((status, i) => {
-		const type = i < 30 ? "WEDDING" : "ENGAGEMENT";
-		const capacity = capacityAt(
-			type === "WEDDING" ? WEDDING_CAPACITIES : ENGAGEMENT_CAPACITIES,
-			type === "WEDDING" ? i : i - 30,
-		);
-		const rng = mulberry32(1337 + i * 977);
-
-		// fillRatio = confirmed guests / capacity. Confirmed must always fit.
-		let fillRatio: number;
-		switch (status) {
-			case "COMPLETED":
-				fillRatio = 0.9 + rng() * 0.1;
-				break;
-			case "CONFIRMED":
-				fillRatio = 0.75 + rng() * 0.22;
-				break;
-			case "PLANNING":
-				fillRatio = 0.4 + rng() * 0.35;
-				break;
-			case "DRAFT":
-				fillRatio = 0.05 + rng() * 0.15;
-				break;
-			case "CANCELLED":
-				fillRatio = 0.05 + rng() * 0.2;
-				break;
-		}
-
-		// Enforcement of real-world "near vs far from capacity" variety.
-		if (i === 0) fillRatio = 0.83; // hero wedding: slightly below cap for funnel headroom
-		if (i === 2) fillRatio = 0.99; // near-full
-		if (i === 21) fillRatio = 0.5; // far from capacity
-
-		const limitGuestCapacity = fillRatio >= 0.55 || type === "WEDDING";
-
-		const owner = pick(rng, USER_IDS);
-		let partner = pick(rng, USER_IDS);
-		while (partner === owner) partner = pick(rng, USER_IDS);
-
-		return {
-			index: i,
-			id:
-				i === 0
-					? "evt_wedding_001"
-					: i === 1
-						? "evt_engagement_002"
-						: `evt_${pad(i + 1, 3)}`,
-			type,
-			status,
-			capacity,
-			limitGuestCapacity,
-			fillRatio,
-			ownerId: owner,
-			partnerId: partner,
-		};
-	});
-}
-
-// ── Group labels ───────────────────────────────────────────────────
-const FAMILY_GROUPS = [
-	"Família da Noiva",
-	"Família do Noivo",
-	"Família dos Padrinhos",
-];
-const FRIEND_GROUPS = [
-	"Amigos da Universidade",
-	"Amigos da Infância",
-	"Amigos do Bairro",
-];
-const WORK_GROUPS = ["Trabalho — Empresa", "Colegas da Igreja", "Paróquia"];
-const VIP_GROUPS = [
-	"Padrinhos e Madrinhas",
-	"Convidados VIP",
-	"Bênçãos da Família",
-];
-const OTHER_GROUPS = ["Vizinhos", "Comunidade", "Amigos da Família"];
-
-/**
- * `createManyInput` types the id as optional; the seed always assigns a stable
- * one so the companion and invitation rows can point at it.
- */
-type SeededGuest = Prisma.GuestCreateManyInput & { id: string };
-
-interface GuestSeed {
-	record: SeededGuest;
-	confirmed: boolean;
-	status:
-		| "CONFIRMED"
-		| "PENDING"
-		| "DECLINED"
-		| "WAITING"
-		| "MAYBE"
-		| "CANCELLED";
-	companionsLimit: number;
-}
-
-// ── Task templates per category ────────────────────────────────────
-const TASKS_BY_CATEGORY: Record<string, readonly string[]> = {
+// ── Task templates per category (every TaskCategory covered) ────────
+const TASK_TEMPLATES: Record<TaskCategory, readonly string[]> = {
 	VENUE: [
 		"Confirmar contrato com o espaço",
-		"Visitar o salão e verificar acústica",
-		"Reservar mesa principal",
-		"Alinhar plano de evacuação",
+		"Visitar o salão e verificar a acústica",
+		"Reservar a mesa principal",
+		"Alinhar o plano de montagem",
 	],
 	DECORATION: [
 		"Escolher tema e cores",
 		"Confirmar arranjos florais",
 		"Montar corredor de flores",
-		"Definir iluminação e candeeiros",
+		"Definir iluminação do salão",
 	],
-
 	GUESTS: [
 		"Enviar convites digitais",
 		"Confirmar presenças até à data limite",
-		"Definir lista de acompanhantes",
-		"Ligação de confirmação aos padrinhos",
+		"Fechar lista de acompanhantes",
+		"Ligar aos padrinhos para confirmação",
 	],
 	FINANCE: [
 		"Fechar orçamento de fornecedores",
-		"Emitir pagamento de sinal",
-		"Reconciliar despesas",
-		"Abrir conta poupança para o evento",
+		"Pagar o sinal do espaço",
+		"Reconciliar despesas do mês",
+		"Actualizar plano de pagamentos",
 	],
 	FOOD: [
-		"Encomendar entradas e prato principal",
+		"Encomendar o prato principal",
 		"Confirmar o bolo e os doces",
-		"Encomendar gelo e bebidas",
 		"Prova de menu com o chef",
 		"Confirmar número final de refeições",
 		"Alinhar dietas e alergias",
-		"Definir serviço de mesa",
 	],
 	DRINKS: [
-		"Fechar bar aberto",
+		"Fechar o bar aberto",
 		"Encomendar água, sumos e refrigerantes",
-		"Escolher vinho e champanhe",
+		"Escolher vinho e espumante",
 	],
 	CEREMONY: [
-		"Marcar ensaio geral",
+		"Marcar o ensaio geral",
 		"Confirmar liturgia e música sacra",
 		"Alinhar o percurso da cerimónia",
 	],
 	DOCUMENTS: [
 		"Reunir documentação do casamento civil",
 		"Assinar contratos dos fornecedores",
-		"Autocarro e licenças do espaço",
+		"Confirmar licenças do espaço",
 	],
 	CLOTHING: [
 		"Prova final do vestido",
 		"Ajuste do fato do noivo",
-		"Definir look dos padrinhos",
+		"Definir o look dos padrinhos",
 	],
 	TRANSPORT: [
-		"Reservar carro decorado",
+		"Reservar o carro decorado",
 		"Confirmar rotas do cortejo",
 		"Contratar transporte dos convidados",
 	],
 	OTHER: [
-		"Lembranças para convidados",
-		"Cuidados e tratamentos de beleza",
-		"Caixa de agradecimentos",
+		"Preparar lembranças para os convidados",
+		"Agendar tratamentos de beleza",
+		"Organizar caixa de agradecimentos",
 	],
 };
 
-const SCHEDULES_WEDDING = [
+// ── Schedule templates (coherent, non-overlapping) ──────────────────
+const SCHEDULE_WEDDING = [
 	{
 		title: "Montagem da decoração",
-		desc: "Equipa de decoração instala-se no espaço",
+		desc: "Equipa de decoração instala o salão",
 		start: 8,
 		end: 12,
 		loc: "Salão principal",
@@ -931,32 +783,32 @@ const SCHEDULES_WEDDING = [
 		loc: "Sala de preparação",
 	},
 	{
-		title: "Ensaio rápido",
-		desc: "Passo final com o celebrante",
+		title: "Receção dos convidados",
+		desc: "Acolhimento e cocktail",
 		start: 14,
-		end: 14.5,
-		loc: "Capela / altar",
-	},
-	{
-		title: "Cerimónia religiosa",
-		desc: "Casamento religioso",
-		start: 15,
-		end: 16,
-		loc: "Igreja",
-	},
-	{
-		title: "Receção de boas-vindas",
-		desc: "Cocktail de boas-vindas",
-		start: 16,
-		end: 17,
+		end: 15,
 		loc: "Entrada do salão",
 	},
 	{
+		title: "Cerimónia",
+		desc: "Casamento religioso / civil",
+		start: 15,
+		end: 16,
+		loc: "Altar",
+	},
+	{
 		title: "Sessão fotográfica",
-		desc: "Fotografias do casal e família",
-		start: 17,
-		end: 18,
+		desc: "Casal e famílias",
+		start: 16,
+		end: 17,
 		loc: "Jardim",
+	},
+	{
+		title: "Entrada dos noivos",
+		desc: "Aplausos e brinde de boas-vindas",
+		start: 17,
+		end: 17.5,
+		loc: "Salão principal",
 	},
 	{
 		title: "Jantar",
@@ -973,22 +825,22 @@ const SCHEDULES_WEDDING = [
 		loc: "Mesa principal",
 	},
 	{
-		title: "Discurso dos padrinhos",
-		desc: "Brindes e palavra dos padrinhos",
+		title: "Primeira dança",
+		desc: "Abertura da pista pelos noivos",
 		start: 21.5,
 		end: 22,
-		loc: "Palco",
+		loc: "Pista de dança",
 	},
 	{
-		title: "Pista de dança",
+		title: "Festa",
 		desc: "DJ e banda ao vivo",
 		start: 22,
 		end: 25,
 		loc: "Pista de dança",
 	},
-];
+] as const;
 
-const SCHEDULES_ENGAGEMENT = [
+const SCHEDULE_ENGAGEMENT = [
 	{
 		title: "Montagem do espaço",
 		desc: "Decoração e som",
@@ -1011,7 +863,7 @@ const SCHEDULES_ENGAGEMENT = [
 		loc: "Palco",
 	},
 	{
-		title: "Jantar de gala",
+		title: "Jantar",
 		desc: "Jantar servido",
 		start: 18.5,
 		end: 21,
@@ -1031,93 +883,225 @@ const SCHEDULES_ENGAGEMENT = [
 		end: 24,
 		loc: "Pista de dança",
 	},
+] as const;
+
+// ── Inventory catalogues (unit prices inside the category norm) ─────
+const INVENTORY_WEDDING: ReadonlyArray<{
+	name: string;
+	category: InventoryCategory;
+	unit: InventoryUnit;
+	min: number;
+	max: number;
+}> = [
+	{
+		name: "Vinho tinto reserva",
+		category: "DRINK",
+		unit: "BOTTLE",
+		min: 6000,
+		max: 12000,
+	},
+	{
+		name: "Espumante brut",
+		category: "DRINK",
+		unit: "BOTTLE",
+		min: 12000,
+		max: 18000,
+	},
+	{
+		name: "Água mineral 500 ml",
+		category: "DRINK",
+		unit: "BOTTLE",
+		min: 200,
+		max: 350,
+	},
+	{
+		name: "Sumo natural de laranja",
+		category: "DRINK",
+		unit: "LITER",
+		min: 2000,
+		max: 3000,
+	},
+	{
+		name: "Cerveja (caixa)",
+		category: "DRINK",
+		unit: "CASE",
+		min: 7000,
+		max: 9500,
+	},
+	{
+		name: "Carne de vaca para grelhados",
+		category: "MATERIAL",
+		unit: "KG",
+		min: 5500,
+		max: 7500,
+	},
+	{
+		name: "Frango para calulu",
+		category: "MATERIAL",
+		unit: "KG",
+		min: 3500,
+		max: 4800,
+	},
+	{
+		name: "Arroz agulha",
+		category: "MATERIAL",
+		unit: "KG",
+		min: 1200,
+		max: 1800,
+	},
+	{
+		name: "Bolo de noiva (andar)",
+		category: "MATERIAL",
+		unit: "UNIT",
+		min: 60000,
+		max: 90000,
+	},
+	{
+		name: "Roses brancas (centro de mesa)",
+		category: "MATERIAL",
+		unit: "UNIT",
+		min: 600,
+		max: 1000,
+	},
+	{
+		name: "Velas aromáticas",
+		category: "MATERIAL",
+		unit: "UNIT",
+		min: 350,
+		max: 700,
+	},
+	{
+		name: "Organza branca (pacote)",
+		category: "LINEN",
+		unit: "PACKAGE",
+		min: 12000,
+		max: 18000,
+	},
+	{
+		name: "Toalhas de mesa algodão (50 un.)",
+		category: "LINEN",
+		unit: "PACKAGE",
+		min: 18000,
+		max: 26000,
+	},
+	{
+		name: "Cadeira Tiffany dourada",
+		category: "FURNITURE",
+		unit: "UNIT",
+		min: 3500,
+		max: 5000,
+	},
+	{
+		name: "Mesa redonda 1,80 m",
+		category: "FURNITURE",
+		unit: "UNIT",
+		min: 30000,
+		max: 42000,
+	},
+	{
+		name: "Microfone sem fios",
+		category: "EQUIPMENT",
+		unit: "UNIT",
+		min: 80000,
+		max: 110000,
+	},
+	{
+		name: "Projetor 5000 lúmens",
+		category: "EQUIPMENT",
+		unit: "UNIT",
+		min: 280000,
+		max: 340000,
+	},
+	{
+		name: "Gerador elétrico 5 kVA",
+		category: "EQUIPMENT",
+		unit: "UNIT",
+		min: 400000,
+		max: 480000,
+	},
+	{
+		name: "Caixa de fogos de artifício",
+		category: "OTHER",
+		unit: "BOX",
+		min: 38000,
+		max: 52000,
+	},
+	{
+		name: "Lembranças para convidados",
+		category: "OTHER",
+		unit: "UNIT",
+		min: 800,
+		max: 1500,
+	},
 ];
 
-const INVENTORY_WEDDING = [
-	{ name: "Vinho Tinto Reserva", cat: "DRINK", unit: "BOTTLE", price: 12000 },
-	{ name: "Champanhe Brut", cat: "DRINK", unit: "BOTTLE", price: 18000 },
-	{ name: "Água Mineral 500ml", cat: "DRINK", unit: "BOTTLE", price: 300 },
-	{ name: "Sumo Natural (Laranja)", cat: "DRINK", unit: "LITER", price: 2500 },
-	{ name: "Cerveja Eza", cat: "DRINK", unit: "CASE", price: 8000 },
-	{ name: "Barriga de Porco Assada", cat: "MATERIAL", unit: "KG", price: 6500 },
-	{ name: "Calulu de Frango", cat: "MATERIAL", unit: "KG", price: 4000 },
-	{ name: "Arroz com Tomate", cat: "MATERIAL", unit: "KG", price: 1500 },
-	{ name: "Salada Tropical", cat: "MATERIAL", unit: "KG", price: 3000 },
+const INVENTORY_ENGAGEMENT: ReadonlyArray<{
+	name: string;
+	category: InventoryCategory;
+	unit: InventoryUnit;
+	min: number;
+	max: number;
+}> = [
 	{
-		name: "Bolo de Casamento 4 Andares",
-		cat: "MATERIAL",
-		unit: "UNIT",
-		price: 250000,
+		name: "Espumante",
+		category: "DRINK",
+		unit: "BOTTLE",
+		min: 8000,
+		max: 11000,
 	},
 	{
-		name: "Rosas Brancas (centro de mesa)",
-		cat: "MATERIAL",
-		unit: "UNIT",
-		price: 800,
-	},
-	{ name: "Velas Aromáticas", cat: "MATERIAL", unit: "UNIT", price: 500 },
-	{
-		name: "Tecido Organza Branco",
-		cat: "LINEN",
-		unit: "PACKAGE",
-		price: 15000,
+		name: "Água mineral 500 ml",
+		category: "DRINK",
+		unit: "BOTTLE",
+		min: 200,
+		max: 350,
 	},
 	{
-		name: "Toalha de Mesa Algodão (50 un.)",
-		cat: "LINEN",
-		unit: "PACKAGE",
-		price: 22000,
+		name: "Sangria de frutas",
+		category: "DRINK",
+		unit: "LITER",
+		min: 2800,
+		max: 3800,
 	},
 	{
-		name: "Cadeira Tiffany Dourada",
-		cat: "FURNITURE",
-		unit: "UNIT",
-		price: 4500,
-	},
-	{ name: "Mesa Redonda 1,80 m", cat: "FURNITURE", unit: "UNIT", price: 38000 },
-	{
-		name: "M-microfone Sem Fios",
-		cat: "EQUIPMENT",
-		unit: "UNIT",
-		price: 95000,
-	},
-	{
-		name: "Projetor 5000 lumens",
-		cat: "EQUIPMENT",
-		unit: "UNIT",
-		price: 320000,
-	},
-	{
-		name: "Gerador Elétrico 5 kVA",
-		cat: "EQUIPMENT",
-		unit: "UNIT",
-		price: 450000,
-	},
-	{
-		name: "Caixa de Fogos de Artifício",
-		cat: "OTHER",
-		unit: "BOX",
-		price: 45000,
-	},
-] as const;
-
-const INVENTORY_ENGAGEMENT = [
-	{ name: "Espumante de Nuvem", cat: "DRINK", unit: "BOTTLE", price: 9000 },
-	{ name: "Água Mineral 500ml", cat: "DRINK", unit: "BOTTLE", price: 300 },
-	{ name: "Sangria de Frutas", cat: "DRINK", unit: "LITER", price: 3500 },
-	{
-		name: "Petiscos (Empadas e Folhados)",
-		cat: "MATERIAL",
+		name: "Petiscos (empadas e folhados)",
+		category: "MATERIAL",
 		unit: "KG",
-		price: 5500,
+		min: 4500,
+		max: 6000,
 	},
-	{ name: "Canapés de Queijo", cat: "MATERIAL", unit: "KG", price: 4800 },
-	{ name: "Bolo de Noivado", cat: "MATERIAL", unit: "UNIT", price: 120000 },
-	{ name: "Balões Dourados", cat: "MATERIAL", unit: "UNIT", price: 1200 },
-] as const;
+	{
+		name: "Canapés variados",
+		category: "MATERIAL",
+		unit: "KG",
+		min: 3800,
+		max: 5200,
+	},
+	{
+		name: "Bolo de noivado",
+		category: "MATERIAL",
+		unit: "UNIT",
+		min: 70000,
+		max: 95000,
+	},
+	{
+		name: "Balões dourados",
+		category: "OTHER",
+		unit: "UNIT",
+		min: 900,
+		max: 1500,
+	},
+	{
+		name: "Toalhas de festa (pacote)",
+		category: "LINEN",
+		unit: "PACKAGE",
+		min: 14000,
+		max: 19000,
+	},
+];
 
 // ── Food plan menu pool ─────────────────────────────────────────────
-// No prices on purpose: catering money belongs to the supplier, so the same
+// No prices by design: catering money lives on the Supplier, so the same
 // spend is never counted twice in the budget.
 const FOOD_PLAN_MENU: ReadonlyArray<{
 	name: string;
@@ -1199,7 +1183,7 @@ const FOOD_PLAN_MENU: ReadonlyArray<{
 		name: "Bolo de noiva",
 		category: "DESSERT",
 		unit: "PORTION",
-		desc: "Fatias Generosas.",
+		desc: "Fatias generosas.",
 	},
 	{
 		name: "Trufas e doces finos",
@@ -1220,14 +1204,14 @@ const FOOD_PLAN_MENU: ReadonlyArray<{
 		category: "FRUIT",
 		unit: "PLATE",
 		share: 0.8,
-		desc: "Mesa de fruta e mingau.",
+		desc: "Mesa de fruta.",
 	},
 	{
 		name: "Sumos naturais",
 		category: "OTHER",
 		unit: "LITER",
 		share: 0.5,
-		desc: "Laranja, Manga e Maracujá.",
+		desc: "Laranja, manga e maracujá.",
 	},
 	{
 		name: "Água e refrigerantes",
@@ -1245,14 +1229,14 @@ const FOOD_PLAN_MENU: ReadonlyArray<{
 	},
 ];
 
-// ── Manual checklist items (never touched by the API) ──────────────
+// ── Manual checklist items (never touched by the API) ───────────────
 const CHECKLIST_TEMPLATES = [
 	{
 		title: "Fechar a lista de convidados",
 		desc: "Confirmar presenças até dois dias antes.",
 	},
 	{
-		title: "Enviar o mapa do salão ao decorator",
+		title: "Enviar o mapa do salão ao decorador",
 		desc: "Indicativo de mesas e zonas de serviço.",
 	},
 	{ title: "Testar o sistema de som", desc: "Microfones, colunas e gerador." },
@@ -1276,77 +1260,116 @@ const CHECKLIST_TEMPLATES = [
 		title: "Organizar o cortejo",
 		desc: "Carros, ordem de entrada e condutores.",
 	},
-];
+] as const;
+
+// ── Guest groups per type ───────────────────────────────────────────
+const GROUP_BY_TYPE: Record<GuestType, readonly string[]> = {
+	FAMILY: ["Família da Noiva", "Família do Noivo", "Família dos Padrinhos"],
+	FRIEND: ["Amigos da Universidade", "Amigos da Infância", "Amigos do Bairro"],
+	COLLEAGUE: ["Trabalho — Empresa", "Colegas da Igreja", "Paróquia"],
+	VIP: ["Padrinhos e Madrinhas", "Convidados VIP", "Bênçãos da Família"],
+	OTHER: ["Vizinhos", "Comunidade", "Amigos da Família"],
+};
+
+// ── Invitation codes (same alphabet/shape the API uses: MUX-XXXX-XXXX) ──
+const SEED_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function uniqueSeedInvitationCode(rng: Rng, used: Set<string>): string {
+	const segment = () =>
+		Array.from(
+			{ length: 4 },
+			() => SEED_CODE_ALPHABET[Math.floor(rng() * SEED_CODE_ALPHABET.length)],
+		).join("");
+	let code = `MUX-${segment()}-${segment()}`;
+	while (used.has(code)) code = `MUX-${segment()}-${segment()}`;
+	used.add(code);
+	return code;
+}
+
+// ── Money helpers ───────────────────────────────────────────────────
+/** Rounds to a clean Kz step so the numbers look hand-entered. */
+const round5k = (n: number) => Math.max(5_000, Math.round(n / 5_000) * 5_000);
 
 async function main() {
 	console.log("🌱 Seeding database...");
 
 	const plans = buildEventPlans();
 
-	// ── Idempotent cleanup (cascades from events) ─────────────────────
+	// ── 0. IDEMPOTENT CLEANUP (FK-safe order, no residue) ─────────────
+	// Event-scoped children are also deleted here explicitly instead of
+	// relying only on the event cascade, so partial re-runs can never leave
+	// orphans behind.
+	await prisma.dedicationViewer.deleteMany({});
+	await prisma.dedication.deleteMany({});
+	await prisma.activityLog.deleteMany({});
+	await prisma.auditLog.deleteMany({});
+	await prisma.notification.deleteMany({});
+	await prisma.invitationGuest.deleteMany({});
 	await prisma.guestInvitation.deleteMany({});
 	await prisma.eventInvitation.deleteMany({});
-	await prisma.invitationGuest.deleteMany({});
 	await prisma.guestCompanion.deleteMany({});
 	await prisma.tableGuest.deleteMany({});
-	await prisma.$executeRaw`TRUNCATE TABLE "audit_log", "notification", "checklist_item", "food_plan_item", "food_plan", "supplier_installment", "supplier_payment", "supplier", "inventory_movement", "inventory_item", "schedule", "task", "table_guest", "guest_companion", "invitation_guest", "guest_invitation", "event_invitation", "guest", "budget", "table", "dedication_viewer", "dedication", "event_member", "event" CASCADE`;
-	await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
+	await prisma.checklistItem.deleteMany({});
+	await prisma.foodPlanItem.deleteMany({});
+	await prisma.foodPlan.deleteMany({});
+	await prisma.supplierInstallment.deleteMany({});
+	await prisma.supplierPayment.deleteMany({});
+	await prisma.supplier.deleteMany({});
+	await prisma.inventoryMovement.deleteMany({});
+	await prisma.inventoryItem.deleteMany({});
+	await prisma.schedule.deleteMany({});
+	await prisma.task.deleteMany({});
+	await prisma.budget.deleteMany({});
+	await prisma.table.deleteMany({});
+	await prisma.guest.deleteMany({});
+	await prisma.eventMember.deleteMany({});
+	await prisma.event.deleteMany({});
+	// Accounts and sessions last: users are recreated from scratch so a
+	// re-run always produces the exact same login list.
+	await prisma.session.deleteMany({});
+	await prisma.account.deleteMany({});
+	await prisma.user.deleteMany({});
 
-	// ── 1. USERS + CREDENTIALS ────────────────────────────────────────
-	await prisma.user.createMany({ data: SEED_USERS });
-	const passwordHash = await hashSeedPassword(SEED_PASSWORD);
-	await prisma.account.createMany({
-		data: SEED_USERS.map((user) => ({
-			id: `acct_credential_${user.id}`,
-			issuer: "local:credential",
-			accountId: user.id,
-			providerId: "credential",
-			userId: user.id,
-			password: passwordHash,
+	// ── 1. USERS + CREDENTIAL ACCOUNTS ────────────────────────────────
+	// The account row is exactly what Better Auth's sign-in looks up:
+	// providerId "credential", issuer "local:credential", accountId = user id,
+	// scrypt password in the `salt:key` hex format verifyPassword expects.
+	await prisma.user.createMany({
+		data: SEED_USERS.map((user, i) => ({
+			id: userIdAt(i),
+			name: user.name,
+			email: user.email,
+			emailVerified: true,
+			image: null,
+			phone: `+244 923 ${pad(100 + i)} ${pad(i + 1, 3)}`,
 		})),
 	});
-	console.log(
-		`  ✅ Users (${SEED_USERS.length}) / Credentials (${SEED_USERS.length})`,
+	const accountRecords = await Promise.all(
+		SEED_USERS.map(async (user, i) => ({
+			id: `acct_seed_${pad(i + 1, 2)}`,
+			issuer: "local:credential",
+			accountId: userIdAt(i),
+			providerId: "credential",
+			userId: userIdAt(i),
+			password: await hashPassword(user.password),
+		})),
 	);
+	await prisma.account.createMany({ data: accountRecords });
+	console.log(`  ✅ Users (${SEED_USERS.length}) + credential accounts`);
 
-	// ── 2. EVENTS ──────────────────────────────────────────────────────
-	const eventRecords: Prisma.EventCreateManyInput[] = [];
-	for (const plan of plans) {
-		const rng = mulberry32(2024 + plan.index * 613);
+	// ── 2. EVENTS ─────────────────────────────────────────────────────
+	const eventRecords: Prisma.EventCreateManyInput[] = plans.map((plan) => {
+		const rng = mulberry32(2000 + plan.index * 613);
 		const venue = pick(rng, VENUES);
-		let eventDate: Date;
-		switch (plan.status) {
-			case "COMPLETED":
-				eventDate = monthsAgo(randInt(rng, 1, 6));
-				break;
-			case "CONFIRMED":
-				eventDate = daysAhead(randInt(rng, 15, 60));
-				break;
-			case "PLANNING":
-				eventDate = monthsAhead(randInt(rng, 2, 12));
-				break;
-			case "CANCELLED":
-				eventDate = daysAhead(randInt(rng, 20, 200));
-				break;
-			case "DRAFT":
-				eventDate = monthsAhead(randInt(rng, 6, 18));
-				break;
-		}
-
 		const female = pick(rng, FEMALE_NAMES);
 		const male = pick(rng, MALE_NAMES);
-		const name =
-			plan.type === "WEDDING"
-				? `Casamento ${female} & ${male}`
-				: `Noivado ${female} & ${male}`;
-
-		eventRecords.push({
+		const noun = plan.type === "WEDDING" ? "Casamento" : "Noivado";
+		return {
 			id: plan.id,
 			ownerId: plan.ownerId,
-			name,
+			name: `${noun} ${female} & ${male}`,
 			type: plan.type,
 			status: plan.status,
-			eventDate,
+			eventDate: plan.eventDate,
 			startTime: plan.type === "WEDDING" ? "15:00" : "17:00",
 			endTime: plan.type === "WEDDING" ? "02:00" : "23:00",
 			venueName: venue.name,
@@ -1358,168 +1381,199 @@ async function main() {
 			latitude: venue.lat,
 			longitude: venue.lng,
 			capacity: plan.capacity,
-			limitGuestCapacity: plan.limitGuestCapacity,
+			limitGuestCapacity: true,
 			currency: "AOA",
 			description:
 				plan.status === "CANCELLED"
 					? "Evento cancelado por motivos da família."
 					: plan.status === "DRAFT"
-						? "Rascunho do evento — detalhes a confirmar."
-						: `${plan.type === "WEDDING" ? "Casamento" : "Festa de noivado"} com receção e celebração no ${venue.name}.`,
-		});
-	}
+						? "Rascunho inicial — detalhes ainda a confirmar."
+						: `${noun} com receção e celebração no ${venue.name}, ${venue.municipality}.`,
+		};
+	});
 	await prisma.event.createMany({ data: eventRecords });
 	console.log(`  ✅ Events (${eventRecords.length})`);
 
 	// ── 3. EVENT MEMBERS + MEMBER INVITATIONS ─────────────────────────
 	const memberRecords: Prisma.EventMemberCreateManyInput[] = [];
 	const eventInvitationRecords: Prisma.EventInvitationCreateManyInput[] = [];
+	const activeMemberIdsByEvent = new Map<string, string[]>();
+	const memberUserIdsByEvent = new Map<string, string[]>();
 
 	for (const plan of plans) {
 		const rng = mulberry32(91 + plan.index * 149);
-		const members: {
+		const joined = (min: number, max: number) =>
+			daysAgo(randInt(rng, min, max));
+		// Users already used by this event's membership, in insertion order.
+		const usedUsers: string[] = [plan.ownerId, plan.partnerId];
+		const firstFree = (startAt: number): string => {
+			const candidate = USER_IDS.find(
+				(id) => !usedUsers.includes(id) && USER_IDS.indexOf(id) >= startAt,
+			);
+			// Wrap around when the tail is exhausted; 6 users never produce a
+			// membership bigger than 5, so a candidate always exists.
+			return (
+				candidate ??
+				USER_IDS.find((id) => !usedUsers.includes(id)) ??
+				plan.partnerId
+			);
+		};
+
+		const members: Array<{
 			user: string;
 			role: MemberRole;
 			status: MemberStatus;
-			joined: Date | null;
-		}[] = [
+			joinedAt: Date | null;
+		}> = [
 			{
 				user: plan.ownerId,
 				role: "OWNER",
 				status: "ACTIVE",
-				joined: daysAgo(randInt(rng, 60, 200)),
+				joinedAt: joined(90, 240),
 			},
 			{
 				user: plan.partnerId,
 				role: "PARTNER",
 				status: "ACTIVE",
-				joined: daysAgo(randInt(rng, 40, 180)),
+				joinedAt: joined(60, 200),
 			},
 		];
-
-		if (rng() > 0.4) {
-			let third = pick(rng, USER_IDS);
-			while (members.some((m) => m.user === third)) third = pick(rng, USER_IDS);
+		// Variety: some events carry an ADMIN, some an EDITOR, every 5th a
+		// pending VIEWER invitation instead of a member.
+		if (plan.index % 3 === 0 && plan.status !== "DRAFT") {
+			const admin = firstFree(2);
 			members.push({
-				user: third,
+				user: admin,
 				role: "ADMIN",
 				status: "ACTIVE",
-				joined: daysAgo(randInt(rng, 20, 120)),
+				joinedAt: joined(20, 120),
 			});
+			usedUsers.push(admin);
 		}
-		if (rng() > 0.75) {
-			let fourth = pick(rng, USER_IDS);
-			while (members.some((m) => m.user === fourth))
-				fourth = pick(rng, USER_IDS);
+		if (plan.index % 5 === 2 && plan.status !== "DRAFT") {
+			const editor = firstFree(2);
 			members.push({
-				user: fourth,
+				user: editor,
 				role: "EDITOR",
 				status: "ACTIVE",
-				joined: daysAgo(randInt(rng, 10, 60)),
+				joinedAt: joined(10, 60),
+			});
+			usedUsers.push(editor);
+		}
+		if (
+			plan.index % 5 === 0 &&
+			(plan.status === "CONFIRMED" || plan.status === "PLANNING")
+		) {
+			const invitee = firstFree(2);
+			members.push({
+				user: invitee,
+				role: "VIEWER",
+				status: "PENDING",
+				joinedAt: null,
+			});
+			eventInvitationRecords.push({
+				id: `evinv_seed_${pad(plan.index + 1)}`,
+				eventId: plan.id,
+				invitedBy: plan.ownerId,
+				email: SEED_USERS[USER_IDS.indexOf(invitee)]?.email ?? null,
+				role: "VIEWER",
+				token: `tok_seed_${plan.index + 1}_${invitee.slice(-3)}`,
+				status: "PENDING",
+				expiresAt: monthsAhead(1),
 			});
 		}
-		// A pending invitation for realism.
-		if (rng() > 0.6) {
-			let invitee = pick(rng, USER_IDS);
-			while (members.some((m) => m.user === invitee))
-				invitee = pick(rng, USER_IDS);
-			if (
-				["CONFIRMED", "PLANNING"].includes(plan.status) &&
-				plan.type === "WEDDING"
-			) {
-				members.push({
-					user: invitee,
-					role: "VIEWER",
-					status: "PENDING",
-					joined: null,
-				});
-				eventInvitationRecords.push({
-					id: `evinv_${plan.index}_${invitee}`,
-					eventId: plan.id,
-					invitedBy: plan.ownerId,
-					email: `${invitee.replace("usr_", "")}@muxima.ao`,
-					role: "VIEWER",
-					token: `tok_${plan.index}_${invitee.slice(-4)}`,
-					status: "PENDING",
-					expiresAt: monthsAhead(1),
-				});
-			}
-		}
 
+		const activeIds: string[] = [];
 		for (const m of members) {
+			const id = `mem_${m.user}_${plan.id}`;
+			if (m.status === "ACTIVE") activeIds.push(id);
 			memberRecords.push({
-				id: `mem_${m.user}_${plan.id}`,
+				id,
 				eventId: plan.id,
 				userId: m.user,
 				role: m.role,
 				status: m.status,
-				joinedAt: m.joined,
+				joinedAt: m.joinedAt,
 			});
 		}
+		activeMemberIdsByEvent.set(plan.id, activeIds);
+		memberUserIdsByEvent.set(
+			plan.id,
+			members.map((m) => m.user),
+		);
 	}
 	await prisma.eventMember.createMany({ data: memberRecords });
 	await prisma.eventInvitation.createMany({ data: eventInvitationRecords });
 	console.log(
-		`  ✅ Event Members (${memberRecords.length}) / Invitations (${eventInvitationRecords.length})`,
+		`  ✅ Event Members (${memberRecords.length}) / Member Invitations (${eventInvitationRecords.length})`,
 	);
 
 	// ── 4. BUDGET TARGETS ─────────────────────────────────────────────
-	// The budget is only a target: the spend is derived from the suppliers and
-	// the inventory, so there are no budget categories to keep in sync.
-	const budgetRecords: Prisma.BudgetCreateManyInput[] = [];
-
-	for (const plan of plans) {
+	// The Budget model is only a target: totalSpent/totalPaid are derived by
+	// the API from suppliers + inventory, so both are sized to fit inside it.
+	const budgetRecords: Prisma.BudgetCreateManyInput[] = plans.map((plan) => {
 		const rng = mulberry32(311 + plan.index * 317);
 		const perPerson =
 			plan.type === "WEDDING"
-				? randInt(rng, 28000, 46000)
-				: randInt(rng, 14000, 22000);
+				? Math.round(
+						randInt(rng, 24, 46) *
+							1000 *
+							(plan.status === "DRAFT"
+								? 0.8
+								: plan.status === "COMPLETED"
+									? 1.05
+									: 1),
+					)
+				: randInt(rng, 14_000, 22_000);
 		const plannedAmount = plan.capacity * perPerson;
-		const reserveAmount = Math.round(plannedAmount * 0.08);
-		budgetRecords.push({
-			id: `bgt_${pad(plan.index + 1)}_${SEED_PREFIX}`,
+		return {
+			id: `bgt_seed_${pad(plan.index + 1)}`,
 			eventId: plan.id,
 			plannedAmount,
-			reserveAmount,
+			reserveAmount: Math.round(plannedAmount * 0.08),
 			notes:
 				plan.status === "DRAFT"
 					? "Orçamento preliminar — valores a confirmar."
-					: "Orçamento derivado dos fornecedores e do inventário.",
-		});
-	}
+					: "Alvo de planeamento; despesa real derivada de fornecedores e inventário.",
+		};
+	});
 	await prisma.budget.createMany({ data: budgetRecords });
 	console.log(`  ✅ Budgets (${budgetRecords.length})`);
 
-	// ── 5. SUPPLIERS + PAYMENTS + INSTALLMENTS ───────────────────────
-	// Money lives here now: every supplier carries an agreed price, the
-	// payments made against it and, when it is paid in stages, the schedule.
+	// ── 5. SUPPLIERS + PAYMENTS + INSTALLMENTS ────────────────────────
 	const supplierRecords: Prisma.SupplierCreateManyInput[] = [];
 	const supplierPaymentRecords: Prisma.SupplierPaymentCreateManyInput[] = [];
 	const supplierInstallmentRecords: Prisma.SupplierInstallmentCreateManyInput[] =
 		[];
+	const cateringSupplierByEvent = new Map<string, string>();
+	// Spend envelope per event: suppliers 62%, inventory 18%, reserve 10%
+	// — the remaining 10% keeps the budget visibly not-overdrawn.
+	const supplierSpendByEvent = new Map<string, number>();
 
-	const WEDDING_SUPPLIER_CATS = [
+	const WEDDING_SUPPLIER_CATS: readonly SupplierCategory[] = [
 		"VENUE",
-		"DECORATION",
 		"CATERING",
+		"DECORATION",
 		"MUSIC",
 		"PHOTOGRAPHER",
+		"VIDEOGRAPHER",
+		"CAKE",
 		"TRANSPORT",
 		"BEAUTY",
 		"ENTERTAINMENT",
-	] as const;
-	const ENGAGEMENT_SUPPLIER_CATS = [
+	];
+	const ENGAGEMENT_SUPPLIER_CATS: readonly SupplierCategory[] = [
 		"VENUE",
-		"DECORATION",
 		"CATERING",
+		"DECORATION",
 		"MUSIC",
 		"PHOTOGRAPHER",
 		"CAKE",
-	] as const;
+	];
 
 	for (const plan of plans) {
 		const rng = mulberry32(503 + plan.index * 271);
-		const cats: readonly string[] =
+		const cats =
 			plan.type === "WEDDING"
 				? WEDDING_SUPPLIER_CATS
 				: ENGAGEMENT_SUPPLIER_CATS;
@@ -1529,87 +1583,98 @@ async function main() {
 				? 2
 				: plan.status === "CANCELLED"
 					? 3
-					: Math.min(cats.length, randInt(rng, 5, cats.length));
-		const usedCats: string[] = [];
-		// The agreed prices have to stay inside the target, otherwise the seeded
-		// budget would look broken on the very first load.
-		let priceBudget = Math.round(
-			Number(
-				budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0,
-			) * 0.62,
-		);
+					: plan.status === "PLANNING"
+						? Math.min(4, cats.length)
+						: Math.min(cats.length, randInt(rng, 6, cats.length));
+
+		const budgetRow = budgetRecords.find((b) => b.eventId === plan.id);
+		let priceBudget = round5k(Number(budgetRow?.plannedAmount ?? 0) * 0.62);
+		let spent = 0;
 
 		for (let j = 0; j < count; j++) {
-			let cat = pick(rng, cats);
-			if (usedCats.includes(cat))
-				cat = cats.find((c) => !usedCats.includes(c)) ?? cat;
-			usedCats.push(cat);
+			const cat = cats[j % cats.length] as SupplierCategory;
 			const rngV = mulberry32(607 + plan.index * 91 + j * 43);
-			const business = pick(
-				rngV,
-				SUPPLIER_NAMES[cat] ?? (["Muxima Serviços"] as const),
-			);
-			const supplierId = `sup_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`;
+			const business = pick(rngV, SUPPLIER_NAMES[cat]);
+			const supplierId = `sup_seed_${pad(plan.index + 1)}_${j + 1}`;
+
 			const status: SupplierStatus =
 				plan.status === "COMPLETED"
 					? "COMPLETED"
 					: plan.status === "CANCELLED"
 						? "CANCELLED"
 						: plan.status === "DRAFT"
-							? "PROSPECT"
-							: pick(rngV, ["CONTACTED", "NEGOTIATING", "CONFIRMED"] as const);
+							? pick(rngV, ["PROSPECT", "CONTACTED"] as const)
+							: plan.status === "PLANNING"
+								? pick(rngV, ["CONTACTED", "NEGOTIATING", "CONFIRMED"] as const)
+								: pick(rngV, [
+										"NEGOTIATING",
+										"CONFIRMED",
+										"CONFIRMED",
+									] as const);
 
-			// Only committed suppliers have a price. The first supplier takes a
-			// larger share, the rest share what is left.
+			// Only committed suppliers carry an agreed price; the first takes a
+			// larger share and the rest split what is left, so the sum of
+			// prices never exceeds the suppliers slice of the budget.
 			const isCommitted = status === "CONFIRMED" || status === "COMPLETED";
 			const share = Math.max(1, count - j) / ((count * (count + 1)) / 2);
 			const price = isCommitted
-				? Math.max(50_000, Math.round((priceBudget * share) / 5_000) * 5_000)
+				? round5k(priceBudget * share * (0.85 + rngV() * 0.1))
 				: 0;
 			priceBudget -= price;
 
-			// A quarter of the committed suppliers pay in stages.
-			const useInstallments = isCommitted && rngV() < 0.25;
+			const useInstallments = isCommitted && rngV() < 0.3;
 			const installmentCount = useInstallments ? randInt(rngV, 2, 4) : 0;
+			if (
+				cat === "CATERING" &&
+				isCommitted &&
+				!cateringSupplierByEvent.has(plan.id)
+			) {
+				cateringSupplierByEvent.set(plan.id, supplierId);
+			}
 
 			supplierRecords.push({
 				id: supplierId,
 				eventId: plan.id,
 				name: `${business} — ${CATEGORY_LABEL[cat] ?? "Serviços"}`,
-				category: cat as SupplierCategory,
-				phone: `+244 ${randInt(rngV, 910, 989)} ${pad(randInt(rngV, 0, 999))} ${pad(randInt(rngV, 0, 999))}`,
-				email: `${business.toLowerCase().replace(/[^a-z0-9]+/g, "")}@muxima.ao`,
+				category: cat,
+				phone: phone(rngV),
+				email: `${business
+					.toLowerCase()
+					.replace(/[^a-z0-9]+/g, "")
+					.slice(0, 20)}@muxima.ao`,
 				address: `${pick(rngV, VENUES).neighborhood}, ${pick(rngV, VENUES).province}`,
 				status,
-				description: `Serviço de ${CATEGORY_LABEL[cat]?.toLowerCase() ?? "apoio"} para o evento.`,
+				description: `Serviço de ${(CATEGORY_LABEL[cat] ?? "apoio").toLowerCase()} para o evento.`,
 				notes:
 					status === "CONFIRMED"
 						? "Contrato assinado e confirmado."
 						: status === "COMPLETED"
 							? "Serviço concluído com sucesso."
 							: status === "CANCELLED"
-								? "Contrato cancelado."
+								? "Contrato cancelado — sem encargos."
 								: "Seguimento necessário.",
 				price: price > 0 ? price : null,
 				paymentModel: useInstallments
 					? SupplierPaymentModel.INSTALLMENTS
 					: SupplierPaymentModel.FULL,
-				// Filled in below, once the payments are known.
+				// Filled in below, once payments are known.
 				paymentStatus: "PENDING",
 				nextDueDate: null,
 			});
-
 			if (!isCommitted || price <= 0) continue;
+			spent += price;
 
 			// Installment schedule: equal parts, the last one absorbing the
-			// rounding remainder so the parts always add up to the price.
+			// rounding remainder so the parts always sum to the price. Dates
+			// walk backwards from today, so a completed event has every
+			// installment in the past.
 			const installments: Array<{
 				position: number;
 				amount: number;
 				dueDate: Date;
 			}> = [];
 			if (useInstallments) {
-				const part = Math.round(price / installmentCount / 5_000) * 5_000;
+				const part = round5k(price / installmentCount);
 				let running = 0;
 				for (let k = 0; k < installmentCount; k++) {
 					const amount = k === installmentCount - 1 ? price - running : part;
@@ -1617,10 +1682,8 @@ async function main() {
 					installments.push({
 						position: k + 1,
 						amount,
-						// Spaced from today towards the event, so a completed
-						// event has every date in the past.
 						dueDate: daysAgo(
-							randInt(rngV, 5, 20) + (installmentCount - k) * 45,
+							randInt(rngV, 3, 15) + (installmentCount - k) * 30,
 						),
 					});
 				}
@@ -1632,14 +1695,13 @@ async function main() {
 					? 1
 					: plan.status === "CANCELLED"
 						? 0
-						: pick(rngV, [0, 0.25, 0.5, 0.75, 1]);
+						: pick(rngV, [0, 0, 0.35, 0.5, 0.75, 1]);
 			let paid = 0;
 			if (paidRatio > 0) {
-				paid = Math.round((price * paidRatio) / 5_000) * 5_000;
-				if (paidRatio === 1) paid = price;
+				paid = paidRatio === 1 ? price : round5k(price * paidRatio);
 				if (paid > 0) {
 					supplierPaymentRecords.push({
-						id: `spay_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+						id: `spay_seed_${pad(plan.index + 1)}_${j + 1}`,
 						supplierId,
 						amount: paid,
 						paymentDate: daysAgo(randInt(rngV, 1, 40)),
@@ -1650,22 +1712,21 @@ async function main() {
 							"CARD",
 							"MOBILE_PAYMENT",
 						] as const),
-						reference: `TRF-2026-${pad(plan.index + 1)}-${j + 1}`,
-						notes: paidRatio === 1 ? "Pagamento integral" : "Adiantamento",
+						reference: `TRF-${plan.eventDate.getFullYear()}-${pad(plan.index + 1)}-${j + 1}`,
+						notes: paid === price ? "Pagamento integral" : "Adiantamento",
 						createdBy: plan.ownerId,
 					});
 				}
 			}
 
-			// A schedule is only stored for suppliers that really have one, and
-			// each installment is marked paid once the payments cover it: a
-			// payment settles the schedule from the earliest due date onwards.
+			// Installments are marked paid while cumulative payments cover
+			// them, in due-date order — same rule the finance module applies.
 			let covered = 0;
 			for (const [k, installment] of installments.entries()) {
 				const isPaid = paid - covered >= installment.amount;
 				if (isPaid) covered += installment.amount;
 				supplierInstallmentRecords.push({
-					id: `sinst_${pad(plan.index + 1)}_${j + 1}_${k + 1}_${SEED_PREFIX}`,
+					id: `sinst_seed_${pad(plan.index + 1)}_${j + 1}_${k + 1}`,
 					supplierId,
 					position: installment.position,
 					amount: installment.amount,
@@ -1676,7 +1737,7 @@ async function main() {
 				});
 			}
 
-			// Nearest installment the payments do not cover yet.
+			// Nearest installment not yet covered by payments.
 			let accumulated = 0;
 			const nextDueDate = installments
 				.filter((installment) => {
@@ -1689,9 +1750,7 @@ async function main() {
 			const isOverdue =
 				nextDueDate !== undefined && nextDueDate.getTime() < now.getTime();
 
-			// Stored status, using the same precedence as the finance module.
-			// A cancelled supplier never reaches this point: it is not committed,
-			// so it has no price and no money to report.
+			// Stored status, same precedence as the finance module.
 			const paymentStatus: SupplierPaymentStatus = isOverdue
 				? "OVERDUE"
 				: paid >= price
@@ -1706,7 +1765,9 @@ async function main() {
 				row.nextDueDate = nextDueDate ?? null;
 			}
 		}
+		supplierSpendByEvent.set(plan.id, spent);
 	}
+
 	await prisma.supplier.createMany({ data: supplierRecords });
 	await prisma.supplierPayment.createMany({ data: supplierPaymentRecords });
 	await prisma.supplierInstallment.createMany({
@@ -1717,280 +1778,249 @@ async function main() {
 	);
 
 	// ── 6. GUESTS + COMPANIONS + INVITATIONS ──────────────────────────
-	const guestRecords: SeededGuest[] = [];
+	const guestRecords: Prisma.GuestCreateManyInput[] = [];
 	const companionRecords: Prisma.GuestCompanionCreateManyInput[] = [];
 	const guestInvitationRecords: Prisma.GuestInvitationCreateManyInput[] = [];
 	const invitationGuestRecords: Prisma.InvitationGuestCreateManyInput[] = [];
+	const seededInvitationCodes = new Set<string>();
+	const confirmedPeopleByEvent = new Map<string, number>();
+	const guestIdsByEvent = new Map<string, string[]>();
 
 	for (const plan of plans) {
 		const rng = mulberry32(719 + plan.index * 353);
-		const guests: GuestSeed[] = [];
+		const eventSlug = pad(plan.index + 1);
+		const eventGuestIds: string[] = [];
+		guestIdsByEvent.set(plan.id, eventGuestIds);
+		// A guest is "active" when not declined/cancelled: only those can be
+		// confirmed and occupy capacity.
+		const addGuest = (
+			n: number,
+			data: {
+				name: string;
+				type: GuestType;
+				status: GuestStatus;
+				phone: string | null;
+				companionsLimit: number;
+				suffix: string;
+			},
+		) => {
+			const id = `gst_seed_${eventSlug}_${pad(n, 4)}${data.suffix}`;
+			eventGuestIds.push(id);
+			guestRecords.push({
+				id,
+				eventId: plan.id,
+				name: data.name,
+				phone: data.phone,
+				email:
+					data.type === "VIP" || data.type === "COLLEAGUE"
+						? `${data.name
+								.toLowerCase()
+								.replace(/[^a-z]+/g, ".")
+								.slice(0, 24)}@mail.test`
+						: null,
+				group: pick(rng, GROUP_BY_TYPE[data.type]),
+				type: data.type,
+				status: data.status,
+				// DECLINED guests never bring companions (they are not coming).
+				companionsLimit: data.status === "DECLINED" ? 0 : data.companionsLimit,
+			});
+			return id;
+		};
 
-		if (plan.status !== "CANCELLED" && plan.status !== "DRAFT") {
-			const confirmed = Math.floor(plan.capacity * plan.fillRatio);
+		if (plan.status === "DRAFT") {
+			// A draft only has a handful of hand-added pending guests.
+			const draftGuests = randInt(rng, 4, 8);
+			for (let g = 0; g < draftGuests; g++) {
+				const type = pick(rng, ["FAMILY", "FRIEND", "VIP"] as const);
+				addGuest(g + 1, {
+					name: personName(rng),
+					type,
+					status: "PENDING",
+					phone: phone(rng),
+					companionsLimit: 0,
+					suffix: "",
+				});
+			}
+			confirmedPeopleByEvent.set(plan.id, 0);
+			continue;
+		}
 
-			// Confirmed guests (all fit — companions budget = remaining seats).
-			let companionBudget = plan.capacity - confirmed;
-			for (let g = 0; g < confirmed; g++) {
-				const companionsLimit = randInt(rng, 0, 2);
-				const type = pick(rng, [
-					"FAMILY",
-					"FAMILY",
-					"FRIEND",
-					"FRIEND",
-					"COLLEAGUE",
-					"VIP",
-					"OTHER",
-				] as const);
-				const group = pick(
-					rng,
-					type === "FAMILY"
-						? FAMILY_GROUPS
-						: type === "FRIEND"
-							? FRIEND_GROUPS
-							: type === "COLLEAGUE"
-								? WORK_GROUPS
-								: type === "VIP"
-									? VIP_GROUPS
-									: OTHER_GROUPS,
-				);
-				const isMale = rng() > 0.5;
-				const fullName = `${isMale ? pick(rng, MALE_NAMES) : pick(rng, FEMALE_NAMES)} ${pick(rng, SURNAMES)}`;
-				const guestSeed: GuestSeed = {
-					record: {
-						id: `gst_${pad(plan.index + 1)}_${pad(g + 1, 4)}`,
-						eventId: plan.id,
-						name: fullName,
-						phone: `+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`,
-						group,
-						type,
-						status: "CONFIRMED",
-						companionsLimit,
-					},
-					confirmed: true,
-					status: "CONFIRMED",
+		if (plan.status === "CANCELLED") {
+			// A cancelled event keeps the remnants of its guest list.
+			for (let g = 0; g < 5; g++) {
+				addGuest(g + 1, {
+					name: personName(rng),
+					type: pick(rng, ["FAMILY", "FRIEND", "OTHER"] as const),
+					status: "PENDING",
+					phone: phone(rng),
+					companionsLimit: 0,
+					suffix: "",
+				});
+			}
+			confirmedPeopleByEvent.set(plan.id, 0);
+			continue;
+		}
+
+		// Confirmed guests: fill the target, then spend the remaining seats
+		// on companions so the event never crosses its capacity.
+		let companionBudget = plan.capacity - plan.confirmedGuests;
+		for (let g = 0; g < plan.confirmedGuests; g++) {
+			const companionsLimit = randInt(rng, 0, 2);
+			const type = pick(rng, [
+				"FAMILY",
+				"FAMILY",
+				"FRIEND",
+				"FRIEND",
+				"COLLEAGUE",
+				"VIP",
+				"OTHER",
+			] as const);
+			const guestId = addGuest(g + 1, {
+				name: personName(rng),
+				type,
+				status: "CONFIRMED",
+				phone: phone(rng),
+				companionsLimit,
+				suffix: "",
+			});
+
+			// Companions are assigned only while the capacity budget lasts,
+			// and never beyond the guest's own limit. A few stay PENDING to
+			// exercise the confirmation flow (pending companions do not count
+			// towards capacity).
+			if (companionsLimit > 0 && companionBudget > 0) {
+				const want = Math.min(
 					companionsLimit,
-				};
-				guests.push(guestSeed);
-				// Realistic companion assignment (some pending to feed capacity metrics).
-				if (companionsLimit > 0 && companionBudget > 0) {
-					const wantCompanions = Math.min(companionsLimit, companionBudget);
-					const pending = rng() > 0.7;
-					guestRecords.push(guestSeed.record);
-					for (let c = 0; c < wantCompanions; c++) {
-						const companionStatus: CompanionStatus = pending
-							? "PENDING"
-							: "CONFIRMED";
-						const role =
-							c === 0 ? (isMale ? "Esposa" : "Marido") : "Acompanhante";
-						const cName = `${role} ${pick(rng, isMale ? FEMALE_NAMES : MALE_NAMES)}`;
-						companionRecords.push({
-							id: `gcp_${pad(plan.index + 1)}_${pad(g + 1, 4)}_${c + 1}`,
-							guestId: guestSeed.record.id,
-							name: cName,
-							status: companionStatus,
-						});
-						if (companionStatus === "CONFIRMED") companionBudget -= 1;
-					}
+					companionBudget,
+					randInt(rng, 1, 2),
+				);
+				const allPending = rng() > 0.8;
+				for (let c = 0; c < want; c++) {
+					const companionStatus: CompanionStatus =
+						allPending || rng() > 0.8 ? "PENDING" : "CONFIRMED";
+					const role = c === 0 ? "Cônjuge" : "Acompanhante";
+					companionRecords.push({
+						id: `gcp_seed_${eventSlug}_${pad(g + 1, 4)}_${c + 1}`,
+						guestId,
+						name: `${role} ${pick(rng, ALL_FIRST_NAMES)}`,
+						status: companionStatus,
+					});
+					if (companionStatus === "CONFIRMED") companionBudget -= 1;
 				}
 			}
+		}
 
-			// Additional non-confirmed guests: pending/declined/waiting/maybe/cancelled.
-			const extras = Math.round(plan.capacity * (0.1 + rng() * 0.25));
-			for (let g = 0; g < extras; g++) {
-				const roll = rng();
-				const status: GuestSeed["status"] =
-					roll < 0.45
-						? "PENDING"
-						: roll < 0.68
-							? "DECLINED"
-							: roll < 0.82
-								? "WAITING"
-								: roll < 0.9
-									? "MAYBE"
-									: "CANCELLED";
-				const type = pick(rng, [
+		// Non-confirmed guests: pending / declined / waiting, sized so the
+		// lists look alive but never approach the capacity.
+		const extras = Math.min(
+			plan.capacity -
+				plan.confirmedGuests -
+				companionBudget +
+				randInt(rng, 3, 10),
+			Math.round(plan.capacity * 0.3),
+		);
+		for (let g = 0; g < Math.max(0, extras); g++) {
+			const roll = rng();
+			const status: GuestStatus =
+				roll < 0.5 ? "PENDING" : roll < 0.78 ? "DECLINED" : "WAITING";
+			addGuest(plan.confirmedGuests + g + 1, {
+				name: personName(rng),
+				type: pick(rng, [
 					"FAMILY",
 					"FRIEND",
 					"COLLEAGUE",
 					"VIP",
 					"OTHER",
-				] as const);
-				const group = pick(
-					rng,
-					type === "FAMILY"
-						? FAMILY_GROUPS
-						: type === "FRIEND"
-							? FRIEND_GROUPS
-							: type === "COLLEAGUE"
-								? WORK_GROUPS
-								: type === "VIP"
-									? VIP_GROUPS
-									: OTHER_GROUPS,
-				);
-				const isMale = rng() > 0.5;
-				guests.push({
-					record: {
-						id: `gst_${pad(plan.index + 1)}_${pad(guestRecords.length + 1, 4)}_x`,
-						eventId: plan.id,
-						name: `${isMale ? pick(rng, MALE_NAMES) : pick(rng, FEMALE_NAMES)} ${pick(rng, SURNAMES)}`,
-						phone: `+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`,
-						group,
-						type,
-						status,
-						companionsLimit: status === "DECLINED" ? 0 : randInt(rng, 0, 1),
-					},
-					confirmed: false,
-					status,
-					companionsLimit: 0,
-				});
-			}
-		}
-
-		// DRAFT events: handful of pending guests.
-		if (plan.status === "DRAFT") {
-			for (let g = 0; g < randInt(rng, 3, 8); g++) {
-				guests.push({
-					record: {
-						id: `gst_${pad(plan.index + 1)}_${pad(guestRecords.length + 1, 4)}_d`,
-						eventId: plan.id,
-						name: `${pick(rng, MALE_NAMES)} ${pick(rng, SURNAMES)}`,
-						type: "FAMILY",
-						group: "Família",
-						status: "PENDING",
-						companionsLimit: 0,
-					},
-					confirmed: false,
-					status: "PENDING",
-					companionsLimit: 0,
-				});
-			}
-		}
-
-		// Persist guests (track ids already in records), invitations + junction.
-		for (const g of guests) {
-			if (!g.record.id.includes("_x") && !g.record.id.includes("_d")) {
-				continue; // already pushed for companions path
-			}
-			guestRecords.push(g.record);
-		}
-		// fix duplicate padding: recompute stable global guest ids now.
-		const guestIdMap = new Map<string, string>();
-		guests.forEach((g, gi) => {
-			const stable = `gst_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
-			guestIdMap.set(g.record.id, stable);
-			g.record.id = stable;
-		});
-		// Restore companion guest FKs to stable ids.
-		for (const c of companionRecords) {
-			const stable = guestIdMap.get(c.guestId);
-			if (stable) c.guestId = stable;
-		}
-
-		for (const [gi, g] of guests.entries()) {
-			const guestId = `gst_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
-			if (!guestRecords.some((r) => r.id === guestId))
-				guestRecords.push({ ...g.record, id: guestId });
-
-			const invStatus: GuestInvitationStatus =
-				g.status === "CONFIRMED"
-					? "RESPONDED"
-					: g.status === "DECLINED"
-						? "RESPONDED"
-						: g.status === "MAYBE"
-							? "RESPONDED"
-							: g.status === "CANCELLED"
-								? "CANCELLED"
-								: g.status === "WAITING"
-									? "OPENED"
-									: rng() < 0.2
-										? "CREATED"
-										: randInt(rng, 0, 1) === 0
-											? "SENT"
-											: "OPENED";
-			const rsvp: RsvpStatus =
-				g.status === "CONFIRMED"
-					? "CONFIRMED"
-					: g.status === "DECLINED"
-						? "DECLINED"
-						: g.status === "MAYBE"
-							? "MAYBE"
-							: "PENDING";
-			const invId = `gi_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`;
-			guestInvitationRecords.push({
-				id: invId,
-				eventId: plan.id,
-				code: `MUX-${pad(plan.index + 1)}-${pad(gi + 1, 3)}`,
-				status: invStatus,
-				rsvpStatus: rsvp,
-				sentAt: invStatus === "CREATED" ? null : daysAgo(randInt(rng, 20, 70)),
-				openedAt:
-					invStatus === "RESPONDED" || invStatus === "OPENED"
-						? daysAgo(randInt(rng, 15, 60))
-						: null,
-				respondedAt:
-					invStatus === "RESPONDED" ? daysAgo(randInt(rng, 10, 50)) : null,
+				] as const),
+				status,
+				phone: phone(rng),
+				// A companion slot is only meaningful while hope remains.
+				companionsLimit: status === "PENDING" ? randInt(rng, 0, 1) : 0,
+				suffix: "_x",
 			});
+		}
+
+		confirmedPeopleByEvent.set(plan.id, plan.confirmedGuests);
+	}
+
+	await prisma.guest.createMany({ data: guestRecords });
+	await prisma.guestCompanion.createMany({ data: companionRecords });
+	console.log(
+		`  ✅ Guests (${guestRecords.length}) / Companions (${companionRecords.length})`,
+	);
+
+	// Guest invitations: one per event, linked to a few guests. Only live
+	// (non-draft/cancelled) events carry codes.
+	for (const plan of plans) {
+		if (plan.status === "DRAFT" || plan.status === "CANCELLED") continue;
+		const rng = mulberry32(853 + plan.index * 257);
+		// Guest invitations: one per event, linked to every 4th guest. Only
+		// live (non-draft/cancelled) events carry codes.
+		const invitedGuestIds = (guestIdsByEvent.get(plan.id) ?? []).filter(
+			(_, i) => i % 4 === 0,
+		);
+		if (invitedGuestIds.length === 0) continue;
+
+		const invId = `ginv_seed_${pad(plan.index + 1)}`;
+		const responded = plan.confirmedGuests > 0 && plan.status !== "PLANNING";
+		guestInvitationRecords.push({
+			id: invId,
+			eventId: plan.id,
+			code: uniqueSeedInvitationCode(rng, seededInvitationCodes),
+			status: responded ? "RESPONDED" : pick(rng, ["SENT", "OPENED"] as const),
+			rsvpStatus: (responded
+				? plan.status === "COMPLETED"
+					? "CONFIRMED"
+					: pick(rng, ["CONFIRMED", "MAYBE"] as const)
+				: "PENDING") as RsvpStatus,
+			sentAt: daysAgo(randInt(rng, 20, 70)),
+			openedAt: responded
+				? daysAgo(randInt(rng, 15, 60))
+				: rng() > 0.5
+					? daysAgo(randInt(rng, 5, 15))
+					: null,
+			respondedAt: responded ? daysAgo(randInt(rng, 10, 50)) : null,
+		});
+		for (const guestId of invitedGuestIds) {
 			invitationGuestRecords.push({
-				id: `ig_${pad(plan.index + 1)}_${pad(gi + 1, 4)}`,
+				id: `ig_seed_${pad(plan.index + 1)}_${guestId.slice(-6)}`,
 				invitationId: invId,
 				guestId,
 			});
 		}
 	}
-	// De-duplicate pending guest records pushed twice.
-	const seen = new Set<string>();
-	const uniqueGuests: SeededGuest[] = [];
-	for (const r of guestRecords) {
-		if (!seen.has(r.id)) {
-			seen.add(r.id);
-			uniqueGuests.push(r);
-		}
-	}
-
-	await prisma.guest.createMany({ data: uniqueGuests });
-	await prisma.guestCompanion.createMany({ data: companionRecords });
 	await prisma.guestInvitation.createMany({ data: guestInvitationRecords });
 	await prisma.invitationGuest.createMany({ data: invitationGuestRecords });
 	console.log(
-		`  ✅ Guests (${uniqueGuests.length}) / Companions (${companionRecords.length}) / Invitations (${guestInvitationRecords.length})`,
+		`  ✅ Guest Invitations (${guestInvitationRecords.length}) / Links (${invitationGuestRecords.length})`,
 	);
 
-	// ── 7. TABLES + SEATING ────────────────────────────────────────────
+	// ── 7. TABLES + SEATING ───────────────────────────────────────────
 	const tableRecords: Prisma.TableCreateManyInput[] = [];
 	const tableGuestRecords: Prisma.TableGuestCreateManyInput[] = [];
 
 	for (const plan of plans) {
-		if (plan.status === "CANCELLED" || plan.status === "DRAFT") continue;
+		if (plan.status === "DRAFT" || plan.status === "CANCELLED") continue;
 		const rng = mulberry32(823 + plan.index * 181);
-		const confirmedCount = Math.floor(plan.capacity * plan.fillRatio);
-		if (confirmedCount <= 0) continue;
+		const confirmed = plan.confirmedGuests;
+		if (confirmed <= 0) continue;
 
-		// Table capacity pool must sum to <= event.capacity.
-		let tableCapacity = 0;
+		// Table sizes sum exactly to the event capacity: 6-10 seat tables with
+		// the last one absorbing the remainder. Free seats inside partially
+		// filled tables provide the headroom, never an over-capacity layout.
 		const caps: number[] = [];
-		while (tableCapacity + 10 <= plan.capacity) {
-			const size = randInt(rng, 6, 10);
+		let covered = 0;
+		while (plan.capacity - covered >= 12) {
+			const size = Math.min(randInt(rng, 6, 10), plan.capacity - covered);
 			caps.push(size);
-			tableCapacity += size;
+			covered += size;
 		}
-		// Remainder (0-9 seats) to reach capacity, only when it makes a usable table.
-		const rest = plan.capacity - tableCapacity;
-		if (rest > 0 && (rest >= 6 || caps.length >= 4)) {
-			caps.push(rest);
-			tableCapacity = plan.capacity;
-		}
-		// One spare empty table sometimes, kept within capacity.
-		const spare =
-			caps.length >= 4 && rng() > 0.6 && tableCapacity + 8 <= plan.capacity;
-		if (spare) {
-			caps.push(8);
-			tableCapacity += 8;
-		}
+		const rest = plan.capacity - covered;
+		if (rest > 0) caps.push(rest);
 
 		caps.forEach((cap, idx) => {
 			tableRecords.push({
-				id: `tbl_${pad(plan.index + 1)}_${idx + 1}`,
+				id: `tbl_seed_${pad(plan.index + 1)}_${idx + 1}`,
 				eventId: plan.id,
 				name: `Mesa ${idx + 1}`,
 				number: idx + 1,
@@ -2005,62 +2035,52 @@ async function main() {
 			});
 		});
 
-		// Seat guests greedily; the spare table stays empty, and no table is
-		// over-subscribed beyond its capacity.
-		const seatableCaps = spare ? caps.slice(0, -1) : caps;
-		const seatsAvailable = seatableCaps.reduce((a, b) => a + b, 0);
-		const seatingCount = Math.min(confirmedCount, seatsAvailable);
-		const seats: { table: number; slot: number }[] = [];
-		seatableCaps.forEach((cap, ti) => {
+		// Seat confirmed guests greedily (companions sit with their guest in
+		// real life but are not seats here — the API only assigns guests).
+		const seats: Array<{ table: number; slot: number }> = [];
+		caps.forEach((cap, ti) => {
 			for (let s = 0; s < cap; s++) seats.push({ table: ti, slot: s });
 		});
-		const placed = seats.slice(0, seatingCount);
-		for (const [p, guestId] of placed.map(
-			(s, k) => [s, `gst_${pad(plan.index + 1)}_${pad(k + 1, 4)}`] as const,
-		)) {
+		const seatingCount = Math.min(confirmed, seats.length);
+		for (let k = 0; k < seatingCount; k++) {
+			const seat = seats[k];
+			if (!seat) continue;
 			tableGuestRecords.push({
-				id: `tg_${pad(plan.index + 1)}_${p.slot + 1}_${p.table + 1}`,
-				tableId: `tbl_${pad(plan.index + 1)}_${p.table + 1}`,
-				guestId,
+				id: `tg_seed_${pad(plan.index + 1)}_${seat.table + 1}_${seat.slot + 1}`,
+				tableId: `tbl_seed_${pad(plan.index + 1)}_${seat.table + 1}`,
+				guestId: `gst_seed_${pad(plan.index + 1)}_${pad(k + 1, 4)}`,
 			});
 		}
 	}
 	await prisma.table.createMany({ data: tableRecords });
 	await prisma.tableGuest.createMany({ data: tableGuestRecords });
 	console.log(
-		`  ✅ Tables (${tableRecords.length}) / Seats (${tableGuestRecords.length})`,
+		`  ✅ Tables (${tableRecords.length}) / Table Guests (${tableGuestRecords.length})`,
 	);
 
-	// ── 8. TASKS + SCHEDULES ───────────────────────────────────────────
+	// ── 8. TASKS + SCHEDULES ──────────────────────────────────────────
 	const taskRecords: Prisma.TaskCreateManyInput[] = [];
 	const scheduleRecords: Prisma.ScheduleCreateManyInput[] = [];
+	const allCategories = Object.keys(TASK_TEMPLATES) as TaskCategory[];
 
 	for (const plan of plans) {
 		const rng = mulberry32(941 + plan.index * 271);
-		const cats = Object.keys(TASKS_BY_CATEGORY);
-		const count =
-			plan.status === "DRAFT"
-				? randInt(rng, 2, 4)
-				: plan.status === "CANCELLED"
-					? randInt(rng, 3, 6)
-					: randInt(rng, 10, 16);
-		const pickedCats = new Set<string>();
 
-		for (let j = 0; j < count; j++) {
-			let cat = pick(rng, cats);
-			if (pickedCats.has(cat))
-				cat = cats.find((c) => !pickedCats.has(c)) ?? cat;
-			pickedCats.add(cat);
-			const template = pick(
-				rng,
-				TASKS_BY_CATEGORY[cat] ?? TASKS_BY_CATEGORY.OTHER ?? [""],
-			);
+		const taskCount =
+			plan.status === "DRAFT"
+				? randInt(rng, 2, 5)
+				: plan.status === "CANCELLED"
+					? randInt(rng, 5, 8)
+					: randInt(rng, 9, 14);
+		for (let j = 0; j < taskCount; j++) {
+			const cat = allCategories[j % allCategories.length] as TaskCategory;
+			const template = pick(rng, TASK_TEMPLATES[cat]);
 			const completed =
 				plan.status === "COMPLETED"
-					? rng() > 0.3
+					? rng() > 0.25
 					: plan.status === "CANCELLED"
-						? rng() > 0.6
-						: rng() > 0.65;
+						? rng() > 0.7
+						: rng() > 0.6;
 			const overdue = !completed && plan.status === "PLANNING" && rng() > 0.7;
 			const dueDate = completed
 				? daysAgo(randInt(rng, 5, 60))
@@ -2074,12 +2094,18 @@ async function main() {
 					: pick(rng, ["TODO", "IN_PROGRESS"] as const);
 
 			taskRecords.push({
-				id: `tsk_${pad(plan.index + 1)}_${j + 1}`,
+				id: `tsk_seed_${pad(plan.index + 1)}_${j + 1}`,
 				eventId: plan.id,
 				title: template,
 				description: `Tarefa de ${cat.toLowerCase()} para o planeamento do evento.`,
-				category: cat as TaskCategory,
-				priority: pick(rng, ["LOW", "MEDIUM", "HIGH", "URGENT"] as const),
+				category: cat,
+				priority: pick(rng, [
+					"LOW",
+					"MEDIUM",
+					"MEDIUM",
+					"HIGH",
+					"URGENT",
+				] as const) as TaskPriority,
 				status,
 				assignedTo: plan.partnerId,
 				dueDate,
@@ -2089,14 +2115,10 @@ async function main() {
 			});
 		}
 
-		// Schedules
+		// Schedules follow the event date; COMPLETED events ran everything,
+		// CANCELLED events keep the plan but flagged as cancelled.
 		const template =
-			plan.type === "WEDDING" ? SCHEDULES_WEDDING : SCHEDULES_ENGAGEMENT;
-		const eventDate =
-			(budgetRecords.find((b) => b.eventId === plan.id)?.id
-				? eventRecords.find((e) => e.id === plan.id)?.eventDate
-				: null) ?? monthsAhead(2);
-		const baseDate = new Date(eventDate);
+			plan.type === "WEDDING" ? SCHEDULE_WEDDING : SCHEDULE_ENGAGEMENT;
 		const scheduleStatus: ScheduleStatus =
 			plan.status === "COMPLETED"
 				? "COMPLETED"
@@ -2104,13 +2126,13 @@ async function main() {
 					? "CANCELLED"
 					: "PENDING";
 		template.forEach((s, si) => {
-			const start = new Date(baseDate);
+			const start = new Date(plan.eventDate);
 			start.setHours(Math.floor(s.start), Math.round((s.start % 1) * 60), 0, 0);
-			const end = new Date(baseDate);
+			const end = new Date(plan.eventDate);
+			// Hours >= 24 roll into the next day (end 25 → 01:00 next day).
 			end.setHours(Math.floor(s.end), Math.round((s.end % 1) * 60), 0, 0);
-			if (s.end < s.start) end.setDate(end.getDate() + 1);
 			scheduleRecords.push({
-				id: `sch_${pad(plan.index + 1)}_${si + 1}`,
+				id: `sch_seed_${pad(plan.index + 1)}_${si + 1}`,
 				eventId: plan.id,
 				title: s.title,
 				description: s.desc,
@@ -2128,9 +2150,10 @@ async function main() {
 		`  ✅ Tasks (${taskRecords.length}) / Schedules (${scheduleRecords.length})`,
 	);
 
-	// ── 9. INVENTORY + MOVEMENTS ───────────────────────────────────────
+	// ── 9. INVENTORY + MOVEMENTS ──────────────────────────────────────
 	const inventoryRecords: Prisma.InventoryItemCreateManyInput[] = [];
 	const movementRecords: Prisma.InventoryMovementCreateManyInput[] = [];
+	const inventorySpendByEvent = new Map<string, number>();
 
 	for (const plan of plans) {
 		const rng = mulberry32(1021 + plan.index * 149);
@@ -2139,61 +2162,62 @@ async function main() {
 		const count =
 			plan.status === "DRAFT"
 				? 2
-				: Math.min(pool.length, randInt(rng, 6, pool.length));
-		const selected = [...pool];
-		selected.sort(() => rng() - 0.5);
-		const chosen = selected.slice(0, count);
+				: plan.status === "CANCELLED"
+					? 3
+					: Math.min(pool.length, randInt(rng, 7, pool.length));
+		const chosen = [...pool].sort(() => rng() - 0.5).slice(0, count);
 
-		// The budget is now derived from the inventory and the suppliers, so the
-		// quantities have to stay inside the target instead of being random:
-		// each item gets a share of the inventory slice of the budget, weighted
-		// so a case of water and a generator both appear in a sensible amount.
-		const inventorySlice = Math.round(
+		// Quantities are normalised so sum(price × planned) equals the event's
+		// inventory slice of the budget: the derived "totalSpent" the API
+		// computes stays inside the planned amount.
+		const slice = round5k(
 			Number(
 				budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0,
 			) * 0.18,
 		);
-		const weights = chosen.map(() => 1 + rng() * 14);
+		const weights = chosen.map(() => 1 + rng() * 12);
 		const weightedCost = chosen.reduce(
-			(sum, item, i) => sum + item.price * (weights[i] ?? 1),
+			(sum, item, i) =>
+				sum + randInt(rng, item.min, item.max) * (weights[i] ?? 1),
 			0,
 		);
-		const scale = weightedCost > 0 ? inventorySlice / weightedCost : 0;
+		const scale = weightedCost > 0 ? slice / weightedCost : 0;
+		let spent = 0;
 
 		for (const [j, item] of chosen.entries()) {
-			// Quantity proportional to the weight, normalised so the total
-			// planned value of the slice matches the inventory share of the
-			// budget: sum(price x quantity) = inventorySlice.
+			const unitPrice = randInt(rng, item.min, item.max);
 			const plannedQuantity = Math.max(
 				1,
 				Math.round((weights[j] ?? 1) * scale),
 			);
 			const roll = rng();
-			// Some items full, some low, some zero — analytics friendly.
+			// A healthy mix of full, partial and not-yet-started items.
 			const currentQuantity =
-				roll < 0.2
-					? 0
-					: roll < 0.5
-						? Math.round(plannedQuantity * (0.1 + rng() * 0.4))
-						: plannedQuantity;
-			const status: InventoryStatus =
 				plan.status === "COMPLETED"
+					? plannedQuantity
+					: roll < 0.2
+						? 0
+						: roll < 0.55
+							? Math.max(1, Math.round(plannedQuantity * (0.2 + rng() * 0.4)))
+							: plannedQuantity;
+			const status: InventoryStatus =
+				currentQuantity >= plannedQuantity
 					? "COMPLETED"
-					: currentQuantity >= plannedQuantity
-						? "COMPLETED"
-						: currentQuantity > 0
-							? "IN_PROGRESS"
-							: "PENDING";
+					: currentQuantity > 0
+						? "IN_PROGRESS"
+						: "PENDING";
+			const itemId = `inv_seed_${pad(plan.index + 1)}_${j + 1}`;
+
 			inventoryRecords.push({
-				id: `inv_${pad(plan.index + 1)}_${j + 1}`,
+				id: itemId,
 				eventId: plan.id,
 				name: item.name,
-				category: item.cat as InventoryCategory,
+				category: item.category,
 				plannedQuantity,
 				currentQuantity,
 				status,
-				unit: item.unit as InventoryUnit,
-				unitPrice: item.price,
+				unit: item.unit,
+				unitPrice,
 				notes:
 					status === "PENDING"
 						? "A aguardar entrega."
@@ -2201,31 +2225,31 @@ async function main() {
 							? "Stock abaixo do esperado."
 							: null,
 			});
+			spent += currentQuantity * unitPrice;
 
-			// Movements
 			if (currentQuantity > 0) {
 				movementRecords.push({
-					id: `mv_${pad(plan.index + 1)}_${j + 1}_1`,
-					inventoryItemId: `inv_${pad(plan.index + 1)}_${j + 1}`,
-					type: "PURCHASE",
+					id: `mv_seed_${pad(plan.index + 1)}_${j + 1}_1`,
+					inventoryItemId: itemId,
+					type: "PURCHASE" as MovementType,
 					quantity: currentQuantity,
-					unitPrice: item.price,
-					totalCost: Math.round(currentQuantity * item.price),
+					unitPrice,
+					totalCost: currentQuantity * unitPrice,
 					reason: "Compra inicial ao fornecedor",
 					createdBy: plan.ownerId,
 					createdAt: daysAgo(randInt(rng, 10, 90)),
 				});
 			}
-			if (rng() > 0.6) {
+			if (currentQuantity > 0 && rng() > 0.6) {
 				movementRecords.push({
-					id: `mv_${pad(plan.index + 1)}_${j + 1}_2`,
-					inventoryItemId: `inv_${pad(plan.index + 1)}_${j + 1}`,
-					type: "CONSUMPTION",
+					id: `mv_seed_${pad(plan.index + 1)}_${j + 1}_2`,
+					inventoryItemId: itemId,
+					type: "CONSUMPTION" as MovementType,
 					quantity: Math.max(
 						1,
-						Math.round(plannedQuantity * (0.05 + rng() * 0.3)),
+						Math.round(currentQuantity * (0.05 + rng() * 0.2)),
 					),
-					unitPrice: item.price,
+					unitPrice,
 					totalCost: 0,
 					reason: "Consumo em ensaio/reunião de planeamento",
 					createdBy: plan.partnerId,
@@ -2233,42 +2257,47 @@ async function main() {
 				});
 			}
 		}
+		inventorySpendByEvent.set(plan.id, spent);
 	}
+
 	await prisma.inventoryItem.createMany({ data: inventoryRecords });
 	await prisma.inventoryMovement.createMany({ data: movementRecords });
 	console.log(
 		`  ✅ Inventory (${inventoryRecords.length}) / Movements (${movementRecords.length})`,
 	);
 
-	// ── 10. FOOD PLAN + CHECKLIST ──────────────────────────────────────
+	// ── 10. FOOD PLAN + CHECKLIST ─────────────────────────────────────
 	const foodPlanRecords: Prisma.FoodPlanCreateManyInput[] = [];
 	const foodPlanItemRecords: Prisma.FoodPlanItemCreateManyInput[] = [];
 	const checklistRecords: Prisma.ChecklistItemCreateManyInput[] = [];
 
 	for (const plan of plans) {
-		// ── Food plan: one per event, at most one catering supplier ──
 		const rngF = mulberry32(911 + plan.index * 97);
-		// The catering supplier, when the event has one, is the plan's supplier.
-		const catering = supplierRecords.find(
-			(s) => s.eventId === plan.id && s.category === "CATERING",
-		);
-		const planId = `fpl_${pad(plan.index + 1)}_${SEED_PREFIX}`;
+
+		// One food plan per event, attached to the catering supplier when
+		// the event has a committed one (the API allows at most one).
+		const planId = `fpl_seed_${pad(plan.index + 1)}`;
+		const cateringId = cateringSupplierByEvent.get(plan.id) ?? null;
 		foodPlanRecords.push({
 			id: planId,
 			eventId: plan.id,
-			supplierId: catering?.id ?? null,
+			supplierId: cateringId,
 			notes:
 				plan.status === "DRAFT"
 					? "Menu por definir com o fornecedor."
-					: "Menu aprovado com o fornecedor.",
+					: plan.status === "CANCELLED"
+						? "Menu suspenso — evento cancelado."
+						: "Menu aprovado com o fornecedor.",
 		});
 
+		// Quantities are derived from the number of confirmed people, not
+		// raw capacity, so the plan matches what the guest module reports.
+		const diners = Math.max(1, confirmedPeopleByEvent.get(plan.id) ?? 0);
 		const menuCount =
 			plan.status === "DRAFT" ? randInt(rngF, 3, 5) : randInt(rngF, 6, 10);
 		const menu = [...FOOD_PLAN_MENU].sort(() => rngF() - 0.5);
 		for (const [j, dish] of menu.slice(0, menuCount).entries()) {
 			const roll = rngF();
-			// Completed events have everything prepared, drafts barely anything.
 			const status: FoodPlanStatus =
 				plan.status === "COMPLETED"
 					? "COMPLETED"
@@ -2280,12 +2309,17 @@ async function main() {
 								? "IN_PROGRESS"
 								: "PENDING";
 			foodPlanItemRecords.push({
-				id: `fpi_${pad(plan.index + 1)}_${j + 1}_${SEED_PREFIX}`,
+				id: `fpi_seed_${pad(plan.index + 1)}_${j + 1}`,
 				eventId: plan.id,
 				foodPlanId: planId,
 				name: dish.name,
 				category: dish.category,
-				quantity: Math.round(plan.capacity * (dish.share ?? 1)),
+				quantity: Math.max(
+					1,
+					Math.round(
+						diners * (plan.status === "DRAFT" ? 0.15 : 1) * (dish.share ?? 1),
+					),
+				),
 				unit: dish.unit,
 				description: dish.desc,
 				status,
@@ -2293,9 +2327,9 @@ async function main() {
 			});
 		}
 
-		// ── Checklist ───────────────────────────────────────────────
-		// The status is derived, exactly as the API derives it: a supplier item
-		// is complete when the supplier is confirmed and fully paid, an
+		// ── Checklist: API-derived + manual items ──
+		// Statuses are derived exactly like the API derives them: a supplier
+		// item is complete when the supplier is confirmed and fully paid; an
 		// inventory item when the planned quantity was reached.
 		let position = 0;
 		const nextPosition = () => (position += 1);
@@ -2316,10 +2350,12 @@ async function main() {
 						? "COMPLETED"
 						: supplier.status === "CONFIRMED"
 							? "IN_PROGRESS"
-							: "PENDING";
+							: supplier.status === "COMPLETED"
+								? "COMPLETED"
+								: "PENDING";
 
 			checklistRecords.push({
-				id: `chk_sup_${pad(plan.index + 1)}_${nextPosition()}`,
+				id: `chk_seed_sup_${pad(plan.index + 1)}_${nextPosition()}`,
 				eventId: plan.id,
 				title: `Contratar ${supplier.name}`,
 				description: "Estado e pagamento do fornecedor.",
@@ -2343,7 +2379,7 @@ async function main() {
 						: "PENDING";
 
 			checklistRecords.push({
-				id: `chk_inv_${pad(plan.index + 1)}_${nextPosition()}`,
+				id: `chk_seed_inv_${pad(plan.index + 1)}_${nextPosition()}`,
 				eventId: plan.id,
 				title: `Adquirir ${item.name}`,
 				description: "Aquisição e conferência do inventário.",
@@ -2356,25 +2392,30 @@ async function main() {
 			});
 		}
 
-		// A few manual items, which the API never touches.
 		const manual = [...CHECKLIST_TEMPLATES].sort(() => rngF() - 0.5);
-		const manualCount = plan.status === "DRAFT" ? 1 : 3;
+		const manualCount =
+			plan.status === "DRAFT" ? 1 : plan.status === "CANCELLED" ? 2 : 4;
 		for (const [j, template] of manual.slice(0, manualCount).entries()) {
 			const status: ChecklistStatus =
 				plan.status === "COMPLETED"
 					? "COMPLETED"
-					: plan.status === "DRAFT"
-						? "PENDING"
-						: pick(rngF, ["PENDING", "IN_PROGRESS", "COMPLETED"] as const);
+					: plan.status === "CANCELLED"
+						? "CANCELLED"
+						: plan.status === "DRAFT"
+							? "PENDING"
+							: pick(rngF, ["PENDING", "IN_PROGRESS", "COMPLETED"] as const);
 			checklistRecords.push({
-				id: `chk_man_${pad(plan.index + 1)}_${j + 1}`,
+				id: `chk_seed_man_${pad(plan.index + 1)}_${j + 1}`,
 				eventId: plan.id,
 				title: template.title,
 				description: template.desc,
 				status,
 				autoManaged: false,
 				position: nextPosition(),
-				dueDate: daysAhead(randInt(rngF, 5, 60)),
+				dueDate:
+					plan.status === "COMPLETED"
+						? daysAgo(randInt(rngF, 20, 60))
+						: daysAhead(randInt(rngF, 5, 60)),
 				completedAt:
 					status === "COMPLETED" ? daysAgo(randInt(rngF, 1, 20)) : null,
 			});
@@ -2387,36 +2428,32 @@ async function main() {
 		`  ✅ Food Plans (${foodPlanRecords.length}) / Items (${foodPlanItemRecords.length}) / Checklist (${checklistRecords.length})`,
 	);
 
-	// ── 11. NOTIFICATIONS + AUDIT LOGS ─────────────────────────────────
+	// ── 11. NOTIFICATIONS + AUDIT LOGS ────────────────────────────────
 	const notificationRecords: Prisma.NotificationCreateManyInput[] = [];
 	const auditRecords: Prisma.AuditLogCreateManyInput[] = [];
 
 	for (const plan of plans) {
 		const rng = mulberry32(1307 + plan.index * 179);
-		const members = memberRecords.filter(
-			(m) => m.eventId === plan.id && m.status === "ACTIVE",
-		);
-		const target =
-			members[randInt(rng, 0, Math.max(0, members.length - 1))]?.userId ??
-			plan.ownerId;
+		const members = memberUserIdsByEvent.get(plan.id) ?? [plan.ownerId];
+		const target = members[randInt(rng, 0, members.length - 1)] ?? plan.ownerId;
 
-		const notificationTypes: NotificationType[] = [
+		const notificationTypes = [
 			"FINANCE",
 			"TASKS",
 			"GUESTS",
 			"INVENTORY",
 			"EVENT",
-		];
+		] as const;
 		const nCount = plan.status === "DRAFT" ? 0 : randInt(rng, 1, 3);
 		for (let n = 0; n < nCount; n++) {
 			const type = pick(rng, notificationTypes);
 			notificationRecords.push({
-				id: `ntf_${pad(plan.index + 1)}_${n + 1}`,
+				id: `ntf_seed_${pad(plan.index + 1)}_${n + 1}`,
 				userId: target,
 				eventId: plan.id,
 				type,
-				title: `Atualização de ${type.toLowerCase()} — ${plan.id}`,
-				message: `Existem novidades no evento ${plan.id}: verifique a secção de ${type.toLowerCase()}.`,
+				title: `Atualização de ${type.toLowerCase()}`,
+				message: `Existem novidades no evento: verifique a secção de ${type.toLowerCase()}.`,
 				priority: pick(rng, [
 					"INFO",
 					"INFO",
@@ -2429,25 +2466,15 @@ async function main() {
 			});
 		}
 
-		const entities = [
-			"Event",
-			"Budget",
-			"Supplier",
-			"FoodPlan",
-			"ChecklistItem",
-			"Guest",
-			"Task",
-			"InventoryItem",
-		];
 		const aCount = plan.status === "DRAFT" ? 1 : 2;
 		for (let a = 0; a < aCount; a++) {
 			auditRecords.push({
-				id: `audit_${pad(plan.index + 1)}_${a + 1}`,
+				id: `audit_seed_${pad(plan.index + 1)}_${a + 1}`,
 				eventId: plan.id,
 				userId: target,
-				action: (["CREATE", "UPDATE"] as const)[a % 2] ?? "CREATE",
-				entity: pick(rng, entities),
-				entityId: `${pick(rng, ["evt", "bgt", "sup", "fpl", "chk", "gst", "tsk"])}_${plan.index + 1}`,
+				action: a === 0 ? "CREATE" : "UPDATE",
+				entity: pick(rng, ["Event", "Budget", "Supplier", "Guest", "Task"]),
+				entityId: plan.id,
 				newData: { note: "atualizado no âmbito do seed" },
 				createdAt: daysAgo(randInt(rng, 1, 40)),
 			});
@@ -2459,29 +2486,15 @@ async function main() {
 		`  ✅ Notifications (${notificationRecords.length}) / Audit Logs (${auditRecords.length})`,
 	);
 
-	// ── 12. DEDICATIONS ────────────────────────────────────────────────
-	// Three examples that exercise every visible state of the module, so the
-	// list, the stats cards and the access rules can all be checked in dev:
+	// ── 12. DEDICATIONS ───────────────────────────────────────────────
+	// Three examples exercising every visible state of the module:
 	//   1. locked + NOT_STARTED → owner only, nothing written yet
 	//   2. locked + DRAFT       → owner only, text in progress
 	//   3. shared + READY       → explicit member grants, already opened once
 	const dedicationRecords: Prisma.DedicationCreateManyInput[] = [];
 	const dedicationViewerRecords: Prisma.DedicationViewerCreateManyInput[] = [];
 
-	/** Active members of a plan, so a grant never points at a stale membership. */
-	const activeMembersOf = (plan: EventPlan) =>
-		memberRecords.filter(
-			(m): m is typeof m & { id: string } =>
-				m.eventId === plan.id &&
-				m.status === "ACTIVE" &&
-				typeof m.id === "string",
-		);
-
-	/**
-	 * Tiptap-shaped document, mirroring what the editor actually stores. An
-	 * empty document is `{ doc, [paragraph] }` — the same canonical shape the
-	 * backend's `EMPTY_RICH_TEXT` uses, never `{ doc, content: [] }`.
-	 */
+	/** Tiptap-shaped document, mirroring what the editor actually stores. */
 	const doc = (...paragraphs: string[]): Prisma.InputJsonValue => ({
 		type: "doc",
 		content:
@@ -2493,66 +2506,69 @@ async function main() {
 				: [{ type: "paragraph" }],
 	});
 
-	// The partner always exists and is always ACTIVE, which makes them the safe
-	// viewer to grant. The owner is deliberately never granted.
-	const wedding: EventPlan = plans[0] as EventPlan;
-	const engagement: EventPlan = plans[1] as EventPlan;
-	const partnerMember = (plan: EventPlan) => `mem_${plan.partnerId}_${plan.id}`;
-
+	const wedding = plans[0];
+	if (!wedding) throw new Error("Event plan 0 missing");
 	dedicationRecords.push(
 		{
-			id: `ded_vow_${SEED_PREFIX}`,
+			id: "ded_seed_vows",
 			eventId: wedding.id,
 			ownerId: wedding.ownerId,
 			title: "Os nossos votos",
-			type: "WEDDING_VOW",
-			status: "NOT_STARTED",
+			type: "WEDDING_VOW" as DedicationType,
+			status: "NOT_STARTED" as DedicationStatus,
 			content: doc(),
 			isLocked: true,
 			lastOpenedAt: null,
 		},
 		{
-			id: `ded_vow_${SEED_PREFIX}_2`,
+			id: "ded_seed_letter",
 			eventId: wedding.id,
 			ownerId: wedding.ownerId,
-			title: "Carta à minha noiva",
-			type: "DEDICATION",
-			status: "DRAFT",
+			title: "Carta para o grande dia",
+			type: "DEDICATION" as DedicationType,
+			status: "DRAFT" as DedicationStatus,
 			content: doc(
-				"Amor, ainda não sei escrever isto sem te rir de mim a meio.",
+				"Amor, ainda não sei escrever isto sem te rir a meio.",
 				"Prometo-te todos os pequenos gestos de todos os dias.",
 			),
 			isLocked: true,
 			lastOpenedAt: daysAgo(6),
 		},
-		{
-			id: `ded_vow_${SEED_PREFIX}_3`,
-			eventId: engagement.id,
-			ownerId: engagement.ownerId,
-			title: "Votos de noivado",
-			type: "ENGAGEMENT_VOW",
-			status: "READY",
-			content: doc(
-				"Escolhi-te num café cheio de gente e não voltei a olhar para outra.",
-				"Obrigado por me fazeres rir primeiro.",
-			),
-			// Shared: access is only ever granted through explicit membership.
-			isLocked: false,
-			lastOpenedAt: daysAgo(2),
-		},
 	);
 
-	// Grant the partner on the shared one, plus an admin/editor when the plan
-	// happens to have one, so the "who can see this" column has >1 row.
-	const sharedPlanMembers = activeMembersOf(engagement).filter(
-		(m) => m.userId !== engagement.ownerId,
+	// The shared one lives on an engagement that is still being planned, so
+	// the sharing flow can be exercised end to end. Grants always point at
+	// active memberships; the owner is deliberately never granted.
+	const shared = plans.find(
+		(p) => p.type === "ENGAGEMENT" && p.status === "PLANNING",
 	);
-	for (const [index, member] of sharedPlanMembers.entries()) {
+	if (!shared)
+		throw new Error(
+			"No planning engagement available for the shared dedication",
+		);
+	dedicationRecords.push({
+		id: "ded_seed_shared",
+		eventId: shared.id,
+		ownerId: shared.ownerId,
+		title: "Votos de noivado",
+		type: "ENGAGEMENT_VOW" as DedicationType,
+		status: "READY" as DedicationStatus,
+		content: doc(
+			"Escolhi-te num café cheio de gente e não voltei a olhar para outra.",
+			"Obrigado por me fazeres rir primeiro.",
+		),
+		isLocked: false,
+		lastOpenedAt: daysAgo(2),
+	});
+
+	const sharedMemberIds = (activeMemberIdsByEvent.get(shared.id) ?? []).filter(
+		(memberId) => memberId !== `mem_${shared.ownerId}_${shared.id}`,
+	);
+	for (const [index, memberId] of sharedMemberIds.slice(0, 3).entries()) {
 		dedicationViewerRecords.push({
-			id: `ddv_${SEED_PREFIX}_${index + 1}`,
-			dedicationId: `ded_vow_${SEED_PREFIX}_3`,
-			eventMemberId: member.id,
-			// The first viewer has already read it; the rest have not.
+			id: `ddv_seed_${index + 1}`,
+			dedicationId: "ded_seed_shared",
+			eventMemberId: memberId,
 			lastOpenedAt: index === 0 ? daysAgo(2) : null,
 		});
 	}
@@ -2563,14 +2579,8 @@ async function main() {
 		`  ✅ Dedications (${dedicationRecords.length}) / Viewers (${dedicationViewerRecords.length})`,
 	);
 
-	// A short history for the shared dedication, so the audit tab has content.
-	// `oldData`/`newData` are nullable Json columns: leaving them out of the
-	// input is how a SQL NULL is written, so only real snapshots are listed.
-	const historyPlan: EventPlan = engagement;
-	const historyEntityId = `ded_vow_${SEED_PREFIX}_3`;
-	const historyViewerMember = partnerMember(historyPlan);
-
-	type DedicationAuditInput = {
+	// History for the shared dedication, so the audit tab has content.
+	type HistoryEntry = {
 		action: string;
 		oldData?: Prisma.InputJsonValue;
 		newData?: Prisma.InputJsonValue;
@@ -2578,72 +2588,108 @@ async function main() {
 		userId?: string;
 	};
 
-	const historySeed: Prisma.AuditLogCreateManyInput[] = (
-		[
-			{
-				action: "CREATED",
-				newData: {
-					title: "Votos de noivado",
-					type: "ENGAGEMENT_VOW",
-					status: "NOT_STARTED",
-				},
-				createdAt: daysAgo(9),
+	const sharedHistoryEntries: HistoryEntry[] = [
+		{
+			action: "CREATED",
+			newData: {
+				title: "Votos de noivado",
+				type: "ENGAGEMENT_VOW",
+				status: "NOT_STARTED",
 			},
-			{
-				action: "UPDATED",
-				newData: { note: "revisão do texto" },
-				createdAt: daysAgo(5),
-			},
-			{
-				action: "STATUS_CHANGED",
-				oldData: { status: "DRAFT" },
-				newData: { status: "READY" },
-				createdAt: daysAgo(4),
-			},
-			{
-				action: "UNLOCKED",
-				oldData: { isLocked: true },
-				newData: { isLocked: false },
-				createdAt: daysAgo(3),
-			},
-			{
-				action: "VIEWER_ADDED",
-				newData: { eventMemberId: historyViewerMember },
-				createdAt: daysAgo(3),
-			},
-			// Attributed to the partner, so the history shows a viewer action and
-			// the "opened by me" stat has something to count.
-			{
-				action: "OPENED",
-				createdAt: daysAgo(2),
-				userId: historyPlan.partnerId,
-			},
-		] satisfies DedicationAuditInput[]
-	).map((row, index) => ({
-		id: `audit_ded_${SEED_PREFIX}_${index + 1}`,
-		eventId: historyPlan.id,
-		userId: row.userId ?? historyPlan.ownerId,
-		action: row.action,
-		entity: "Dedication",
-		entityId: historyEntityId,
-		oldData: row.oldData,
-		newData: row.newData,
-		createdAt: row.createdAt,
-	}));
+			createdAt: daysAgo(9),
+		},
+		{
+			action: "UPDATED",
+			newData: { note: "revisão do texto" },
+			createdAt: daysAgo(5),
+		},
+		{
+			action: "STATUS_CHANGED",
+			oldData: { status: "DRAFT" },
+			newData: { status: "READY" },
+			createdAt: daysAgo(4),
+		},
+		{
+			action: "UNLOCKED",
+			oldData: { isLocked: true },
+			newData: { isLocked: false },
+			createdAt: daysAgo(3),
+		},
+		{
+			action: "VIEWER_ADDED",
+			newData: { eventMemberId: sharedMemberIds[0] },
+			createdAt: daysAgo(3),
+		},
+		{ action: "OPENED", createdAt: daysAgo(2), userId: shared.partnerId },
+	];
 
-	await prisma.auditLog.createMany({ data: historySeed });
-	console.log(`  ✅ Dedication Audit Logs (${historySeed.length})`);
+	const sharedHistory: Prisma.AuditLogCreateManyInput[] =
+		sharedHistoryEntries.map((row, index) => ({
+			id: `audit_seed_ded_${index + 1}`,
+			eventId: shared.id,
+			userId: row.userId ?? shared.ownerId,
+			action: row.action,
+			entity: "Dedication",
+			entityId: "ded_seed_shared",
+			// Nullable Json columns: omitting the key is how a SQL NULL is
+			// written, so only real snapshots are listed.
+			...(row.oldData !== undefined && { oldData: row.oldData }),
+			...(row.newData !== undefined && { newData: row.newData }),
+			createdAt: row.createdAt,
+		}));
+	await prisma.auditLog.createMany({ data: sharedHistory });
+	console.log(`  ✅ Dedication Audit Logs (${sharedHistory.length})`);
 
-	// ── DONE ───────────────────────────────────────────────────────────
+	// ── FINAL VALIDATION (fails loudly, never seeds silently) ─────────
+	let capacityViolations = 0;
+	for (const plan of plans) {
+		const confirmedCompanions = companionRecords.filter(
+			(c) =>
+				c.status === "CONFIRMED" &&
+				guestRecords.find((g) => g.id === c.guestId)?.eventId === plan.id,
+		).length;
+		const total =
+			(confirmedPeopleByEvent.get(plan.id) ?? 0) + confirmedCompanions;
+		if (total > plan.capacity) {
+			capacityViolations += 1;
+			console.error(
+				`  ❌ Capacity violation on ${plan.id}: ${total} > ${plan.capacity}`,
+			);
+		}
+	}
+	if (capacityViolations > 0)
+		throw new Error(`${capacityViolations} capacity violation(s)`);
+
+	const spendViolations = plans.filter((plan) => {
+		const planned = Number(
+			budgetRecords.find((b) => b.eventId === plan.id)?.plannedAmount ?? 0,
+		);
+		return (
+			(supplierSpendByEvent.get(plan.id) ?? 0) +
+				(inventorySpendByEvent.get(plan.id) ?? 0) >
+			planned
+		);
+	});
+	if (spendViolations.length > 0) {
+		throw new Error(
+			`Budget overrun on: ${spendViolations.map((p) => p.id).join(", ")}`,
+		);
+	}
+
+	// ── DONE ──────────────────────────────────────────────────────────
+	const weddings = plans.filter((p) => p.type === "WEDDING").length;
+	const engagements = plans.filter((p) => p.type === "ENGAGEMENT").length;
 	console.log("\n🎉 Seed completed successfully!");
 	console.log(`   Users:          ${SEED_USERS.length}`);
-	console.log(`   Events:         ${eventRecords.length}`);
-	console.log(`   Event Members:  ${memberRecords.length}`);
+	console.log(
+		`   Events:         ${plans.length} (${weddings} weddings / ${engagements} engagements)`,
+	);
+	console.log(`   Members:        ${memberRecords.length}`);
 	console.log(`   Budgets:        ${budgetRecords.length}`);
 	console.log(`   Suppliers:      ${supplierRecords.length}`);
 	console.log(`   Sup. Payments:  ${supplierPaymentRecords.length}`);
 	console.log(`   Sup. Installs:  ${supplierInstallmentRecords.length}`);
-	console.log(`   Guests:         ${uniqueGuests.length}`);
+	console.log(`   Guests:         ${guestRecords.length}`);
 	console.log(`   Companions:     ${companionRecords.length}`);
 	console.log(`   Invitations:    ${guestInvitationRecords.length}`);
 	console.log(`   Tables:         ${tableRecords.length}`);
@@ -2656,11 +2702,14 @@ async function main() {
 	console.log(`   Food Plan Items:${foodPlanItemRecords.length}`);
 	console.log(`   Checklist:      ${checklistRecords.length}`);
 	console.log(`   Notifications:  ${notificationRecords.length}`);
-	console.log(`   Audit Logs:     ${auditRecords.length}`);
+	console.log(
+		`   Audit Logs:     ${auditRecords.length + sharedHistory.length}`,
+	);
 	console.log(`   Dedications:    ${dedicationRecords.length}`);
-	console.log(`   Ded. Viewers:   ${dedicationViewerRecords.length}`);
 	console.log("\n🔐 Credenciais de acesso (email / senha):");
-	for (const u of SEED_USERS) console.log(`   ${u.email}  /  ${SEED_PASSWORD}`);
+	for (const user of SEED_USERS) {
+		console.log(`   ${user.email}  /  ${user.password}`);
+	}
 }
 
 main()
