@@ -1,24 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { Gift } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { Logo } from "@/shared/components/logo";
 import { LoadingState } from "@/shared/components/states/loading-state";
-
-function Rings({ className }: { className?: string }) {
-	return (
-		<svg
-			viewBox="0 0 64 40"
-			className={className}
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.25"
-			aria-hidden
-		>
-			<circle cx="24" cy="22" r="14" />
-			<circle cx="40" cy="22" r="14" />
-			<path d="M40 2l3 4-3 4-3-4z" />
-		</svg>
-	);
-}
 
 const LEAVES = [
 	{ y: 300, a: -55 },
@@ -108,7 +91,7 @@ function AuthLayout() {
 				{/* Conteúdo */}
 				<div className="relative flex h-full flex-col justify-between p-14">
 					<div className="flex items-center gap-3">
-						<Rings className="h-7 text-white" />
+						<Logo className="h-7 text-white" />
 						<span className="font-display text-2xl tracking-wide">Muxima</span>
 					</div>
 
@@ -138,7 +121,7 @@ function AuthLayout() {
 			<main className="flex items-center justify-center bg-background px-6 py-12 sm:px-12">
 				<div className="w-full max-w-sm">
 					<div className="mb-10 flex items-center gap-2.5 lg:hidden">
-						<Rings className="h-5 text-foreground" />
+						<Logo className="h-5 text-foreground" />
 						<span className="font-display text-xl">Muxima</span>
 					</div>
 					<Outlet />
