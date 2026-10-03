@@ -3,7 +3,13 @@ import {
 	ConflictError,
 	ForbiddenError,
 	NotFoundError,
+	ValidationError,
 } from "../../shared/errors/app-error";
+import {
+	DEDICATION_CODES,
+	EVENT_CODES,
+	MEMBER_CODES,
+} from "../../shared/errors/codes";
 import type {
 	Dedication,
 	DedicationDetail,
@@ -51,7 +57,9 @@ async function assertEventMembership(
 		userId,
 	);
 	if (!membership) {
-		throw new ForbiddenError("Não tem acesso a este evento");
+		throw new ForbiddenError("Não tem acesso a este evento", {
+			code: EVENT_CODES.ACCESS_DENIED,
+		});
 	}
 	return membership;
 }
@@ -77,7 +85,9 @@ async function loadForRead(
 		params.dedicationId,
 	);
 	if (!dedication) {
-		throw new NotFoundError("Dedicatória não encontrada");
+		throw new NotFoundError("Dedicatória não encontrada", {
+			code: DEDICATION_CODES.NOT_FOUND,
+		});
 	}
 
 	if (dedication.ownerId === params.userId) {
@@ -114,7 +124,9 @@ async function loadForWrite(
 ) {
 	const { dedication } = await loadForRead(db, params);
 	if (dedication.ownerId !== params.userId) {
-		throw new ForbiddenError("Apenas o autor pode alterar esta dedicatória");
+		throw new ForbiddenError("Apenas o autor pode alterar esta dedicatória", {
+			code: DEDICATION_CODES.EDIT_DENIED,
+		});
 	}
 	return dedication;
 }
@@ -142,7 +154,9 @@ export function assertTypeIsEditable(status: Dedication["status"]): void {
 function toStorableContent(raw: unknown): RichTextNode {
 	const content = parseRichTextContent(raw);
 	if (!content) {
-		throw new BadRequestError("O conteúdo do editor tem um formato inválido");
+		throw new BadRequestError("O conteúdo do editor tem um formato inválido", {
+			code: DEDICATION_CODES.INVALID_CONTENT,
+		});
 	}
 	return content;
 }
@@ -167,8 +181,9 @@ async function resolveViewers(
 	const resolved: { id: string; userId: string }[] = [];
 	for (const member of members) {
 		if (!member || member.eventId !== params.eventId) {
-			throw new ForbiddenError(
+			throw new ValidationError(
 				"Um dos membros seleccionados não pertence a este evento",
+				{ code: DEDICATION_CODES.VIEWER_NOT_IN_EVENT },
 			);
 		}
 		if (member.status !== "ACTIVE") {
@@ -177,7 +192,9 @@ async function resolveViewers(
 			);
 		}
 		if (member.userId === params.ownerUserId) {
-			throw new BadRequestError("O autor já tem acesso à própria dedicatória");
+			throw new BadRequestError("O autor já tem acesso à própria dedicatória", {
+				code: DEDICATION_CODES.DUPLICATE_VIEWER,
+			});
 		}
 		resolved.push({ id: member.id, userId: member.userId });
 	}
@@ -351,7 +368,9 @@ export const DedicationService = {
 		);
 		// Only reachable if the row was deleted between the two statements.
 		if (!saved) {
-			throw new NotFoundError("Dedicatória não encontrada");
+			throw new NotFoundError("Dedicatória não encontrada", {
+				code: DEDICATION_CODES.NOT_FOUND,
+			});
 		}
 		// The stored document was rebuilt against the allowlist on write, so the
 		// cast only bridges Prisma's `JsonValue` to the validated DTO shape.
@@ -543,6 +562,7 @@ export const DedicationService = {
 		if (dedication.isLocked) {
 			throw new ConflictError(
 				"Desbloqueie a dedicatória antes de seleccionar membros",
+				{ code: DEDICATION_CODES.LOCKED },
 			);
 		}
 
@@ -552,7 +572,9 @@ export const DedicationService = {
 			eventMemberIds: [params.input.eventMemberId],
 		});
 		if (!member) {
-			throw new BadRequestError("Seleccione um membro do evento");
+			throw new BadRequestError("Seleccione um membro do evento", {
+				code: DEDICATION_CODES.VIEWER_REQUIRED,
+			});
 		}
 
 		const existing = await DedicationRepository.findViewerGrantByMember(
@@ -561,7 +583,9 @@ export const DedicationService = {
 			member.id,
 		);
 		if (existing) {
-			throw new ConflictError("Este membro já pode visualizar a dedicatória");
+			throw new ConflictError("Este membro já pode visualizar a dedicatória", {
+				code: DEDICATION_CODES.VIEWER_ALREADY_SET,
+			});
 		}
 
 		return db.$transaction(async (tx) => {
@@ -595,7 +619,9 @@ export const DedicationService = {
 			params.viewerId,
 		);
 		if (!viewer) {
-			throw new NotFoundError("Membro autorizado não encontrado");
+			throw new NotFoundError("Membro autorizado não encontrado", {
+				code: MEMBER_CODES.NOT_FOUND,
+			});
 		}
 
 		return db.$transaction(async (tx) => {

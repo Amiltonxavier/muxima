@@ -1,4 +1,5 @@
-import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { NotFoundError, ValidationError } from "../../shared/errors/app-error";
+import { INVENTORY_CODES } from "../../shared/errors/codes";
 import type {
 	InventoryCategory,
 	InventoryHistory,
@@ -207,7 +208,10 @@ export const InventoryService = {
 
 	async getById(db: InventoryDb, id: string): Promise<InventoryListItem> {
 		const item = await InventoryRepository.findById(db, id);
-		if (!item) throw new NotFoundError("Item de inventário não encontrado");
+		if (!item)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
 		return toListItem(item);
 	},
 
@@ -279,8 +283,9 @@ export const InventoryService = {
 		input: CreateInventoryItemInput,
 	): Promise<InventoryListItem> {
 		if (input.currentQuantity > input.plannedQuantity) {
-			throw new ForbiddenError(
+			throw new ValidationError(
 				"A quantidade actual não pode superar a quantidade planeada",
+				{ code: INVENTORY_CODES.QUANTITY_RULE },
 			);
 		}
 
@@ -320,15 +325,19 @@ export const InventoryService = {
 		input: UpdateInventoryItemInput,
 	): Promise<InventoryListItem> {
 		const item = await InventoryRepository.findById(db, id);
-		if (!item) throw new NotFoundError("Item de inventário não encontrado");
+		if (!item)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
 
 		const plannedQuantity =
 			input.plannedQuantity ?? toNumber(item.plannedQuantity);
 		const currentQuantity = toNumber(item.currentQuantity);
 
 		if (plannedQuantity < currentQuantity) {
-			throw new ForbiddenError(
+			throw new ValidationError(
 				"A quantidade planeada não pode ser inferior à quantidade actual",
+				{ code: INVENTORY_CODES.QUANTITY_RULE },
 			);
 		}
 
@@ -341,7 +350,10 @@ export const InventoryService = {
 
 	async delete(db: InventoryDb, id: string): Promise<void> {
 		const item = await InventoryRepository.findById(db, id);
-		if (!item) throw new NotFoundError("Item de inventário não encontrado");
+		if (!item)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
 		await InventoryRepository.delete(db, id);
 	},
 
@@ -357,7 +369,10 @@ export const InventoryService = {
 		input: AddMovementInput,
 	): Promise<InventoryMovementDto> {
 		const item = await InventoryRepository.findById(db, inventoryItemId);
-		if (!item) throw new NotFoundError("Item de inventário não encontrado");
+		if (!item)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
 
 		const plannedQuantity = toNumber(item.plannedQuantity);
 		const currentQuantity = toNumber(item.currentQuantity);
@@ -367,8 +382,9 @@ export const InventoryService = {
 		if (isIncreaseType(type)) {
 			if (currentQuantity + quantity > plannedQuantity) {
 				const remaining = Math.max(0, plannedQuantity - currentQuantity);
-				throw new ForbiddenError(
+				throw new ValidationError(
 					`Não é possível adicionar ${quantity} unidades. Apenas ${remaining} unidades restam para completar a quantidade planeada.`,
+					{ code: INVENTORY_CODES.QUANTITY_RULE },
 				);
 			}
 			newQuantity = currentQuantity + quantity;
@@ -377,8 +393,9 @@ export const InventoryService = {
 		} else {
 			// ADJUSTMENT sets an absolute value
 			if (quantity > plannedQuantity) {
-				throw new ForbiddenError(
+				throw new ValidationError(
 					"A quantidade ajustada não pode superar a quantidade planeada",
+					{ code: INVENTORY_CODES.QUANTITY_RULE },
 				);
 			}
 			newQuantity = quantity;
@@ -407,7 +424,10 @@ export const InventoryService = {
 		inventoryItemId: string,
 	): Promise<InventoryHistory> {
 		const item = await InventoryRepository.findById(db, inventoryItemId);
-		if (!item) throw new NotFoundError("Item de inventário não encontrado");
+		if (!item)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
 
 		const movements = await InventoryRepository.findMovements(
 			db,

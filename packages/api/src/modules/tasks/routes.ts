@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../../shared/auth/event-access";
+import { NotFoundError } from "../../shared/errors/app-error";
+import { SCHEDULE_CODES, TASK_CODES } from "../../shared/errors/codes";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -21,20 +24,17 @@ import {
 import { TaskService } from "./service";
 
 export async function taskRoutes(app: FastifyInstance) {
-	app.get("/api/v1/events/:eventId/tasks", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/tasks", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			status: validateEnum(query.status, VALID_TASK_STATUSES),
-			category: validateEnum(query.category, VALID_TASK_CATEGORIES),
-			priority: validateEnum(query.priority, VALID_TASK_PRIORITIES),
+			status: validateEnum(query.status, VALID_TASK_STATUSES, "status"),
+			category: validateEnum(query.category, VALID_TASK_CATEGORIES, "category"),
+			priority: validateEnum(query.priority, VALID_TASK_PRIORITIES, "priority"),
 		};
 		const result = await TaskService.findByEventId(
 			eventId,
@@ -48,28 +48,21 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/tasks", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const data = createTaskSchema.parse(request.body);
 		const task = await TaskService.create(eventId, userId, data);
 		return reply.status(201).send(successResponse(task));
 	});
 
-	app.patch("/api/v1/tasks/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.patch("/api/v1/tasks/:id", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
+			throw new NotFoundError("Tarefa não encontrada", {
+				code: TASK_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		const data = updateTaskSchema.parse(request.body);
@@ -78,34 +71,27 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/tasks/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Tarefa não encontrada" },
+			throw new NotFoundError("Tarefa não encontrada", {
+				code: TASK_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		await TaskService.delete(id);
 		return reply.status(204).send();
 	});
 
-	app.get("/api/v1/events/:eventId/schedules", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/schedules", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			status: validateEnum(query.status, VALID_SCHEDULE_STATUSES),
+			status: validateEnum(query.status, VALID_SCHEDULE_STATUSES, "status"),
 		};
 		const result = await TaskService.getSchedules(
 			eventId,
@@ -119,28 +105,21 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/schedules", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const data = createScheduleSchema.parse(request.body);
 		const schedule = await TaskService.createSchedule(eventId, data);
 		return reply.status(201).send(successResponse(schedule));
 	});
 
-	app.patch("/api/v1/schedules/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.patch("/api/v1/schedules/:id", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
+			throw new NotFoundError("Agendamento não encontrado", {
+				code: SCHEDULE_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		const data = updateScheduleSchema.parse(request.body);
@@ -149,16 +128,12 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/schedules/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Agendamento não encontrado" },
+			throw new NotFoundError("Agendamento não encontrado", {
+				code: SCHEDULE_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		await TaskService.deleteSchedule(id);

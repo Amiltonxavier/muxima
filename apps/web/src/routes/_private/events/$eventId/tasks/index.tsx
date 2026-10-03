@@ -57,6 +57,7 @@ import {
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { QueryState } from "@/shared/components/states";
 import {
 	useCreateTask,
@@ -73,7 +74,6 @@ import {
 } from "@/utils/status-helpers";
 import { taskSchema } from "@/utils/task-schemas";
 import { TaskAnalytics } from "./-components/task-analytics";
-import { ExportMenu } from "@/shared/components/export-menu";
 
 export const Route = createFileRoute("/_private/events/$eventId/tasks/")({
 	component: TasksPage,
@@ -189,7 +189,6 @@ function TasksPage() {
 								`Tarefa movida para "${TASK_STATUS_LABELS[newStatus] || newStatus}"`,
 							);
 						},
-						onError: (e) => toast.error(e.message),
 					},
 				);
 			}
@@ -575,7 +574,6 @@ function TasksPage() {
 								toast.success("Tarefa criada");
 								setShowCreateDialog(false);
 							},
-							onError: (e) => toast.error(e.message),
 						},
 					);
 				}}
@@ -603,7 +601,6 @@ function TasksPage() {
 									toast.success("Tarefa atualizada");
 									setEditingTask(null);
 								},
-								onError: (e) => toast.error(e.message),
 							},
 						);
 					}}
@@ -636,7 +633,6 @@ function TasksPage() {
 												toast.success("Tarefa eliminada");
 												setDeleteId(null);
 											},
-											onError: (e) => toast.error(e.message),
 										},
 									);
 								}

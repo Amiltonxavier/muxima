@@ -257,7 +257,6 @@ function TablesPage() {
 								toast.success("Mesa criada");
 								setShowCreate(false);
 							},
-							onError: (e) => toast.error(e.message),
 						},
 					);
 				}}
@@ -283,7 +282,6 @@ function TablesPage() {
 									toast.success("Mesa atualizada");
 									setEditingTable(null);
 								},
-								onError: (e) => toast.error(e.message),
 							},
 						);
 					}}
@@ -311,7 +309,6 @@ function TablesPage() {
 									toast.success("Mesa eliminada");
 									setDeletingTable(null);
 								},
-								onError: (e) => toast.error(e.message),
 							},
 						);
 					}

@@ -10,6 +10,8 @@ import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../shared/auth/event-access";
+import { NotFoundError } from "../shared/errors/app-error";
+import { TASK_CODES } from "../shared/errors/codes";
 import { scheduleListInput, taskListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -69,7 +71,9 @@ export const tasksRouter = {
 			});
 
 			if (!task) {
-				throw new Error("Tarefa não encontrada");
+				throw new NotFoundError("Tarefa não encontrada", {
+					code: TASK_CODES.NOT_FOUND,
+				});
 			}
 
 			await requireEventAccess(context.session.user.id, task.eventId);

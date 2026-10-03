@@ -101,7 +101,6 @@ export function SupplierInstallmentsDialog({
 					toast.success("Plano de parcelas actualizado");
 					onOpenChange(false);
 				},
-				onError: (error) => toast.error(error.message),
 			},
 		);
 	};

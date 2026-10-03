@@ -7,6 +7,7 @@ import { CheckCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { handleApiError } from "@/shared/errors";
 import { resetPasswordSchema } from "@/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/reset-password/")({
@@ -46,14 +47,18 @@ function ResetPasswordPage() {
 				});
 
 				if (error) {
-					toast.error(error.message || "Erro ao redefinir password");
+					handleApiError(error, {
+						fallbackMessage: "Erro ao redefinir password",
+					});
 					return;
 				}
 
 				setSuccess(true);
 				toast.success("Password redefinida com sucesso");
-			} catch {
-				toast.error("Erro ao redefinir password");
+			} catch (caught) {
+				handleApiError(caught, {
+					fallbackMessage: "Erro ao redefinir password",
+				});
 			} finally {
 				setIsLoading(false);
 			}

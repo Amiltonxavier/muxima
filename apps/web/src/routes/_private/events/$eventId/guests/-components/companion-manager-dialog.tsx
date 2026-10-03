@@ -54,7 +54,6 @@ export function CompanionManagerDialog({
 					toast.success("Acompanhante adicionado");
 					setNewName("");
 				},
-				onError: (e) => toast.error(e.message),
 			},
 		);
 	};
@@ -67,7 +66,6 @@ export function CompanionManagerDialog({
 			},
 			{
 				onSuccess: () => toast.success("Estado atualizado"),
-				onError: (e) => toast.error(e.message),
 			},
 		);
 	};
@@ -77,7 +75,6 @@ export function CompanionManagerDialog({
 			{ id: companionId },
 			{
 				onSuccess: () => toast.success("Acompanhante removido"),
-				onError: (e) => toast.error(e.message),
 			},
 		);
 	};

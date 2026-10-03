@@ -1,4 +1,6 @@
 import db from "@muxima/db";
+import { NotFoundError } from "../../shared/errors/app-error";
+import { EVENT_CODES } from "../../shared/errors/codes";
 import { toCents } from "../../shared/finance/money";
 import { composeEndAt } from "../events/lifecycle";
 
@@ -118,7 +120,9 @@ export async function getExpenseAnalytics(
 		},
 	});
 	if (!event) {
-		throw new Error("Evento não encontrado");
+		throw new NotFoundError("Evento não encontrado", {
+			code: EVENT_CODES.NOT_FOUND,
+		});
 	}
 
 	const { from, to } = resolveExpensePeriod(event, now);

@@ -29,6 +29,7 @@ import {
 	publicInvitationScheduleLimiter,
 } from "../shared/auth/rate-limit";
 import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
+import { INVITATION_CODES } from "../shared/errors/codes";
 import { paginationInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -88,7 +89,9 @@ export const invitationsRouter = {
 				if (lookup.result === "AVAILABLE") {
 					return lookup.invitation;
 				}
-				throw new NotFoundError("Convite não encontrado");
+				throw new NotFoundError("Convite não encontrado", {
+					code: INVITATION_CODES.NOT_FOUND,
+				});
 			}),
 	},
 
@@ -199,7 +202,9 @@ export const invitationsRouter = {
 			await requireEventAccess(context.session.user.id, input.eventId);
 
 			if (input.scope === "SELECTED" && input.invitationIds.length === 0) {
-				throw new BadRequestError("Seleciona pelo menos um convite");
+				throw new BadRequestError("Seleciona pelo menos um convite", {
+					code: INVITATION_CODES.INVALID_GUESTS,
+				});
 			}
 
 			return publishInvitationsBatch(db, {
@@ -230,13 +235,18 @@ export const invitationsRouter = {
 				where: { code: input.code },
 				select: { eventId: true },
 			});
-			if (!invitation) throw new NotFoundError("Convite não encontrado");
+			if (!invitation)
+				throw new NotFoundError("Convite não encontrado", {
+					code: INVITATION_CODES.NOT_FOUND,
+				});
 
 			// The event comes from the invitation, not from the payload, so a
 			// user cannot respond to another event's invitation.
 			await requireEventAccess(context.session.user.id, invitation.eventId);
 			if (invitation.eventId !== input.eventId) {
-				throw new NotFoundError("Convite não encontrado");
+				throw new NotFoundError("Convite não encontrado", {
+					code: INVITATION_CODES.NOT_FOUND,
+				});
 			}
 
 			return respondToInvitation(db, input.code, input.response);
@@ -270,7 +280,9 @@ export const invitationsRouter = {
 			});
 
 			if (!invitation || invitation.eventId !== input.eventId) {
-				throw new NotFoundError("Convite não encontrado");
+				throw new NotFoundError("Convite não encontrado", {
+					code: INVITATION_CODES.NOT_FOUND,
+				});
 			}
 
 			return canRespondToInvitation(invitation, invitation.event);
@@ -292,7 +304,10 @@ async function findInvitationByGuest(
 		select: { invitationId: true },
 	});
 
-	if (!invitationGuest) throw new NotFoundError("Convite não encontrado");
+	if (!invitationGuest)
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 
 	return prisma.guestInvitation.findUnique({
 		where: { id: invitationGuest.invitationId },

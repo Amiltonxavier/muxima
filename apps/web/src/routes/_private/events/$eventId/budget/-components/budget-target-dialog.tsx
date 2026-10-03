@@ -43,7 +43,6 @@ export function BudgetTargetDialog({
 					toast.success("Meta actualizada");
 					onOpenChange(false);
 				},
-				onError: (error) => toast.error(error.message),
 			},
 		);
 	}

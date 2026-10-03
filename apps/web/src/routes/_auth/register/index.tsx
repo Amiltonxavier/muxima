@@ -7,6 +7,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { handleApiError } from "@/shared/errors";
 import { registerSchema } from "@/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/register/")({
@@ -39,7 +40,7 @@ function RegisterPage() {
 					password: value.password,
 				});
 				if (error) {
-					toast.error(error.message || "Erro ao criar conta");
+					handleApiError(error, { fallbackMessage: "Erro ao criar conta" });
 					return;
 				}
 
@@ -50,8 +51,8 @@ function RegisterPage() {
 				form.reset();
 
 				toast.success("Conta criada com sucesso.");
-			} catch {
-				toast.error("Erro ao criar conta");
+			} catch (caught) {
+				handleApiError(caught, { fallbackMessage: "Erro ao criar conta" });
 			} finally {
 				setIsLoading(false);
 			}

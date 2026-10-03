@@ -71,7 +71,6 @@ export function SupplierEditDialog({
 									toast.success("Fornecedor actualizado");
 									onOpenChange(false);
 								},
-								onError: (error) => toast.error(error.message),
 							},
 						)
 					}

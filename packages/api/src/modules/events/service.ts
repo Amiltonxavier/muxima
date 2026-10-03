@@ -1,4 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { EVENT_CODES } from "../../shared/errors/codes";
 import { syncEventLifecycle } from "./lifecycle";
 import { type EventFilterParams, EventRepository } from "./repository";
 
@@ -33,10 +34,16 @@ export const EventService = {
 
 	async findById(id: string, userId: string) {
 		const event = await EventRepository.findById(id);
-		if (!event) throw new NotFoundError("Evento não encontrado");
+		if (!event)
+			throw new NotFoundError("Evento não encontrado", {
+				code: EVENT_CODES.NOT_FOUND,
+			});
 
 		const isMember = event.members.some((m) => m.userId === userId);
-		if (!isMember) throw new ForbiddenError("Não tem acesso a este evento");
+		if (!isMember)
+			throw new ForbiddenError("Não tem acesso a este evento", {
+				code: EVENT_CODES.ACCESS_DENIED,
+			});
 
 		// Lazy lifecycle sync (backend is the authority for status changes).
 		const status = await syncEventLifecycle(event);
@@ -82,7 +89,10 @@ export const EventService = {
 		}>,
 	) {
 		const event = await EventRepository.findById(id);
-		if (!event) throw new NotFoundError("Evento não encontrado");
+		if (!event)
+			throw new NotFoundError("Evento não encontrado", {
+				code: EVENT_CODES.NOT_FOUND,
+			});
 
 		const member = event.members.find((m) => m.userId === userId);
 		if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
@@ -97,7 +107,10 @@ export const EventService = {
 
 	async delete(id: string, userId: string) {
 		const event = await EventRepository.findById(id);
-		if (!event) throw new NotFoundError("Evento não encontrado");
+		if (!event)
+			throw new NotFoundError("Evento não encontrado", {
+				code: EVENT_CODES.NOT_FOUND,
+			});
 
 		const member = event.members.find((m) => m.userId === userId);
 		if (member?.role !== "OWNER") {

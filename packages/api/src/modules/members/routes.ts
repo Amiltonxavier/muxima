@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -10,20 +11,16 @@ import { addMemberSchema, updateMemberRoleSchema } from "./schemas";
 import { MemberService } from "./service";
 
 export async function memberRoutes(app: FastifyInstance) {
-	app.get("/api/v1/events/:eventId/members", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/members", async (request) => {
+		const userId = requireSessionUserId(request);
 
 		const { eventId } = request.params as { eventId: string };
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			role: validateEnum(query.role, VALID_MEMBER_ROLES),
-			status: validateEnum(query.status, VALID_MEMBER_STATUSES),
+			role: validateEnum(query.role, VALID_MEMBER_ROLES, "role"),
+			status: validateEnum(query.status, VALID_MEMBER_STATUSES, "status"),
 		};
 		const result = await MemberService.getMembers(
 			eventId,
@@ -38,11 +35,7 @@ export async function memberRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/members", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 
 		const body = request.body as { email?: string; role?: string };
 		const params = request.params as { eventId: string };
@@ -56,12 +49,8 @@ export async function memberRoutes(app: FastifyInstance) {
 		return reply.status(201).send(successResponse(member));
 	});
 
-	app.patch("/api/v1/members/:memberId/role", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.patch("/api/v1/members/:memberId/role", async (request) => {
+		const userId = requireSessionUserId(request);
 
 		const { memberId } = request.params as { memberId: string };
 		const { role } = updateMemberRoleSchema.parse(request.body);
@@ -70,11 +59,7 @@ export async function memberRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/members/:memberId", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 
 		const { memberId } = request.params as { memberId: string };
 		await MemberService.removeMember(memberId, userId);

@@ -57,12 +57,7 @@ export function useChangePassword() {
  * success — the user is leaving the app, not re-reading their own data.
  */
 export function useBlockAccount() {
-	return useMutation(
-		orpc.users.blockAccount.mutationOptions({
-			onError: (err: Error) =>
-				toast.error(err.message || "Não foi possível bloquear a conta"),
-		}),
-	);
+	return useMutation(orpc.users.blockAccount.mutationOptions({}));
 }
 
 export function useMembers(eventId: string) {

@@ -47,7 +47,6 @@ export function ScheduleDeleteDialog({
 										toast.success("Atividade eliminada");
 										onOpenChange(false);
 									},
-									onError: (error) => toast.error(error.message),
 								},
 							);
 						}}

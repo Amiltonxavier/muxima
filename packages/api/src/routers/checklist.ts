@@ -9,6 +9,7 @@ import {
 } from "../modules/checklist/rules";
 import { requireEventAccess } from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
+import { CHECKLIST_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toCents } from "../shared/finance/money";
 import { resolveSupplierMoney } from "../shared/finance/supplier-money";
 
@@ -226,7 +227,9 @@ export const checklistRouter = {
 						select: { eventId: true },
 					});
 					if (!supplier || supplier.eventId !== input.eventId) {
-						throw new ValidationError("Fornecedor inválido para este evento.");
+						throw new ValidationError("Fornecedor inválido para este evento.", {
+							code: SUPPLIER_CODES.INVALID_SUPPLIER,
+						});
 					}
 				}
 				if (input.inventoryItemId) {
@@ -292,7 +295,9 @@ export const checklistRouter = {
 				select: { eventId: true, autoManaged: true },
 			});
 			if (!existing || existing.eventId !== input.eventId) {
-				throw new ValidationError("Item de checklist inválido.");
+				throw new ValidationError("Item de checklist inválido.", {
+					code: CHECKLIST_CODES.INVALID_ITEM,
+				});
 			}
 
 			// An auto-managed item's status is owned by the API, so a manual

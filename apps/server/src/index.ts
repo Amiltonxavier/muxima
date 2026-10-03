@@ -2,6 +2,9 @@ import { buildApp } from "@muxima/api/app";
 import { createContext } from "@muxima/api/context";
 import { startEventLifecycleWorker } from "@muxima/api/jobs/event-lifecycle";
 import { appRouter } from "@muxima/api/routers/index";
+import { NotFoundError } from "@muxima/api/shared/errors/app-error";
+import { ERROR_CODES } from "@muxima/api/shared/errors/codes";
+import { errorEnvelope } from "@muxima/api/shared/errors/error-handler";
 import { OpenAPIHandler } from "@orpc/openapi/fastify";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { onError } from "@orpc/server";
@@ -15,7 +18,7 @@ async function main() {
 	const rpcHandler = new RPCHandler(appRouter, {
 		interceptors: [
 			onError((error) => {
-				console.error(error);
+				fastify.log.error({ err: error }, "oRPC handler error");
 			}),
 		],
 	});
@@ -28,7 +31,7 @@ async function main() {
 		],
 		interceptors: [
 			onError((error) => {
-				console.error(error);
+				fastify.log.error({ err: error }, "OpenAPI handler error");
 			}),
 		],
 	});
@@ -43,7 +46,7 @@ async function main() {
 				context: await createContext(request.headers, { ip: request.ip }),
 				prefix: "/rpc",
 			});
-			if (!matched) reply.status(404).send();
+			if (!matched) reply.status(404).send(errorEnvelope(rpcNotFound()));
 		});
 
 		rpcApp.all("/api-reference/*", async (request, reply) => {
@@ -51,7 +54,7 @@ async function main() {
 				context: await createContext(request.headers, { ip: request.ip }),
 				prefix: "/api-reference",
 			});
-			if (!matched) reply.status(404).send();
+			if (!matched) reply.status(404).send(errorEnvelope(rpcNotFound()));
 		});
 	});
 
@@ -67,3 +70,10 @@ main().catch((err) => {
 	console.error(err);
 	process.exit(1);
 });
+
+/** 404 for a procedure/route that does not exist in the oRPC router. */
+function rpcNotFound() {
+	return new NotFoundError("O procedimento solicitado não existe.", {
+		code: ERROR_CODES.NOT_FOUND,
+	});
+}

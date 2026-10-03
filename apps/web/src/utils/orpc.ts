@@ -3,21 +3,38 @@ import { env } from "@muxima/env/web";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+	handleApiError,
+	parseApiError,
+	SESSION_EXPIRED_MESSAGE,
+} from "@/shared/errors";
 
+/**
+ * Every query and mutation failure is reported through `handleApiError`, the one
+ * place that turns an API payload into a PT-PT message. Components therefore
+ * never toast `error.message` themselves.
+ */
 export function createQueryClient() {
 	return new QueryClient({
 		queryCache: new QueryCache({
 			onError: (error, query) => {
-				toast.error(`Error: ${error.message}`, {
-					action: {
-						label: "retry",
-						onClick: () => {
-							query.invalidate();
+				handleApiError(error, {
+					toastOptions: {
+						action: {
+							label: "Tentar novamente",
+							onClick: () => {
+								query.invalidate();
+							},
 						},
 					},
 				});
+			},
+		}),
+		mutationCache: new MutationCache({
+			onError: (error) => {
+				handleApiError(error);
 			},
 		}),
 	});
@@ -81,7 +98,10 @@ export const link = new RPCLink({
 						!currentPath.startsWith("/register") &&
 						!currentPath.startsWith("/invite/")
 					) {
-						toast.error("Sessão expirada. Por favor, inicie sessão novamente.");
+						// The session guard is a navigation concern, so it stays
+						// here; the wording comes from the shared error module.
+						const info = parseApiError({ status: 401 });
+						toast.error(info.message || SESSION_EXPIRED_MESSAGE);
 						window.location.href = "/login";
 					}
 				}

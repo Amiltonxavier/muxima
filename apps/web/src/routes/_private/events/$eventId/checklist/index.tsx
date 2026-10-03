@@ -43,6 +43,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
@@ -66,7 +67,6 @@ import {
 	getStatusLabel,
 	toSelectItems,
 } from "@/utils/status-helpers";
-import { ExportMenu } from "@/shared/components/export-menu";
 
 export const Route = createFileRoute("/_private/events/$eventId/checklist/")({
 	component: ChecklistPage,
@@ -126,12 +126,7 @@ function ChecklistPage() {
 	const handleToggle = (item: ChecklistRow) => {
 		const nextStatus: ChecklistStatusValue =
 			item.status === "COMPLETED" ? "PENDING" : "COMPLETED";
-		updateItem.mutate(
-			{ id: item.id, eventId, status: nextStatus },
-			{
-				onError: (error) => toast.error(error.message),
-			},
-		);
+		updateItem.mutate({ id: item.id, eventId, status: nextStatus }, {});
 	};
 
 	return (
@@ -156,7 +151,6 @@ function ChecklistPage() {
 								{ eventId },
 								{
 									onSuccess: () => toast.success("Checklist sincronizado"),
-									onError: (error) => toast.error(error.message),
 								},
 							)
 						}
@@ -388,7 +382,6 @@ function ChecklistPage() {
 									toast.success("Item atualizado");
 									setDialogOpen(false);
 								},
-								onError: (error) => toast.error(error.message),
 							},
 						);
 						return;
@@ -409,7 +402,6 @@ function ChecklistPage() {
 								toast.success("Item criado");
 								setDialogOpen(false);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}
@@ -431,7 +423,6 @@ function ChecklistPage() {
 								toast.success("Item eliminado");
 								setDeletingItem(null);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}

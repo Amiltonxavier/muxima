@@ -27,6 +27,7 @@ import { Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { RichTextEditor } from "@/shared/components/rich-text-editor";
+import { handleApiError } from "@/shared/errors";
 import {
 	useCreateDedication,
 	useUpdateDedication,
@@ -140,11 +141,9 @@ export function DedicationFormDialog({
 				onSaved?.();
 				onOpenChange(false);
 			} catch (error) {
-				toast.error(
-					error instanceof Error
-						? error.message
-						: "Não foi possível guardar a dedicatória",
-				);
+				handleApiError(error, {
+					fallbackMessage: "Não foi possível guardar a dedicatória",
+				});
 			}
 		},
 	});

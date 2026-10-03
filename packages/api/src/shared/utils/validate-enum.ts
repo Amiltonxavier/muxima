@@ -1,16 +1,28 @@
+import { ValidationError } from "../errors/app-error";
+
 /**
- * Validates a string value against an array of valid enum values.
- * Returns the value if valid, undefined otherwise.
+ * Validates a query-string enum filter against the allowed values.
+ *
+ * An absent value means "no filter" and yields `undefined`. A value that is
+ * present but not allowed is a client mistake and must not be silently dropped
+ * (it used to be, which made REST ignore invalid filters while oRPC rejected
+ * them with 422): it raises the same `422 VALIDATION_ERROR` contract, with the
+ * issue attached to the offending query-string field.
  */
 export function validateEnum<T extends string>(
 	value: string | undefined,
 	validValues: readonly T[],
+	field: string,
 ): T | undefined {
 	if (!value) return undefined;
 	if (validValues.includes(value as T)) {
 		return value as T;
 	}
-	return undefined;
+	throw new ValidationError("Os dados enviados são inválidos.", {
+		details: {
+			issues: [{ path: field, message: "Valor inválido." }],
+		},
+	});
 }
 
 // Valid enum values from Prisma schema

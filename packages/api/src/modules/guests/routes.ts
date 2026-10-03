@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../../shared/auth/event-access";
+import { NotFoundError } from "../../shared/errors/app-error";
+import { GUEST_CODES } from "../../shared/errors/codes";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -19,19 +22,16 @@ import {
 import { GuestService } from "./service";
 
 export async function guestRoutes(app: FastifyInstance) {
-	app.get("/api/v1/events/:eventId/guests", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/guests", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			status: validateEnum(query.status, VALID_GUEST_STATUSES),
-			type: validateEnum(query.type, VALID_GUEST_TYPES),
+			status: validateEnum(query.status, VALID_GUEST_STATUSES, "status"),
+			type: validateEnum(query.type, VALID_GUEST_TYPES, "type"),
 		};
 		const result = await GuestService.findByEventId(
 			eventId,
@@ -45,28 +45,21 @@ export async function guestRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/guests", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const data = createGuestSchema.parse(request.body);
 		const guest = await GuestService.create(eventId, data);
 		return reply.status(201).send(successResponse(guest));
 	});
 
-	app.patch("/api/v1/guests/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.patch("/api/v1/guests/:id", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("guest", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		const data = updateGuestSchema.parse(request.body);
@@ -75,29 +68,22 @@ export async function guestRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/guests/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("guest", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		await GuestService.delete(id);
 		return reply.status(204).send();
 	});
 
-	app.get("/api/v1/events/:eventId/tables", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/tables", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -115,29 +101,22 @@ export async function guestRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/tables", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const data = createTableSchema.parse(request.body);
 		const table = await GuestService.createTable(eventId, data);
 		return reply.status(201).send(successResponse(table));
 	});
 
 	app.post("/api/v1/tables/:tableId/guests", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { tableId } = request.params as { tableId: string };
 		const { guestId } = assignTableSchema.parse(request.body);
 		const eventId = await getEventIdForResource("guest", guestId);
 		if (!eventId)
-			return reply.status(404).send({
-				error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		await GuestService.assignToTable(tableId, guestId);
@@ -147,19 +126,15 @@ export async function guestRoutes(app: FastifyInstance) {
 	app.delete(
 		"/api/v1/tables/:tableId/guests/:guestId",
 		async (request, reply) => {
-			const userId = request.session?.user?.id;
-			if (!userId)
-				return reply
-					.status(401)
-					.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+			const userId = requireSessionUserId(request);
 			const { tableId, guestId } = request.params as {
 				tableId: string;
 				guestId: string;
 			};
 			const eventId = await getEventIdForResource("guest", guestId);
 			if (!eventId)
-				return reply.status(404).send({
-					error: { code: "NOT_FOUND", message: "Convidado não encontrado" },
+				throw new NotFoundError("Convidado não encontrado", {
+					code: GUEST_CODES.NOT_FOUND,
 				});
 			await requireEventAccess(userId, eventId);
 			await GuestService.removeFromTable(tableId, guestId);

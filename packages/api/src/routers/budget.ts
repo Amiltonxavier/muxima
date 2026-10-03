@@ -9,6 +9,7 @@ import {
 	getBudgetSnapshot,
 } from "../modules/budget/repository";
 import { requireEventAccess } from "../shared/auth/event-access";
+import { ValidationError } from "../shared/errors/app-error";
 import { centsToUnits, fromCents } from "../shared/finance/money";
 
 /**
@@ -94,7 +95,9 @@ export const budgetRouter = {
 			// The reserve is held back from the target, so it can never exceed it.
 			const reserve = input.reserveAmount ?? 0;
 			if (reserve > input.plannedAmount) {
-				throw new Error("A reserva não pode ultrapassar o valor planeado.");
+				throw new ValidationError(
+					"A reserva não pode ultrapassar o valor planeado.",
+				);
 			}
 
 			const budget = await db.budget.upsert({

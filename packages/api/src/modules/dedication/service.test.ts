@@ -139,7 +139,7 @@ describe("Regra 1 — utilizador fora do evento", () => {
 				dedicationId: "ded_1",
 				userId: OUTSIDER,
 			}),
-			"NOT_FOUND",
+			"DEDICATION_NOT_FOUND",
 		);
 	});
 
@@ -150,7 +150,7 @@ describe("Regra 1 — utilizador fora do evento", () => {
 				userId: NOWHERE,
 				pagination: { page: 1, limit: 20 },
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 	});
 
@@ -161,7 +161,7 @@ describe("Regra 1 — utilizador fora do evento", () => {
 				userId: OUTSIDER,
 				pagination: { page: 1, limit: 20 },
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 	});
 
@@ -173,7 +173,7 @@ describe("Regra 1 — utilizador fora do evento", () => {
 				userId: OUTSIDER,
 				input: { title: "invadido" },
 			}),
-			"NOT_FOUND",
+			"DEDICATION_NOT_FOUND",
 		);
 		await expectAppError(
 			DedicationService.remove(db, {
@@ -181,7 +181,7 @@ describe("Regra 1 — utilizador fora do evento", () => {
 				dedicationId: "ded_1",
 				userId: OUTSIDER,
 			}),
-			"NOT_FOUND",
+			"DEDICATION_NOT_FOUND",
 		);
 	});
 });
@@ -256,7 +256,7 @@ describe("Regra 4 — viewer autorizado lê mas não escreve", () => {
 				userId: VIEWER,
 				input: { title: "alterado" },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 
@@ -267,7 +267,7 @@ describe("Regra 4 — viewer autorizado lê mas não escreve", () => {
 				dedicationId: "ded_1",
 				userId: VIEWER,
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 
@@ -279,7 +279,7 @@ describe("Regra 4 — viewer autorizado lê mas não escreve", () => {
 				userId: VIEWER,
 				input: { status: "READY" },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 });
@@ -297,7 +297,7 @@ describe("Regra 5 — só o proprietário gere membros autorizados", () => {
 				userId: VIEWER,
 				input: { eventMemberId: "mem_stranger" },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 
@@ -309,7 +309,7 @@ describe("Regra 5 — só o proprietário gere membros autorizados", () => {
 				viewerId: "view_1",
 				userId: VIEWER,
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 
@@ -321,7 +321,7 @@ describe("Regra 5 — só o proprietário gere membros autorizados", () => {
 				userId: VIEWER,
 				input: { isLocked: true, viewerEventMemberIds: [] },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 
@@ -332,7 +332,7 @@ describe("Regra 5 — só o proprietário gere membros autorizados", () => {
 				dedicationId: "ded_1",
 				userId: VIEWER,
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 });
@@ -393,7 +393,7 @@ describe("Regra 8 — viewers têm de pertencer ao mesmo evento", () => {
 				userId: OWNER,
 				input: { isLocked: false, viewerEventMemberIds: ["mem_outsider"] },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_VIEWER_NOT_IN_EVENT",
 		);
 	});
 
@@ -405,7 +405,7 @@ describe("Regra 8 — viewers têm de pertencer ao mesmo evento", () => {
 				userId: OWNER,
 				input: { isLocked: false, viewerEventMemberIds: ["mem_inventado"] },
 			}),
-			"FORBIDDEN",
+			"DEDICATION_VIEWER_NOT_IN_EVENT",
 		);
 	});
 
@@ -429,7 +429,7 @@ describe("Regra 8 — viewers têm de pertencer ao mesmo evento", () => {
 				userId: OWNER,
 				input: { isLocked: false, viewerEventMemberIds: ["mem_owner"] },
 			}),
-			"BAD_REQUEST",
+			"DEDICATION_VIEWER_ALREADY_OWNER",
 		);
 	});
 
@@ -661,7 +661,7 @@ describe("Saída do autor", () => {
 				dedicationId: "ded_1",
 				userId: OWNER,
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 
 		await expectAppError(
@@ -671,7 +671,7 @@ describe("Saída do autor", () => {
 				userId: OWNER,
 				input: { title: "Novo título" },
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 
 		await expectAppError(
@@ -680,7 +680,7 @@ describe("Saída do autor", () => {
 				dedicationId: "ded_1",
 				userId: OWNER,
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 	});
 
@@ -694,7 +694,7 @@ describe("Saída do autor", () => {
 				dedicationId: "ded_1",
 				userId: OWNER,
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 
 		if (member) member.status = "ACTIVE";
@@ -846,7 +846,7 @@ describe("Regra 12 — histórico de alterações", () => {
 				dedicationId: "ded_1",
 				userId: VIEWER,
 			}),
-			"FORBIDDEN",
+			"DEDICATION_EDIT_DENIED",
 		);
 	});
 });
@@ -909,7 +909,7 @@ describe("Bloqueio e membros autorizados", () => {
 				userId: OWNER,
 				input: { eventMemberId: "mem_viewer" },
 			}),
-			"CONFLICT",
+			"DEDICATION_LOCKED",
 		);
 	});
 
@@ -928,7 +928,7 @@ describe("Bloqueio e membros autorizados", () => {
 				userId: OWNER,
 				input: { eventMemberId: "mem_viewer" },
 			}),
-			"CONFLICT",
+			"DEDICATION_VIEWER_ALREADY_SET",
 		);
 	});
 
@@ -997,7 +997,7 @@ describe("Saída do evento", () => {
 				dedicationId: "ded_1",
 				userId: VIEWER,
 			}),
-			"FORBIDDEN",
+			"EVENT_ACCESS_DENIED",
 		);
 	});
 });

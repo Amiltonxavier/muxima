@@ -118,7 +118,7 @@ export function useUpdateDedication() {
 	const queryClient = useQueryClient();
 	return useMutation(
 		orpc.dedications.update.mutationOptions({
-			onSuccess: (_data, variables) => {
+			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: dedicationKeys.all });
 			},
 		}),
@@ -129,7 +129,7 @@ export function useSetDedicationVisibility() {
 	const queryClient = useQueryClient();
 	return useMutation(
 		orpc.dedications.setVisibility.mutationOptions({
-			onSuccess: (_data, variables) => {
+			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: dedicationKeys.all });
 			},
 		}),

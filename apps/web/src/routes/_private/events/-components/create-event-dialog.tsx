@@ -74,7 +74,6 @@ export function CreateEventDialog({
 				toast.success("Evento criado com sucesso");
 				onOpenChange(false);
 			},
-			onError: (error) => toast.error(error.message || "Erro ao criar evento"),
 		});
 	}
 

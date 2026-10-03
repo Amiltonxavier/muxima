@@ -56,7 +56,6 @@ export function ShareInvitationDialog({
 				onSuccess: () => {
 					toast.success("Convite criado!");
 				},
-				onError: (e) => toast.error(e.message),
 			},
 		);
 	};

@@ -53,6 +53,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { StatChart } from "@/shared/components/charts";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
@@ -69,7 +70,6 @@ import {
 	useUpdateFoodPlanNotes,
 } from "@/shared/queries/food-plan-queries";
 import { useSuppliers } from "@/shared/queries/supplier-queries";
-import { ExportMenu } from "@/shared/components/export-menu";
 import {
 	FOOD_PLAN_CATEGORY_LABELS,
 	FOOD_PLAN_STATUS_LABELS,
@@ -480,7 +480,6 @@ function FoodPlanPage() {
 									toast.success("Item atualizado");
 									setItemDialogOpen(false);
 								},
-								onError: (error) => toast.error(error.message),
 							},
 						);
 						return;
@@ -501,7 +500,6 @@ function FoodPlanPage() {
 								toast.success("Item adicionado ao plano");
 								setItemDialogOpen(false);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}
@@ -520,7 +518,6 @@ function FoodPlanPage() {
 								toast.success("Fornecedor associado ao plano");
 								setShowSupplierDialog(false);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}
@@ -540,7 +537,6 @@ function FoodPlanPage() {
 								toast.success("Notas atualizadas");
 								setShowNotesDialog(false);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}
@@ -562,7 +558,6 @@ function FoodPlanPage() {
 								toast.success("Item eliminado");
 								setDeletingItem(null);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}

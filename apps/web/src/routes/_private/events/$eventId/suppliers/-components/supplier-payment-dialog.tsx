@@ -87,7 +87,6 @@ export function SupplierPaymentDialog({
 					toast.success("Pagamento registado");
 					onOpenChange(false);
 				},
-				onError: (error) => toast.error(error.message),
 			});
 		},
 	});

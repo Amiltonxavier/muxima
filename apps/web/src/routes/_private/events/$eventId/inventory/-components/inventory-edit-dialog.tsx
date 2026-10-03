@@ -67,7 +67,6 @@ export function InventoryEditDialog({
 						toast.success("Item actualizado");
 						onOpenChange(false);
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},

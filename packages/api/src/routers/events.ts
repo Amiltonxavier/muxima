@@ -9,6 +9,12 @@ import {
 	buildActivityLog,
 	submittedValues,
 } from "../shared/activity/activity-context";
+import {
+	ForbiddenError,
+	NotFoundError,
+	ValidationError,
+} from "../shared/errors/app-error";
+import { EVENT_CODES } from "../shared/errors/codes";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 import { validateTimeString } from "../shared/validation/angola";
@@ -109,7 +115,9 @@ export const eventsRouter = {
 			});
 
 			if (!event) {
-				throw new Error("Evento não encontrado");
+				throw new NotFoundError("Evento não encontrado", {
+					code: EVENT_CODES.NOT_FOUND,
+				});
 			}
 
 			const isMember = event.members.some(
@@ -117,7 +125,9 @@ export const eventsRouter = {
 			);
 
 			if (!isMember) {
-				throw new Error("Não tem permissão para aceder a este evento");
+				throw new ForbiddenError("Não tem acesso a este evento", {
+					code: EVENT_CODES.ACCESS_DENIED,
+				});
 			}
 
 			// Lazy lifecycle sync: derive CONFIRMED→ONGOING→COMPLETED from the
@@ -172,7 +182,7 @@ export const eventsRouter = {
 			// Horário coerente: ambos são obrigatórios e o fim tem de ser
 			// estritamente posterior ao início ("HH:mm" compara-se como string).
 			if (input.endTime <= input.startTime) {
-				throw new Error(
+				throw new ValidationError(
 					"O horário de fim deve ser posterior ao horário de início",
 				);
 			}
@@ -292,7 +302,9 @@ export const eventsRouter = {
 			});
 
 			if (!event) {
-				throw new Error("Evento não encontrado");
+				throw new NotFoundError("Evento não encontrado", {
+					code: EVENT_CODES.NOT_FOUND,
+				});
 			}
 
 			const isMember = event.members.some(
@@ -302,7 +314,9 @@ export const eventsRouter = {
 			);
 
 			if (!isMember) {
-				throw new Error("Não tem permissão para editar este evento");
+				throw new ForbiddenError("Não tem permissão para editar este evento", {
+					code: EVENT_CODES.EDIT_DENIED,
+				});
 			}
 
 			// Horário efectivo: campos não enviados mantêm o valor guardado.
@@ -316,7 +330,7 @@ export const eventsRouter = {
 				effectiveEndTime &&
 				effectiveEndTime <= effectiveStartTime
 			) {
-				throw new Error(
+				throw new ValidationError(
 					"O horário de fim deve ser posterior ao horário de início",
 				);
 			}
@@ -378,7 +392,9 @@ export const eventsRouter = {
 			});
 
 			if (!event) {
-				throw new Error("Evento não encontrado");
+				throw new NotFoundError("Evento não encontrado", {
+					code: EVENT_CODES.NOT_FOUND,
+				});
 			}
 
 			const isOwner = event.members.some(
@@ -387,7 +403,12 @@ export const eventsRouter = {
 			);
 
 			if (!isOwner) {
-				throw new Error("Apenas o proprietário pode eliminar o evento");
+				throw new ForbiddenError(
+					"Apenas o proprietário pode eliminar o evento",
+					{
+						code: EVENT_CODES.DELETE_DENIED,
+					},
+				);
 			}
 
 			await db.event.delete({

@@ -4,37 +4,40 @@ import db from "@muxima/db";
 import { ORPCError, os } from "@orpc/server";
 
 import type { Context } from "./context";
-import { AppError } from "./shared/errors/app-error";
+import { ForbiddenError, UnauthorizedError } from "./shared/errors/app-error";
+import { ERROR_CODES } from "./shared/errors/codes";
 import { mapError } from "./shared/errors/map-error";
 
 export const o = os.$context<Context>();
 
+/** Public code for a BLOCKED account, shared with the Better Auth boundary. */
+export const ACCOUNT_BLOCKED_CODE = ERROR_CODES.ACCOUNT_BLOCKED;
+
 /**
- * Central error mapping for every oRPC procedure:
- * - `AppError`s (NotFound, Forbidden, …) become ORPC errors with their
- *   original status/code/message.
- * - Prisma errors (P2022/P2025/P2002/P2003), Zod errors and unexpected
- *   errors are mapped to safe, user-facing messages — internal details
- *   (stack, SQL, column names, paths) are never sent to the client.
- * - The original error is preserved as `cause` so the server-side
- *   `onError` interceptor keeps the full diagnostic in the logs.
+ * Central error mapping for every oRPC procedure.
+ *
+ * oRPC serialises its own transport envelope
+ * (`{ defined, code, status, message, data }`) but it is fed from the very
+ * same `mapError` the REST handler uses, so both surfaces expose the same
+ * `code`, `status` and PT-PT `message`. `details` travels in the oRPC `data`
+ * field — that is the envelope's slot for structured information.
  */
 const errorMapper = o.middleware(async ({ next }) => {
 	try {
 		return await next();
 	} catch (error) {
+		// Errors already shaped by oRPC (validation, NOT_FOUND, …) are kept.
 		if (error instanceof ORPCError) throw error;
 
+		// The server logs the original error through its own `onError`
+		// interceptor, so nothing internal is lost — it is only replaced here by
+		// the public, PT-PT version the client is allowed to see.
 		const appError = mapError(error);
-
-		if (appError.statusCode >= 500 && !(error instanceof AppError)) {
-			// Keep the full original error in the server logs.
-			console.error("[rpc] Unhandled error:", error);
-		}
 
 		throw new ORPCError(appError.code, {
 			status: appError.statusCode,
 			message: appError.message,
+			data: appError.details,
 			cause: error,
 		});
 	}
@@ -44,7 +47,7 @@ export const publicProcedure = o.use(errorMapper);
 
 const requireAuth = o.middleware(async ({ context, next }) => {
 	if (!context.session?.user) {
-		throw new ORPCError("UNAUTHORIZED");
+		throw new UnauthorizedError();
 	}
 	return next({
 		context: {
@@ -62,7 +65,7 @@ const requireAuth = o.middleware(async ({ context, next }) => {
 const requireActiveUser = o.middleware(async ({ context, next }) => {
 	const userId = context.session?.user?.id;
 	if (!userId) {
-		throw new ORPCError("UNAUTHORIZED");
+		throw new UnauthorizedError();
 	}
 
 	const user = await db.user.findUnique({
@@ -71,12 +74,12 @@ const requireActiveUser = o.middleware(async ({ context, next }) => {
 	});
 
 	if (!user) {
-		throw new ORPCError("UNAUTHORIZED");
+		throw new UnauthorizedError();
 	}
 
 	if (user.status === "BLOCKED") {
-		throw new ORPCError("FORBIDDEN", {
-			message: BLOCKED_USER_MESSAGE,
+		throw new ForbiddenError(BLOCKED_USER_MESSAGE, {
+			code: ACCOUNT_BLOCKED_CODE,
 		});
 	}
 

@@ -59,7 +59,6 @@ export function SupplierStatusDialog({
 					);
 					onOpenChange(false);
 				},
-				onError: (error) => toast.error(error.message),
 			},
 		);
 	};

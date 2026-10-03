@@ -10,9 +10,9 @@ import {
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-	toastExportError,
 	type ExportFormat,
 	type ExportModule,
+	toastExportError,
 	useExportEventModule,
 } from "@/shared/hooks/use-export-download";
 
@@ -49,9 +49,7 @@ export function ExportMenu({
 	const { mutate, isPending } = useExportEventModule({
 		onSuccess: () =>
 			toast.success(
-				module === "event"
-					? "Relatório completo gerado."
-					: "Relatório gerado.",
+				module === "event" ? "Relatório completo gerado." : "Relatório gerado.",
 			),
 	});
 
@@ -59,75 +57,71 @@ export function ExportMenu({
 
 	return (
 		<DropdownMenu>
-	<DropdownMenuTrigger>
-		<Button
-			className={className}
-			variant={variant}
-			size={size}
-			disabled={isPending}
-		>
-			{isPending ? (
-				<>
-					<Loader2 className="animate-spin" />
-					A gerar...
-				</>
-			) : (
-				<>
-					<Download />
-					Exportar
-				</>
-			)}
-		</Button>
-	</DropdownMenuTrigger>
+			<DropdownMenuTrigger>
+				<Button
+					className={className}
+					variant={variant}
+					size={size}
+					disabled={isPending}
+				>
+					{isPending ? (
+						<>
+							<Loader2 className="animate-spin" />A gerar...
+						</>
+					) : (
+						<>
+							<Download />
+							Exportar
+						</>
+					)}
+				</Button>
+			</DropdownMenuTrigger>
 
-	<DropdownMenuContent
-		align="end"
-		className="w-64 p-1.5"
-	>
-		<div className="px-2.5 py-2">
-			<p className="text-sm font-medium">Exportar dados</p>
-			<p className="text-muted-foreground text-xs">
-				Escolha o formato do ficheiro
-			</p>
-		</div>
-
-		<DropdownMenuSeparator />
-
-		<DropdownMenuItem
-			onSelect={() => run("pdf")}
-			className="gap-3 px-2.5 py-2.5"
-		>
-			<div className="flex size-8 shrink-0 items-center justify-center border">
-				<FileText className="size-4" />
-			</div>
-
-			<div className="min-w-0">
-				<p className="text-sm font-medium">PDF</p>
-				<p className="text-muted-foreground text-xs">
-					Documento pronto para impressão
-				</p>
-			</div>
-		</DropdownMenuItem>
-
-		{allowSpreadsheet && (
-			<DropdownMenuItem
-				onSelect={() => run("xlsx")}
-				className="gap-3 px-2.5 py-2.5"
-			>
-				<div className="flex size-8 shrink-0 items-center justify-center border">
-					<FileSpreadsheet className="size-4" />
-				</div>
-
-				<div className="min-w-0">
-					<p className="text-sm font-medium">Excel</p>
+			<DropdownMenuContent align="end" className="w-64 p-1.5">
+				<div className="px-2.5 py-2">
+					<p className="font-medium text-sm">Exportar dados</p>
 					<p className="text-muted-foreground text-xs">
-						Dados editáveis em formato XLSX
+						Escolha o formato do ficheiro
 					</p>
 				</div>
-			</DropdownMenuItem>
-		)}
-	</DropdownMenuContent>
-</DropdownMenu>
+
+				<DropdownMenuSeparator />
+
+				<DropdownMenuItem
+					onSelect={() => run("pdf")}
+					className="gap-3 px-2.5 py-2.5"
+				>
+					<div className="flex size-8 shrink-0 items-center justify-center border">
+						<FileText className="size-4" />
+					</div>
+
+					<div className="min-w-0">
+						<p className="font-medium text-sm">PDF</p>
+						<p className="text-muted-foreground text-xs">
+							Documento pronto para impressão
+						</p>
+					</div>
+				</DropdownMenuItem>
+
+				{allowSpreadsheet && (
+					<DropdownMenuItem
+						onSelect={() => run("xlsx")}
+						className="gap-3 px-2.5 py-2.5"
+					>
+						<div className="flex size-8 shrink-0 items-center justify-center border">
+							<FileSpreadsheet className="size-4" />
+						</div>
+
+						<div className="min-w-0">
+							<p className="font-medium text-sm">Excel</p>
+							<p className="text-muted-foreground text-xs">
+								Dados editáveis em formato XLSX
+							</p>
+						</div>
+					</DropdownMenuItem>
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 

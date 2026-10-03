@@ -47,7 +47,6 @@ export function InventoryDeleteDialog({
 										toast.success("Item eliminado");
 										onOpenChange(false);
 									},
-									onError: (error) => toast.error(error.message),
 								},
 							)
 						}

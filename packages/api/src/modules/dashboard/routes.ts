@@ -1,16 +1,21 @@
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
+import { requireEventAccess } from "../../shared/auth/event-access";
+import { NotFoundError } from "../../shared/errors/app-error";
+import { EVENT_CODES } from "../../shared/errors/codes";
 import { successResponse } from "../../shared/http/response";
 import { DashboardService } from "./service";
 
 export async function dashboardRoutes(app: FastifyInstance) {
-	app.get("/api/v1/events/:eventId/dashboard", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/dashboard", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const summary = await DashboardService.getEventSummary(eventId, userId);
+		if (!summary)
+			throw new NotFoundError("Evento não encontrado", {
+				code: EVENT_CODES.NOT_FOUND,
+			});
 		return successResponse(summary);
 	});
 }

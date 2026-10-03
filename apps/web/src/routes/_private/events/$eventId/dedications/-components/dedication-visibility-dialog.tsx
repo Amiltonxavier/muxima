@@ -14,6 +14,7 @@ import { Label } from "@muxima/ui/components/label";
 import { EyeOff, Lock, Search, Unlock, UserMinus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { handleApiError } from "@/shared/errors";
 import {
 	useRemoveDedicationViewer,
 	useSetDedicationVisibility,
@@ -103,9 +104,9 @@ export function DedicationVisibilityDialog({
 			);
 			onOpenChange(false);
 		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Não foi possível guardar",
-			);
+			handleApiError(error, {
+				fallbackMessage: "Não foi possível guardar",
+			});
 		}
 	};
 
@@ -117,9 +118,9 @@ export function DedicationVisibilityDialog({
 			);
 			toast.success("Acesso removido");
 		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Não foi possível remover",
-			);
+			handleApiError(error, {
+				fallbackMessage: "Não foi possível remover",
+			});
 		}
 	};
 

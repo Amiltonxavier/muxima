@@ -110,13 +110,11 @@ export function GuestsTableRow({
 							canAddCompanion
 								? "Adicionar acompanhante"
 								: "Convite recusado — adicionar acompanhante"
-							}
+						}
 						aria-label={`Gerir acompanhantes de ${guest.name}`}
 					>
 						<Plus
-							className={`h-3.5 w-3.5 ${
-								canAddCompanion ? "" : "opacity-70"
-							}`}
+							className={`h-3.5 w-3.5 ${canAddCompanion ? "" : "opacity-70"}`}
 						/>
 					</Button>
 				)}

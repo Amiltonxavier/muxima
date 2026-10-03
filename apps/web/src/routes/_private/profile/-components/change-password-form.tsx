@@ -57,10 +57,6 @@ export function ChangePasswordForm() {
 							"Palavra-passe alterada. As outras sessões foram encerradas.",
 						);
 					},
-					onError: (error: Error) =>
-						toast.error(
-							error.message || "Não foi possível alterar a palavra-passe",
-						),
 				},
 			);
 		},

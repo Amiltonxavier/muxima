@@ -1,8 +1,12 @@
 import db from "@muxima/db";
+import { ForbiddenError } from "../errors/app-error";
 
 /**
- * Verify that a user is a member of the given event.
- * Throws Error if not.
+ * Verify that a user is an ACTIVE member of the given event.
+ *
+ * Throws a `ForbiddenError` (`403 EVENT_ACCESS_DENIED`) so an authorization
+ * failure can never surface as a `500`. Used by every oRPC procedure and REST
+ * route that touches event-scoped data.
  */
 export async function requireEventAccess(
 	userId: string,
@@ -18,11 +22,18 @@ export async function requireEventAccess(
 	});
 
 	if (!membership) {
-		throw new Error("Não tem permissão para aceder a este evento");
+		throw new ForbiddenError("Não tem acesso a este evento", {
+			code: "EVENT_ACCESS_DENIED",
+		});
 	}
 
 	if (allowedRoles && !allowedRoles.includes(membership.role)) {
-		throw new Error("Não tem permissão suficiente para esta operação");
+		throw new ForbiddenError(
+			"Não tem permissão suficiente para esta operação",
+			{
+				code: "EVENT_ROLE_REQUIRED",
+			},
+		);
 	}
 }
 

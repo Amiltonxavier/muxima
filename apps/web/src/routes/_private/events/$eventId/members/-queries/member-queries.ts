@@ -60,8 +60,6 @@ export function useAddMember() {
 				invalidate();
 				toast.success("Membro adicionado com sucesso");
 			},
-			onError: (err: Error) =>
-				toast.error(err.message || "Erro ao adicionar membro"),
 		}),
 	);
 }
@@ -75,8 +73,6 @@ export function useUpdateMemberRole() {
 				invalidate();
 				toast.success("Papel atualizado com sucesso");
 			},
-			onError: (err: Error) =>
-				toast.error(err.message || "Erro ao atualizar papel"),
 		}),
 	);
 }
@@ -90,8 +86,6 @@ export function useRemoveMember() {
 				invalidate();
 				toast.success("Membro removido com sucesso");
 			},
-			onError: (err: Error) =>
-				toast.error(err.message || "Erro ao remover membro"),
 		}),
 	);
 }

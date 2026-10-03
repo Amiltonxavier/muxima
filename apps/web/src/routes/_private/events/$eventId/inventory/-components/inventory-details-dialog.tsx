@@ -1,9 +1,7 @@
-import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
 	DialogContent,
-	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
@@ -23,18 +21,10 @@ import {
 } from "@/utils/status-helpers";
 import { useInventoryItem } from "../-queries/inventory-queries";
 
-/** Kept next to the chart so the overlay and the hole can never drift apart. */
-const QUANTITY_CHART_SIZE = 140;
-const QUANTITY_CHART_INNER_RADIUS = 46;
-/** Usable width inside the hole, leaving a gap before the ring. */
+const QUANTITY_CHART_SIZE = 160;
+const QUANTITY_CHART_INNER_RADIUS = 52;
 const QUANTITY_CENTER_BOX = QUANTITY_CHART_INNER_RADIUS * 2 - 16;
 
-/**
- * Read-only view of an inventory item. Every quantity, value and percentage
- * is provided pre-calculated by the backend. The pie carries the whole quantity
- * story — concluded vs. missing, which together add up to the planned total —
- * and the money figures live in a compact list instead of a grid of cards.
- */
 export function InventoryDetailsDialog({
 	open,
 	onOpenChange,
@@ -47,20 +37,22 @@ export function InventoryDetailsDialog({
 	const itemQuery = useInventoryItem(itemId);
 	const item = itemQuery.data;
 
-	// Without a unit price the API treats it as 0, so every derived figure is 0
-	// and a formula would just be noise.
 	const { hasPrice, unitPriceLabel } =
 		item?.unitPrice != null
-			? { hasPrice: true, unitPriceLabel: formatCurrency(item.unitPrice) }
-			: { hasPrice: false, unitPriceLabel: "" };
+			? {
+					hasPrice: true,
+					unitPriceLabel: formatCurrency(item.unitPrice),
+				}
+			: {
+					hasPrice: false,
+					unitPriceLabel: "",
+				};
 
 	const quantitySlices = useMemo(
 		() => [
 			{
 				label: "Concluído",
 				value: item?.currentQuantity ?? 0,
-				// Light and deep blue, far apart in lightness so the two halves of
-				// the ring read as different quantities at a glance.
 				color: "var(--chart-1)",
 			},
 			{
@@ -74,12 +66,27 @@ export function InventoryDetailsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>{item?.name ?? "Detalhes do produto"}</DialogTitle>
-					<DialogDescription>
-						Informação do item de inventário
-					</DialogDescription>
+			<DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+				<DialogHeader className="border-b pb-4">
+					<DialogTitle>{item?.name ?? "Detalhes do item"}</DialogTitle>
+
+					{item && (
+						<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
+							<span>
+								{INVENTORY_CATEGORY_LABELS[item.category] ?? item.category}
+							</span>
+
+							<span aria-hidden="true">·</span>
+
+							<span>{INVENTORY_UNIT_LABELS[item.unit] ?? item.unit}</span>
+
+							<span aria-hidden="true">·</span>
+
+							<span className="font-medium text-foreground">
+								{getStatusLabel(item.status, "inventory")}
+							</span>
+						</div>
+					)}
 				</DialogHeader>
 
 				{itemQuery.isLoading ? (
@@ -87,137 +94,189 @@ export function InventoryDetailsDialog({
 				) : itemQuery.isError || !item ? (
 					<ErrorState message="Não foi possível carregar os detalhes do item." />
 				) : (
-					<div className="space-y-4">
-						<div className="flex flex-wrap gap-2">
-							<Badge variant="secondary">
-								{INVENTORY_CATEGORY_LABELS[item.category] || item.category}
-							</Badge>
-							<Badge variant="outline">
-								{INVENTORY_UNIT_LABELS[item.unit] || item.unit}
-							</Badge>
-							<Badge
-								className={
-									item.status === "COMPLETED"
-										? "bg-emerald-50 text-emerald-700"
-										: item.status === "IN_PROGRESS"
-											? "bg-blue-50 text-blue-700"
-											: "bg-amber-50 text-amber-700"
-								}
-							>
-								{getStatusLabel(item.status, "inventory")}
-							</Badge>
-						</div>
-
-						{/* Quantities: the donut replaces the progress bar and the
-						    quantity cells — same numbers, one visual. */}
-						<div className="flex flex-col items-center gap-4 border p-4 sm:flex-row sm:justify-around">
-							{/*
-							 * The percentage sits in the hole, over the chart. `PieCenter`
-							 * can only show the slice total there, and its custom renderer
-							 * runs on hover only — so the headline the API returns,
-							 * `completionPercentage`, is overlaid instead.
-							 */}
-							<div className="relative shrink-0">
-								<PieChart
-									data={quantitySlices}
-									innerRadius={QUANTITY_CHART_INNER_RADIUS}
-									size={QUANTITY_CHART_SIZE}
-								>
-									{quantitySlices.map((slice, index) => (
-										<PieSlice key={slice.label} index={index} />
-									))}
-								</PieChart>
-
-								<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-									<span
-										className="font-semibold text-lg tabular-nums"
-										style={{ maxWidth: QUANTITY_CENTER_BOX }}
-									>
-										{item.completionPercentage}%
-									</span>
-									<span
-										className="text-[0.625rem] text-muted-foreground leading-tight"
-										style={{ maxWidth: QUANTITY_CENTER_BOX }}
-									>
-										concluído
-									</span>
-								</div>
-							</div>
-							<div className="space-y-3">
-								<ChartLegend
-									items={quantitySlices.map((slice) => ({
-										label: slice.label,
-										color: slice.color,
-										value: slice.value,
-									}))}
-								/>
-								<p className="text-muted-foreground text-xs">
-									Planeado: {item.plannedQuantity}{" "}
-									{INVENTORY_UNIT_LABELS[item.unit] || item.unit}
+					<div className="grid gap-6 py-2 md:grid-cols-[0.9fr_1.1fr]">
+						{/* LEFT — QUANTITY / PROGRESS */}
+						<section className="space-y-5 md:border-r md:pr-6">
+							<div>
+								<h3 className="font-medium text-sm">Execução</h3>
+								<p className="mt-1 text-muted-foreground text-xs">
+									Acompanhamento das quantidades planeadas.
 								</p>
 							</div>
-						</div>
 
-						{/* Money as a compact list, no cards. Each derived figure carries
-					    the operands the API used, so the number can be checked
-					    without repeating any of the arithmetic here. */}
-						<div className="space-y-1.5">
-							<MoneyRow
-								label="Preço unitário"
-								value={
-									item.unitPrice !== null ? formatCurrency(item.unitPrice) : "—"
-								}
-							/>
-							<MoneyRow
-								label="Montante total"
-								value={formatCurrency(item.totalValue)}
-								formula={
-									hasPrice
-										? `${item.plannedQuantity} × ${unitPriceLabel}`
-										: undefined
-								}
-							/>
-							<MoneyRow
-								label="Montante concluído"
-								value={formatCurrency(item.completedValue)}
-								formula={
-									hasPrice
-										? `${item.currentQuantity} × ${unitPriceLabel}`
-										: undefined
-								}
-							/>
-							<MoneyRow
-								label="Montante pendente"
-								value={formatCurrency(item.pendingValue)}
-								formula={
-									hasPrice
-										? `${formatCurrency(item.totalValue)} − ${formatCurrency(item.completedValue)}`
-										: undefined
-								}
-							/>
-						</div>
+							<div className="flex justify-center py-2">
+								<div className="relative shrink-0">
+									<PieChart
+										data={quantitySlices}
+										innerRadius={QUANTITY_CHART_INNER_RADIUS}
+										size={QUANTITY_CHART_SIZE}
+									>
+										{quantitySlices.map((slice, index) => (
+											<PieSlice key={slice.label} index={index} />
+										))}
+									</PieChart>
 
-						{item.notes && (
-							<div className="rounded-md bg-muted/50 p-3">
-								<p className="text-muted-foreground text-xs">Observações</p>
-								<p className="mt-1 text-sm">{item.notes}</p>
+									<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+										<span
+											className="font-semibold text-xl tabular-nums"
+											style={{
+												maxWidth: QUANTITY_CENTER_BOX,
+											}}
+										>
+											{item.completionPercentage}%
+										</span>
+
+										<span
+											className="text-[0.625rem] text-muted-foreground leading-tight"
+											style={{
+												maxWidth: QUANTITY_CENTER_BOX,
+											}}
+										>
+											concluído
+										</span>
+									</div>
+								</div>
 							</div>
-						)}
 
-						<div className="grid grid-cols-2 gap-3 text-muted-foreground text-xs">
-							<p>Criado: {formatDate(item.createdAt)}</p>
-							<p>Actualizado: {formatDate(item.updatedAt)}</p>
-						</div>
+							<ChartLegend
+								items={quantitySlices.map((slice) => ({
+									label: slice.label,
+									color: slice.color,
+									value: slice.value,
+								}))}
+							/>
+
+							<div className="border-y py-3">
+								<InfoRow
+									label="Planeado"
+									value={`${item.plannedQuantity} ${
+										INVENTORY_UNIT_LABELS[item.unit] ?? item.unit
+									}`}
+								/>
+
+								<InfoRow
+									label="Concluído"
+									value={`${item.currentQuantity} ${
+										INVENTORY_UNIT_LABELS[item.unit] ?? item.unit
+									}`}
+								/>
+
+								<InfoRow
+									label="Em falta"
+									value={`${item.remainingQuantity} ${
+										INVENTORY_UNIT_LABELS[item.unit] ?? item.unit
+									}`}
+								/>
+							</div>
+
+							{item.notes && (
+								<div className="border-t pt-4">
+									<p className="text-muted-foreground text-xs">Observações</p>
+									<p className="mt-1 text-sm leading-relaxed">{item.notes}</p>
+								</div>
+							)}
+						</section>
+
+						{/* RIGHT — FINANCIAL / DETAILS */}
+						<section className="space-y-5">
+							<div>
+								<h3 className="font-medium text-sm">Valores</h3>
+								<p className="mt-1 text-muted-foreground text-xs">
+									Resumo financeiro do item.
+								</p>
+							</div>
+
+							<div className="space-y-4">
+								<MoneyRow
+									label="Preço unitário"
+									value={
+										item.unitPrice !== null
+											? formatCurrency(item.unitPrice)
+											: "—"
+									}
+								/>
+
+								<MoneyRow
+									label="Montante total"
+									value={formatCurrency(item.totalValue)}
+									formula={
+										hasPrice
+											? `${item.plannedQuantity} × ${unitPriceLabel}`
+											: undefined
+									}
+								/>
+
+								<MoneyRow
+									label="Montante concluído"
+									value={formatCurrency(item.completedValue)}
+									formula={
+										hasPrice
+											? `${item.currentQuantity} × ${unitPriceLabel}`
+											: undefined
+									}
+								/>
+
+								<MoneyRow
+									label="Montante pendente"
+									value={formatCurrency(item.pendingValue)}
+									formula={
+										hasPrice
+											? `${formatCurrency(item.totalValue)} − ${formatCurrency(item.completedValue)}`
+											: undefined
+									}
+								/>
+							</div>
+
+							<div className="border-t pt-4">
+								<h3 className="font-medium text-sm">Informação</h3>
+
+								<div className="mt-3 space-y-2">
+									<InfoRow
+										label="Categoria"
+										value={
+											INVENTORY_CATEGORY_LABELS[item.category] ?? item.category
+										}
+									/>
+
+									<InfoRow
+										label="Unidade"
+										value={INVENTORY_UNIT_LABELS[item.unit] ?? item.unit}
+									/>
+
+									<InfoRow
+										label="Estado"
+										value={getStatusLabel(item.status, "inventory")}
+									/>
+								</div>
+							</div>
+
+							<div className="border-t pt-4 text-muted-foreground text-xs">
+								<div className="flex justify-between gap-4">
+									<span>Criado em {formatDate(item.createdAt)}</span>
+
+									<span>Actualizado em {formatDate(item.updatedAt)}</span>
+								</div>
+							</div>
+						</section>
 					</div>
 				)}
 
-				<DialogFooter>
+				<DialogFooter className="border-t pt-4">
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
 						Fechar
 					</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex items-center justify-between gap-4">
+			<span className="text-muted-foreground text-xs">{label}</span>
+			<span className="text-right font-medium text-sm">{value}</span>
+		</div>
 	);
 }
 
@@ -231,16 +290,18 @@ function MoneyRow({
 	formula?: string;
 }) {
 	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="text-muted-foreground text-xs">{label}</span>
-			<span className="text-right">
-				<span className="block font-medium text-sm">{value}</span>
+		<div className="flex items-start justify-between gap-4">
+			<span className="pt-0.5 text-muted-foreground text-xs">{label}</span>
+
+			<div className="text-right">
+				<p className="font-medium text-sm tabular-nums">{value}</p>
+
 				{formula && (
-					<span className="block text-muted-foreground text-xs tabular-nums">
+					<p className="mt-0.5 text-muted-foreground text-xs tabular-nums">
 						{formula}
-					</span>
+					</p>
 				)}
-			</span>
+			</div>
 		</div>
 	);
 }

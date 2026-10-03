@@ -75,7 +75,6 @@ export function InventoryCreateDialog({
 						toast.success("Item adicionado ao inventário");
 						onOpenChange(false);
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},

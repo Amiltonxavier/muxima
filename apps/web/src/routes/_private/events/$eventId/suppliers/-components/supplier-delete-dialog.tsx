@@ -48,7 +48,6 @@ export function SupplierDeleteDialog({
 										toast.success("Fornecedor eliminado");
 										onOpenChange(false);
 									},
-									onError: (error) => toast.error(error.message),
 								},
 							)
 						}

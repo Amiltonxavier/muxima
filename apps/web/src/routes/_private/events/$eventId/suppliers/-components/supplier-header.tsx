@@ -1,6 +1,6 @@
 import { Button } from "@muxima/ui/components/button";
-import { ExportMenu } from "@/shared/components/export-menu";
 import { Plus } from "lucide-react";
+import { ExportMenu } from "@/shared/components/export-menu";
 
 export function SupplierHeader({
 	eventId,
@@ -21,9 +21,9 @@ export function SupplierHeader({
 				<ExportMenu eventId={eventId} module="suppliers" />
 
 				<Button onClick={onAddSupplier}>
-				<Plus className="mr-2 h-4 w-4" />
-				Adicionar fornecedor
-			</Button>
+					<Plus className="mr-2 h-4 w-4" />
+					Adicionar fornecedor
+				</Button>
 			</div>
 		</div>
 	);

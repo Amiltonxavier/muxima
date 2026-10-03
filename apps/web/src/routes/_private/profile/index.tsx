@@ -100,7 +100,6 @@ function ProfilePage() {
 										updateProfile.mutate(values, {
 											onSuccess: () =>
 												toast.success("Perfil atualizado com sucesso"),
-											onError: (e: Error) => toast.error(e.message),
 										})
 									}
 								/>

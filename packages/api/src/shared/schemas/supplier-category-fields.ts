@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ValidationError } from "../errors/app-error";
+import { zodIssueToMessage } from "../errors/map-error";
 
 /**
  * Per-category dynamic fields for suppliers.
@@ -269,10 +271,19 @@ export function parseSupplierCategoryFields(
 		fields: payload,
 	});
 	if (!parsed.success) {
-		throw new Error(
-			`Campos inválidos para a categoria ${category}: ${parsed.error.issues
-				.map((i) => `${i.path.join(".")} ${i.message}`)
-				.join("; ")}`,
+		// Same contract as any other schema validation in the API: 422 with
+		// PT-PT messages and per-issue paths, so the dynamic form can attach the
+		// message to the offending field instead of showing a generic toast.
+		throw new ValidationError(
+			`Os campos da categoria ${category} são inválidos.`,
+			{
+				details: {
+					issues: parsed.error.issues.map((issue, index) => ({
+						path: ["fields", ...issue.path].join("."),
+						message: zodIssueToMessage(issue, index),
+					})),
+				},
+			},
 		);
 	}
 	return parsed.data.fields as Record<string, unknown>;

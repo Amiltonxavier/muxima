@@ -6,6 +6,7 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../../shared/errors/app-error";
+import { INVITATION_CODES } from "../../shared/errors/codes";
 import type {
 	BulkPublishError,
 	BulkPublishItemResult,
@@ -404,11 +405,15 @@ export async function respondToInvitation(
 	});
 
 	if (!invitation) {
-		throw new NotFoundError("Convite não encontrado");
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 	}
 
 	if (options.publishRequired && invitation.publishedAt === null) {
-		throw new NotFoundError("Convite não encontrado");
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 	}
 
 	// The backend is the authority on RSVP eligibility. Every blocked reason
@@ -476,7 +481,9 @@ async function enforceCapacity(
 		currentConfirmed - alreadyConfirmedInInvitation + invitation.guests.length;
 
 	if (prospective > capacity) {
-		throw new BadRequestError("A capacidade máxima do evento já foi atingida");
+		throw new BadRequestError("A capacidade máxima do evento já foi atingida", {
+			code: INVITATION_CODES.EVENT_CAPACITY_REACHED,
+		});
 	}
 }
 
@@ -714,11 +721,10 @@ export async function publishInvitationsBatch(
 				where: { id: { in: publishable.map((inv) => inv.id) } },
 				data: { publishedAt },
 			});
-		} catch (error) {
-			const message =
-				error instanceof Error
-					? error.message
-					: "Não foi possível publicar o convite";
+		} catch {
+			// The database error is logged server-side; the client only ever sees
+			// a PT-PT message, never the driver/stack text.
+			const message = "Não foi possível publicar o convite";
 
 			for (const invitation of publishable) {
 				outcomes.set(invitation.id, {
@@ -755,14 +761,11 @@ export async function publishInvitationsBatch(
 							data: { url, qrCode },
 						});
 						return null;
-					} catch (error) {
+					} catch {
 						return {
 							invitationId: inv.id,
 							code: inv.code,
-							reason:
-								error instanceof Error
-									? `Publicado, mas o QR Code não pôde ser gerado: ${error.message}`
-									: "Publicado, mas o QR Code não pôde ser gerado",
+							reason: "Publicado, mas o QR Code não pôde ser gerado",
 						};
 					}
 				}),
@@ -824,7 +827,9 @@ export async function publishInvitation(
 
 	const [outcome] = result.results;
 	if (!outcome) {
-		throw new NotFoundError("Convite não encontrado");
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 	}
 
 	if (
@@ -854,7 +859,10 @@ export async function unpublishInvitation(
 		select: { eventId: true },
 	});
 
-	if (!invitation) throw new NotFoundError("Convite não encontrado");
+	if (!invitation)
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 	assertSameEvent(invitation.eventId, input.eventId);
 
 	return prisma.guestInvitation.update({
@@ -874,7 +882,10 @@ export async function getInvitationById(
 		include: { guests: { include: { guest: true } } },
 	});
 
-	if (!invitation) throw new NotFoundError("Convite não encontrado");
+	if (!invitation)
+		throw new NotFoundError("Convite não encontrado", {
+			code: INVITATION_CODES.NOT_FOUND,
+		});
 	assertSameEvent(invitation.eventId, input.eventId);
 
 	return invitation;
@@ -882,7 +893,9 @@ export async function getInvitationById(
 
 function assertSameEvent(invitationEventId: string, expectedEventId: string) {
 	if (invitationEventId !== expectedEventId) {
-		throw new ForbiddenError("Convite não pertence a este evento");
+		throw new ForbiddenError("Convite não pertence a este evento", {
+			code: INVITATION_CODES.ACCESS_DENIED,
+		});
 	}
 }
 

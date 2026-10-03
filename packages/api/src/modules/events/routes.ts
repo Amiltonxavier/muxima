@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -11,19 +12,14 @@ import { EventService } from "./service";
 
 export async function eventRoutes(app: FastifyInstance) {
 	// List events
-	app.get("/api/v1/events", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-
+	app.get("/api/v1/events", async (request) => {
+		const userId = requireSessionUserId(request);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			status: validateEnum(query.status, VALID_EVENT_STATUSES),
-			type: validateEnum(query.type, VALID_EVENT_TYPES),
+			status: validateEnum(query.status, VALID_EVENT_STATUSES, "status"),
+			type: validateEnum(query.type, VALID_EVENT_TYPES, "type"),
 		};
 		const result = await EventService.findByUserId(
 			userId,
@@ -37,13 +33,8 @@ export async function eventRoutes(app: FastifyInstance) {
 	});
 
 	// Get event by ID
-	app.get("/api/v1/events/:eventId", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-
+	app.get("/api/v1/events/:eventId", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		const event = await EventService.findById(eventId, userId);
 		return successResponse(event);
@@ -51,25 +42,15 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Create event
 	app.post("/api/v1/events", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-
+		const userId = requireSessionUserId(request);
 		const data = createEventSchema.parse(request.body);
 		const event = await EventService.create(userId, data);
 		return reply.status(201).send(successResponse(event));
 	});
 
 	// Update event
-	app.patch("/api/v1/events/:eventId", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-
+	app.patch("/api/v1/events/:eventId", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		const data = updateEventSchema.parse(request.body);
 		const event = await EventService.update(eventId, userId, data);
@@ -78,12 +59,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Delete event
 	app.delete("/api/v1/events/:eventId", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-
+		const userId = requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		await EventService.delete(eventId, userId);
 		return reply.status(204).send();

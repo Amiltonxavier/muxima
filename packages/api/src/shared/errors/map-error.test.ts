@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { AppError, NotFoundError } from "./app-error";
 import { mapError } from "./map-error";
@@ -72,7 +73,7 @@ describe("mapError", () => {
 		expect(mapError(original)).toBe(original);
 	});
 
-	it("keeps safe Fastify 4xx errors (rate limit, parsing)", () => {
+	it("translates Fastify 4xx errors into public codes, never forwarding the library code", () => {
 		const rateLimit = Object.assign(new Error("Rate limit exceeded"), {
 			statusCode: 429,
 			code: "FST_ERR_RATE_LIMIT",
@@ -81,7 +82,37 @@ describe("mapError", () => {
 		const mapped = mapError(rateLimit);
 
 		expect(mapped.statusCode).toBe(429);
-		expect(mapped.code).toBe("FST_ERR_RATE_LIMIT");
+		expect(mapped.code).toBe("RATE_LIMIT_EXCEEDED");
+		expect(mapped.message).toBe(
+			"Demasiadas tentativas. Tente novamente dentro de alguns instantes.",
+		);
+		expect(mapped.code).not.toContain("FST_ERR");
+	});
+
+	it("maps every Fastify 4xx status to a stable public code", () => {
+		const cases: Array<[number, string]> = [
+			[400, "BAD_REQUEST"],
+			[401, "UNAUTHORIZED"],
+			[403, "FORBIDDEN"],
+			[404, "NOT_FOUND"],
+			[405, "METHOD_NOT_ALLOWED"],
+			[413, "PAYLOAD_TOO_LARGE"],
+			[415, "UNSUPPORTED_MEDIA_TYPE"],
+			[422, "VALIDATION_ERROR"],
+			[429, "RATE_LIMIT_EXCEEDED"],
+		];
+
+		for (const [statusCode, code] of cases) {
+			const mapped = mapError(
+				Object.assign(new Error("FST_ERR_SOMETHING"), {
+					statusCode,
+					code: "FST_ERR_SOMETHING",
+				}),
+			);
+
+			expect(mapped.statusCode).toBe(statusCode);
+			expect(mapped.code).toBe(code);
+		}
 	});
 
 	it("never leaks messages from unexpected errors", () => {
@@ -94,8 +125,80 @@ describe("mapError", () => {
 		expect(mapped).toBeInstanceOf(AppError);
 		expect(mapped.statusCode).toBe(500);
 		expect(mapped.code).toBe("INTERNAL_SERVER_ERROR");
-		expect(mapped.message).toBe("Internal server error");
+		expect(mapped.message).toBe(
+			"Ocorreu um erro interno. Tente novamente mais tarde.",
+		);
 		expect(mapped.message).not.toContain("ECONNREFUSED");
 		expect(mapped.message).not.toContain("node_modules");
+	});
+
+	it("maps a ZodError to VALIDATION_ERROR with PT-PT issues and paths", () => {
+		const schema = z.object({
+			email: z.email("Email inválido."),
+			age: z.number().min(18, "Idade mínima é 18."),
+		});
+
+		const result = schema.safeParse({ email: "nao-e-email", age: 10 });
+
+		const mapped = mapError(result.error);
+
+		expect(mapped.statusCode).toBe(422);
+		expect(mapped.code).toBe("VALIDATION_ERROR");
+		expect(mapped.message).toBe("Os dados enviados são inválidos.");
+
+		const details = mapped.details as {
+			issues: Array<{ path: string; message: string }>;
+		};
+		expect(details.issues).toEqual([
+			{ path: "email", message: "Email inválido." },
+			{ path: "age", message: "Idade mínima é 18." },
+		]);
+	});
+
+	it("replaces Zod's English defaults with PT-PT messages", () => {
+		const schema = z.object({
+			name: z.string().min(3),
+			role: z.enum(["ADMIN", "VIEWER"]),
+			website: z.url(),
+		});
+
+		const result = schema.safeParse({ name: "ab", role: "GUEST" });
+
+		const mapped = mapError(result.error);
+		const details = mapped.details as {
+			issues: Array<{ path: string; message: string }>;
+		};
+
+		expect(details.issues).toEqual([
+			{ path: "name", message: "O valor é demasiado curto." },
+			{ path: "role", message: "Valor inválido." },
+			{ path: "website", message: "Este campo é obrigatório." },
+		]);
+		expect(details.issues.map((issue) => issue.message).join(" ")).not.toMatch(
+			/Invalid|Expected|must be/,
+		);
+	});
+
+	it("reports missing fields as required regardless of the schema kind", () => {
+		const schema = z.object({
+			email: z.email(),
+			website: z.url(),
+			name: z.string().min(3),
+			role: z.enum(["ADMIN", "VIEWER"]),
+		});
+
+		const mapped = mapError(schema.safeParse({}).error);
+		const details = mapped.details as {
+			issues: Array<{ path: string; message: string }>;
+		};
+
+		expect(details.issues).toEqual([
+			{ path: "email", message: "Este campo é obrigatório." },
+			{ path: "website", message: "Este campo é obrigatório." },
+			{ path: "name", message: "Este campo é obrigatório." },
+			// Zod does not tell a missing enum apart from an unknown value, so
+			// both end up under the same message.
+			{ path: "role", message: "Valor inválido." },
+		]);
 	});
 });

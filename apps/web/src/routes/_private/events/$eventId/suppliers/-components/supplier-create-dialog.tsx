@@ -43,7 +43,6 @@ export function SupplierCreateDialog({
 									toast.success("Fornecedor adicionado");
 									onOpenChange(false);
 								},
-								onError: (error) => toast.error(error.message),
 							},
 						)
 					}

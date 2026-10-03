@@ -58,7 +58,6 @@ export function InvitationTableRow({
 			unpublish.mutate(
 				{ eventId: invitation.eventId, invitationId: invitation.id },
 				{
-					onError: (e: Error) => toast.error(e.message),
 					onSuccess: () => toast.success("Convite retirado da publicação"),
 				},
 			);
@@ -68,8 +67,6 @@ export function InvitationTableRow({
 		publish.mutate(
 			{ eventId: invitation.eventId, invitationId: invitation.id },
 			{
-				onError: (e: Error) =>
-					toast.error(e.message || "Não foi possível publicar o convite"),
 				onSuccess: () => toast.success("Convite publicado!"),
 			},
 		);

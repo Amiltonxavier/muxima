@@ -9,6 +9,7 @@ import { protectedProcedure } from "../index";
 import { getFoodPlanStats } from "../modules/food-plan/stats";
 import { requireEventAccess } from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
+import { FOOD_PLAN_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toJsonInput } from "../shared/utils/json";
 
 /**
@@ -106,7 +107,9 @@ export const foodPlanRouter = {
 					select: { id: true, eventId: true, name: true },
 				});
 				if (!supplier || supplier.eventId !== input.eventId) {
-					throw new ValidationError("Fornecedor inválido para este evento.");
+					throw new ValidationError("Fornecedor inválido para este evento.", {
+						code: SUPPLIER_CODES.INVALID_SUPPLIER,
+					});
 				}
 
 				const existing = await db.foodPlan.findUnique({
@@ -202,7 +205,9 @@ export const foodPlanRouter = {
 				select: { eventId: true },
 			});
 			if (!existing || existing.eventId !== input.eventId) {
-				throw new ValidationError("Item do plano de alimentação inválido.");
+				throw new ValidationError("Item do plano de alimentação inválido.", {
+					code: FOOD_PLAN_CODES.INVALID_ITEM,
+				});
 			}
 
 			const item = await db.foodPlanItem.update({
@@ -235,7 +240,9 @@ export const foodPlanRouter = {
 				select: { eventId: true },
 			});
 			if (!existing || existing.eventId !== input.eventId) {
-				throw new ValidationError("Item do plano de alimentação inválido.");
+				throw new ValidationError("Item do plano de alimentação inválido.", {
+					code: FOOD_PLAN_CODES.INVALID_ITEM,
+				});
 			}
 
 			await db.foodPlanItem.delete({ where: { id: input.id } });

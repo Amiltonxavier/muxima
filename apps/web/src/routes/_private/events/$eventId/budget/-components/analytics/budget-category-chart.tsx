@@ -60,27 +60,27 @@ export function BudgetCategoryChart({ entries }: { entries: BudgetEntry[] }) {
 								const entry = readEntry(point);
 								return [
 									{
-										color: "var(--chart-line-primary)",
+										color: "var(--chart-1)",
 										label: "Planeado",
 										value: formatCurrency(entry.planned),
 									},
 									{
-										color: "var(--chart-line-primary)",
+										color: "var(--chart-1)",
 										label: "Pago",
 										value: formatCurrency(entry.paid),
 									},
 									{
-										color: "var(--chart-line-primary)",
+										color: "var(--chart-1)",
 										label: "Por pagar",
 										value: formatCurrency(entry.pending),
 									},
 									{
-										color: "var(--chart-line-primary)",
+										color: "var(--chart-1)",
 										label: "Progresso",
 										value: `${entry.percentage}%`,
 									},
 									{
-										color: "var(--chart-line-primary)",
+										color: "var(--chart-1)",
 										label: "Itens",
 										value: entry.count,
 									},

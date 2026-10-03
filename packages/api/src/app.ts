@@ -5,7 +5,14 @@ import { env } from "@muxima/env/server";
 import type { FastifyInstance } from "fastify";
 import { registerRoutes } from "./routes";
 import { authMiddleware } from "./shared/auth/auth-middleware";
-import { errorHandler } from "./shared/errors/error-handler";
+import { mapBetterAuthError } from "./shared/auth/better-auth-error";
+import { ERROR_CODES } from "./shared/errors/codes";
+import {
+	errorEnvelope,
+	errorHandler,
+	notFoundHandler,
+} from "./shared/errors/error-handler";
+import { errorResponse } from "./shared/http/response";
 
 export async function buildApp(): Promise<FastifyInstance> {
 	const fastify = (await import("fastify")).default({
@@ -27,8 +34,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 		timeWindow: "1 minute",
 	});
 
-	// Global error handler
+	// Global error handler + 404 envelope for unmatched routes
 	fastify.setErrorHandler(errorHandler);
+	fastify.setNotFoundHandler(notFoundHandler);
 
 	// Auth middleware on all /api/v1 routes
 	fastify.addHook("preHandler", async (request, reply) => {
@@ -64,19 +72,35 @@ export async function buildApp(): Promise<FastifyInstance> {
 				response.headers.forEach((value, key) => {
 					reply.header(key, value);
 				});
-				reply.send(response.body ? await response.text() : null);
+
+				const body = response.body ? await response.text() : null;
+				if (response.ok || !body) {
+					reply.send(body);
+					return;
+				}
+
+				// Better Auth answered with an error: translate it into the
+				// official envelope (stable public code + PT-PT message) while
+				// preserving the status and headers it produced (cookies, etc.).
+				const appError = mapBetterAuthError(
+					parseJsonBody(body),
+					response.status,
+				);
+				reply.status(appError.statusCode).send(errorEnvelope(appError));
 			} catch (error) {
 				fastify.log.error({ err: error }, "Authentication Error:");
 				// Return 401 so the frontend can distinguish "no session" from
 				// a real server error (500). Without this, a transient DB
 				// failure would cause the frontend to treat it as "logged out"
 				// and redirect to /login.
-				reply.status(401).send({
-					error: {
-						code: "UNAUTHORIZED",
-						message: "Sessão inválida",
-					},
-				});
+				reply
+					.status(401)
+					.send(
+						errorResponse(
+							ERROR_CODES.UNAUTHORIZED,
+							"Não foi possível validar a sessão. Tente novamente.",
+						),
+					);
 			}
 		},
 	});
@@ -88,4 +112,19 @@ export async function buildApp(): Promise<FastifyInstance> {
 	await registerRoutes(fastify);
 
 	return fastify;
+}
+
+/** Parses a response body without ever throwing (Better Auth always sends JSON here). */
+function parseJsonBody(body: string): {
+	error?: { code?: unknown; message?: unknown; status?: unknown };
+	code?: unknown;
+	message?: unknown;
+	status?: unknown;
+} | null {
+	try {
+		const parsed = JSON.parse(body);
+		return typeof parsed === "object" && parsed !== null ? parsed : null;
+	} catch {
+		return null;
+	}
 }

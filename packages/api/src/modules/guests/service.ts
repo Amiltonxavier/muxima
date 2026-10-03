@@ -1,5 +1,6 @@
 import db from "@muxima/db";
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { GUEST_CODES } from "../../shared/errors/codes";
 import {
 	type GuestFilterParams,
 	GuestRepository,
@@ -21,7 +22,10 @@ export const GuestService = {
 
 	async findById(id: string) {
 		const guest = await GuestRepository.findById(id);
-		if (!guest) throw new NotFoundError("Convidado não encontrado");
+		if (!guest)
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
+			});
 		return guest;
 	},
 
@@ -54,21 +58,32 @@ export const GuestService = {
 		}>,
 	) {
 		const guest = await GuestRepository.findById(id);
-		if (!guest) throw new NotFoundError("Convidado não encontrado");
+		if (!guest)
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
+			});
 		return GuestRepository.update(id, data);
 	},
 
 	async delete(id: string) {
 		const guest = await GuestRepository.findById(id);
-		if (!guest) throw new NotFoundError("Convidado não encontrado");
+		if (!guest)
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
+			});
 		return GuestRepository.delete(id);
 	},
 
 	async addCompanion(guestId: string, name: string) {
 		const guest = await GuestRepository.findById(guestId);
-		if (!guest) throw new NotFoundError("Convidado não encontrado");
+		if (!guest)
+			throw new NotFoundError("Convidado não encontrado", {
+				code: GUEST_CODES.NOT_FOUND,
+			});
 		if (guest.companions.length >= guest.companionsLimit) {
-			throw new ForbiddenError("Limite de acompanhantes atingido");
+			throw new ForbiddenError("Limite de acompanhantes atingido", {
+				code: GUEST_CODES.COMPANION_LIMIT_REACHED,
+			});
 		}
 		return GuestRepository.addCompanion({ guestId, name });
 	},
@@ -107,9 +122,14 @@ export const GuestService = {
 			where: { id: tableId },
 			include: { tableGuests: true },
 		});
-		if (!table) throw new NotFoundError("Mesa não encontrada");
+		if (!table)
+			throw new NotFoundError("Mesa não encontrada", {
+				code: GUEST_CODES.TABLE_NOT_FOUND,
+			});
 		if (table.tableGuests.length >= table.capacity) {
-			throw new ForbiddenError("Mesa lotada");
+			throw new ForbiddenError("Mesa lotada", {
+				code: GUEST_CODES.TABLE_FULL,
+			});
 		}
 		return GuestRepository.assignToTable(tableId, guestId);
 	},

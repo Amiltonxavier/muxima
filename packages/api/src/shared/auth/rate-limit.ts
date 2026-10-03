@@ -1,3 +1,5 @@
+import { RateLimitError } from "../errors/app-error";
+
 type RateLimiterOptions = {
 	limit: number;
 	windowMs: number;
@@ -23,7 +25,7 @@ export function createMemoryRateLimiter(
 		);
 
 		if (recent.length >= options.limit) {
-			throw new Error("Demasiadas tentativas. Tente novamente mais tarde.");
+			throw new RateLimitError();
 		}
 
 		recent.push(now);

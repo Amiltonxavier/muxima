@@ -3,6 +3,7 @@ import { Pagination } from "@muxima/ui/components/pagination";
 import { Link2 } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
+import { ExportMenu } from "@/shared/components/export-menu";
 import { useInvitationsFilters } from "../../-hooks/use-invitations-filters";
 import { useVisibleSelection } from "../../-hooks/use-visible-selection";
 import {
@@ -19,7 +20,6 @@ import {
 import { InvitationsFilters } from "./invitations-filters";
 import { InvitationsStats } from "./invitations-stats";
 import { InvitationsTable } from "./invitations-table";
-import { ExportMenu } from "@/shared/components/export-menu";
 
 /**
  * "Convites" tab — the invitations half of the guests module.
@@ -74,8 +74,6 @@ export function InvitationsTab({
 					reportBulkPublishResult(summary);
 					selection.clear();
 				},
-				onError: (e: Error) =>
-					toast.error(e.message || "Não foi possível publicar os convites"),
 			},
 		);
 	};

@@ -1,9 +1,12 @@
 import db from "@muxima/db";
 import type { FastifyInstance } from "fastify";
+import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
 } from "../../shared/auth/event-access";
+import { NotFoundError } from "../../shared/errors/app-error";
+import { INVENTORY_CODES } from "../../shared/errors/codes";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -19,19 +22,20 @@ import {
 import { InventoryService } from "./service";
 
 export async function inventoryRoutes(app: FastifyInstance) {
-	app.get("/api/v1/events/:eventId/inventory", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/inventory", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventAccess(userId, eventId);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
 			search: query.search || undefined,
-			category: validateEnum(query.category, VALID_INVENTORY_CATEGORIES),
-			status: validateEnum(query.status, VALID_INVENTORY_STATUSES),
+			category: validateEnum(
+				query.category,
+				VALID_INVENTORY_CATEGORIES,
+				"category",
+			),
+			status: validateEnum(query.status, VALID_INVENTORY_STATUSES, "status"),
 		};
 		const result = await InventoryService.list(
 			db,
@@ -45,12 +49,8 @@ export async function inventoryRoutes(app: FastifyInstance) {
 		);
 	});
 
-	app.get("/api/v1/events/:eventId/inventory/stats", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.get("/api/v1/events/:eventId/inventory/stats", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
 		await requireEventAccess(userId, eventId);
 		const stats = await InventoryService.getStats(db, eventId);
@@ -58,11 +58,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/inventory", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
 		const data = createInventoryItemSchema.parse(request.body);
 		const item = await db.$transaction((tx) =>
@@ -71,20 +67,13 @@ export async function inventoryRoutes(app: FastifyInstance) {
 		return reply.status(201).send(successResponse(item));
 	});
 
-	app.patch("/api/v1/inventory/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+	app.patch("/api/v1/inventory/:id", async (request) => {
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("inventoryItem", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: {
-					code: "NOT_FOUND",
-					message: "Item de inventário não encontrado",
-				},
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		const data = updateInventoryItemSchema.parse(request.body);
@@ -95,70 +84,46 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/inventory/:id", async (request, reply) => {
-		const userId = request.session?.user?.id;
-		if (!userId)
-			return reply
-				.status(401)
-				.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+		const userId = requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("inventoryItem", id);
 		if (!eventId)
-			return reply.status(404).send({
-				error: {
-					code: "NOT_FOUND",
-					message: "Item de inventário não encontrado",
-				},
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
 			});
 		await requireEventAccess(userId, eventId);
 		await InventoryService.delete(db, id);
 		return reply.status(204).send();
 	});
 
-	app.get(
-		"/api/v1/inventory/:inventoryItemId/movements",
-		async (request, reply) => {
-			const userId = request.session?.user?.id;
-			if (!userId)
-				return reply
-					.status(401)
-					.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
-			const { inventoryItemId } = request.params as { inventoryItemId: string };
-			const eventId = await getEventIdForResource(
-				"inventoryItem",
-				inventoryItemId,
-			);
-			if (!eventId)
-				return reply.status(404).send({
-					error: {
-						code: "NOT_FOUND",
-						message: "Item de inventário não encontrado",
-					},
-				});
-			await requireEventAccess(userId, eventId);
-			const history = await InventoryService.getHistory(db, inventoryItemId);
-			return successResponse(history);
-		},
-	);
+	app.get("/api/v1/inventory/:inventoryItemId/movements", async (request) => {
+		const userId = requireSessionUserId(request);
+		const { inventoryItemId } = request.params as { inventoryItemId: string };
+		const eventId = await getEventIdForResource(
+			"inventoryItem",
+			inventoryItemId,
+		);
+		if (!eventId)
+			throw new NotFoundError("Item de inventário não encontrado", {
+				code: INVENTORY_CODES.NOT_FOUND,
+			});
+		await requireEventAccess(userId, eventId);
+		const history = await InventoryService.getHistory(db, inventoryItemId);
+		return successResponse(history);
+	});
 
 	app.post(
 		"/api/v1/inventory/:inventoryItemId/movements",
 		async (request, reply) => {
-			const userId = request.session?.user?.id;
-			if (!userId)
-				return reply
-					.status(401)
-					.send({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } });
+			const userId = requireSessionUserId(request);
 			const { inventoryItemId } = request.params as { inventoryItemId: string };
 			const eventId = await getEventIdForResource(
 				"inventoryItem",
 				inventoryItemId,
 			);
 			if (!eventId)
-				return reply.status(404).send({
-					error: {
-						code: "NOT_FOUND",
-						message: "Item de inventário não encontrado",
-					},
+				throw new NotFoundError("Item de inventário não encontrado", {
+					code: INVENTORY_CODES.NOT_FOUND,
 				});
 			await requireEventAccess(userId, eventId);
 			const data = addMovementSchema.parse(request.body);

@@ -33,7 +33,6 @@ export function DeleteEventDialog({
 					toast.success("Evento eliminado");
 					onOpenChange(false);
 				},
-				onError: (error) => toast.error(error.message),
 			},
 		);
 	}

@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
 import { env } from "@muxima/env/web";
-import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
+import { handleApiError, parseApiError } from "@/shared/errors";
 
 /**
  * Download hooks for the export endpoints.
@@ -78,15 +78,32 @@ function saveBlob(blob: Blob, filename: string) {
 	}
 }
 
-async function readErrorMessage(response: Response) {
+/**
+ * Turns a failed export response into the normalised API error, so the message
+ * shown to the user comes from the same parser every other failure uses.
+ */
+async function toApiError(response: Response): Promise<Error> {
+	let payload: unknown = null;
 	try {
-		const body = await response.json();
-		const message = (body as { error?: { message?: string } })?.error?.message;
-		if (message) return message;
+		payload = await response.json();
 	} catch {
-		// Not a JSON error body — fall back to the status text.
+		// Not a JSON error body — the status still drives the message.
 	}
-	return response.statusText || "Não foi possível gerar o ficheiro.";
+
+	// A non-JSON body leaves nothing to read, so the status drives the message.
+	const hasEnvelope =
+		typeof payload === "object" &&
+		payload !== null &&
+		Object.keys(payload).length > 0;
+	const info = parseApiError(
+		hasEnvelope ? payload : { status: response.status },
+	);
+	const status = info.status ?? response.status;
+
+	return Object.assign(new Error(info.message), {
+		code: info.code,
+		status,
+	});
 }
 
 type DownloadOptions = {
@@ -102,7 +119,7 @@ async function download(
 	const response = await fetch(url, { credentials: "include" });
 
 	if (!response.ok) {
-		throw new Error(await readErrorMessage(response));
+		throw await toApiError(response);
 	}
 
 	saveBlob(
@@ -176,8 +193,12 @@ export function useExportPublicInvitation(options: DownloadOptions = {}) {
 	});
 }
 
-/** Turns any export failure into one toast, without leaking a raw stack. */
+/**
+ * Turns any export failure into one toast through the shared handler, so the
+ * wording is the same PT-PT message the rest of the app shows.
+ */
 export function toastExportError(error: unknown) {
-	const message = error instanceof Error ? error.message : "Erro desconhecido";
-	toast.error(`Falha ao exportar: ${message}`);
+	handleApiError(error, {
+		fallbackMessage: "Não foi possível gerar o ficheiro.",
+	});
 }

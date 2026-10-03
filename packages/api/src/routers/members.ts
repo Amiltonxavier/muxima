@@ -3,6 +3,12 @@ import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../shared/errors/app-error";
+import { MEMBER_CODES, USER_CODES } from "../shared/errors/codes";
 import { memberListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -69,7 +75,9 @@ export const membersRouter = {
 				where: { email: input.email },
 			});
 			if (!user) {
-				throw new Error("Utilizador não encontrado com este email");
+				throw new NotFoundError("Utilizador não encontrado com este email", {
+					code: USER_CODES.NOT_FOUND,
+				});
 			}
 
 			const existing = await db.eventMember.findUnique({
@@ -81,7 +89,9 @@ export const membersRouter = {
 				},
 			});
 			if (existing) {
-				throw new Error("Utilizador já é membro deste evento");
+				throw new ConflictError("Utilizador já é membro deste evento", {
+					code: MEMBER_CODES.ALREADY_EXISTS,
+				});
 			}
 
 			const member = await db.eventMember.create({
@@ -108,7 +118,10 @@ export const membersRouter = {
 			const member = await db.eventMember.findUnique({
 				where: { id: input.memberId },
 			});
-			if (!member) throw new Error("Membro não encontrado");
+			if (!member)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
 
 			await requireEventAccess(context.session.user.id, member.eventId);
 
@@ -127,12 +140,17 @@ export const membersRouter = {
 			const member = await db.eventMember.findUnique({
 				where: { id: input.memberId },
 			});
-			if (!member) throw new Error("Membro não encontrado");
+			if (!member)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
 
 			await requireEventAccess(context.session.user.id, member.eventId);
 
 			if (member.role === "OWNER") {
-				throw new Error("Não é possível remover o proprietário");
+				throw new ForbiddenError("Não é possível remover o proprietário", {
+					code: MEMBER_CODES.OWNER_PROTECTED,
+				});
 			}
 
 			await db.eventMember.delete({

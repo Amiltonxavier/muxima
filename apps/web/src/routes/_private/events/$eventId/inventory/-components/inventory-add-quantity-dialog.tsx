@@ -62,7 +62,6 @@ export function InventoryAddQuantityDialog({
 						);
 						onOpenChange(false);
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},

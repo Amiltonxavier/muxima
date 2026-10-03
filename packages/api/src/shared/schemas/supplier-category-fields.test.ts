@@ -60,18 +60,18 @@ describe("parseSupplierCategoryFields", () => {
 	it("rejects a field that does not belong to the category", () => {
 		expect(() =>
 			parseSupplierCategoryFields("PHOTOGRAPHER", { capacity: 120 }),
-		).toThrow(/Campos inválidos/);
+		).toThrow(/são inválidos/);
 	});
 
 	it("rejects a field with the wrong type", () => {
 		expect(() =>
 			parseSupplierCategoryFields("VENUE", { capacity: "muito" }),
-		).toThrow(/Campos inválidos/);
+		).toThrow(/são inválidos/);
 	});
 
 	it("rejects an unknown category", () => {
 		expect(() => parseSupplierCategoryFields("NOT_A_CATEGORY", {})).toThrow(
-			/Campos inválidos/,
+			/são inválidos/,
 		);
 	});
 });

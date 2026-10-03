@@ -48,6 +48,10 @@ export const MemberRepository = {
 		});
 	},
 
+	findById(id: string) {
+		return db.eventMember.findUnique({ where: { id } });
+	},
+
 	findByEventAndUser(eventId: string, userId: string) {
 		return db.eventMember.findUnique({
 			where: { eventId_userId: { eventId, userId } },

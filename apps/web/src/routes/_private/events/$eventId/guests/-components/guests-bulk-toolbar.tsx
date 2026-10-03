@@ -49,7 +49,6 @@ export function GuestsBulkToolbar({
 					);
 					onClearSelection();
 				},
-				onError: (e: Error) => toast.error(e.message),
 			},
 		);
 	};
@@ -64,8 +63,6 @@ export function GuestsBulkToolbar({
 					reportBulkPublishResult(summary);
 					if (summary.published > 0) onClearSelection();
 				},
-				onError: (e: Error) =>
-					toast.error(e.message || "Não foi possível publicar os convites"),
 			},
 		);
 	};

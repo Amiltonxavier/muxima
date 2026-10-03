@@ -21,7 +21,6 @@ export function useGuestActions() {
 						toast.success("Convidado adicionado");
 						onSuccess?.();
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},
@@ -37,7 +36,6 @@ export function useGuestActions() {
 						toast.success("Convidado atualizado");
 						onSuccess?.();
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},
@@ -53,7 +51,6 @@ export function useGuestActions() {
 						toast.success("Convidado eliminado");
 						onSuccess?.();
 					},
-					onError: (error) => toast.error(error.message),
 				},
 			);
 		},

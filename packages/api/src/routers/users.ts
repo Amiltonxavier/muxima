@@ -7,7 +7,13 @@ import { protectedProcedure } from "../index";
 import { profileSelect, UserService } from "../modules/users/service";
 import { buildActivityLog } from "../shared/activity/activity-context";
 import { requireEventAccess } from "../shared/auth/event-access";
-import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../shared/errors/app-error";
+import { AUTH_CODES, MEMBER_CODES, USER_CODES } from "../shared/errors/codes";
 import {
 	PASSWORD_MISMATCH_MESSAGE,
 	passwordConfirmationSchema,
@@ -40,7 +46,10 @@ export const usersRouter = {
 				getUserAccess(userId),
 			]);
 
-			if (!user) throw new NotFoundError("Utilizador não encontrado");
+			if (!user)
+				throw new NotFoundError("Utilizador não encontrado", {
+					code: USER_CODES.NOT_FOUND,
+				});
 
 			const [activeSessions, ownedEventsCount, membershipsCount] =
 				await Promise.all([
@@ -165,7 +174,9 @@ export const usersRouter = {
 				// current password. Translate it to our own error so the client gets
 				// a stable, actionable message — and without echoing the credential.
 				if (error instanceof APIError) {
-					throw new BadRequestError("A palavra-passe atual está incorreta");
+					throw new BadRequestError("A palavra-passe atual está incorreta", {
+						code: AUTH_CODES.INVALID_CREDENTIALS,
+					});
 				}
 				throw error;
 			}
@@ -228,7 +239,9 @@ export const usersRouter = {
 			});
 
 			if (existingMember) {
-				throw new Error("Este utilizador já é membro do evento");
+				throw new ConflictError("Este utilizador já é membro do evento", {
+					code: MEMBER_CODES.ALREADY_EXISTS,
+				});
 			}
 
 			const invitation = await db.eventInvitation.create({
@@ -252,10 +265,15 @@ export const usersRouter = {
 				where: { id: input.id },
 				select: { eventId: true, role: true },
 			});
-			if (!member) throw new NotFoundError("Membro não encontrado");
+			if (!member)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, member.eventId);
 			if (member.role === "OWNER")
-				throw new Error("Não é possível remover o proprietário");
+				throw new ForbiddenError("Não é possível remover o proprietário", {
+					code: MEMBER_CODES.OWNER_PROTECTED,
+				});
 			await db.eventMember.delete({
 				where: { id: input.id },
 			});
@@ -275,7 +293,10 @@ export const usersRouter = {
 				where: { id: input.id },
 				select: { eventId: true },
 			});
-			if (!member) throw new NotFoundError("Membro não encontrado");
+			if (!member)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, member.eventId, [
 				"OWNER",
 			]);

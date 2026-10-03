@@ -1,4 +1,5 @@
 import { ValidationError } from "../errors/app-error";
+import { SUPPLIER_CODES } from "../errors/codes";
 
 /**
  * Business guards for supplier money, shared by every write path (create,
@@ -50,7 +51,9 @@ export function assertPaymentsWithinAgreed(input: {
 	nextAmountCents: number;
 }): void {
 	if (input.nextAmountCents <= 0) {
-		throw new ValidationError("O montante pago tem de ser maior que zero.");
+		throw new ValidationError("O montante pago tem de ser maior que zero.", {
+			code: SUPPLIER_CODES.INVALID_PAYMENT_AMOUNT,
+		});
 	}
 	const total = input.currentPaidCents + input.nextAmountCents;
 	if (total > input.agreedCents) {

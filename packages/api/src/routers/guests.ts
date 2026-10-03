@@ -22,9 +22,11 @@ import {
 } from "../shared/auth/event-access";
 import {
 	BadRequestError,
+	ConflictError,
 	ForbiddenError,
 	NotFoundError,
 } from "../shared/errors/app-error";
+import { GUEST_CODES } from "../shared/errors/codes";
 import { guestListInput, tableListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -115,7 +117,9 @@ export const guestsRouter = {
 			});
 
 			if (!guest) {
-				throw new Error("Convidado não encontrado");
+				throw new NotFoundError("Convidado não encontrado", {
+					code: GUEST_CODES.NOT_FOUND,
+				});
 			}
 
 			await requireEventAccess(context.session.user.id, guest.eventId);
@@ -331,7 +335,9 @@ export const guestsRouter = {
 			});
 
 			if (!guest) {
-				throw new NotFoundError("Convidado não encontrado");
+				throw new NotFoundError("Convidado não encontrado", {
+					code: GUEST_CODES.NOT_FOUND,
+				});
 			}
 
 			const invitationRsvp = guest.invitationGuests[0]?.invitation.rsvpStatus;
@@ -342,6 +348,7 @@ export const guestsRouter = {
 			if (!canAddCompanion) {
 				throw new ForbiddenError(
 					"Não é possível adicionar acompanhante a este convidado",
+					{ code: GUEST_CODES.COMPANION_LIMIT_REACHED },
 				);
 			}
 
@@ -524,11 +531,14 @@ export const guestsRouter = {
 			]);
 
 			if (!table || !guest) {
-				throw new NotFoundError("Mesa ou convidado não encontrado");
+				throw new NotFoundError("Mesa ou convidado não encontrado", {
+					code: GUEST_CODES.TABLE_NOT_FOUND,
+				});
 			}
 			if (table.eventId !== guest.eventId) {
 				throw new BadRequestError(
 					"A mesa e o convidado pertencem a eventos diferentes",
+					{ code: GUEST_CODES.DIFFERENT_EVENT },
 				);
 			}
 
@@ -542,7 +552,9 @@ export const guestsRouter = {
 			});
 
 			if (existing) {
-				throw new BadRequestError("Convidado já está associado a esta mesa");
+				throw new ConflictError("Convidado já está associado a esta mesa", {
+					code: GUEST_CODES.ALREADY_ASSIGNED,
+				});
 			}
 
 			const tableGuest = await db.tableGuest.create({
@@ -564,7 +576,9 @@ export const guestsRouter = {
 			});
 
 			if (!tableGuest) {
-				throw new NotFoundError("Associação não encontrada");
+				throw new NotFoundError("Associação não encontrada", {
+					code: GUEST_CODES.NOT_FOUND,
+				});
 			}
 
 			await requireEventAccess(

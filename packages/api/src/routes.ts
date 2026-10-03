@@ -4,6 +4,7 @@ import { eventRoutes } from "./modules/events/routes";
 import { exportRoutes } from "./modules/exports/routes";
 import { guestRoutes } from "./modules/guests/routes";
 import { inventoryRoutes } from "./modules/inventory/routes";
+import { invitationPublicRoutes } from "./modules/invitations/public/routes-invitation-export";
 import { memberRoutes } from "./modules/members/routes";
 import { notificationRoutes } from "./modules/notifications/routes";
 import { taskRoutes } from "./modules/tasks/routes";
@@ -19,4 +20,5 @@ export async function registerRoutes(app: FastifyInstance) {
 	await app.register(dashboardRoutes);
 	await app.register(userRoutes);
 	await app.register(exportRoutes);
+	await app.register(invitationPublicRoutes);
 }

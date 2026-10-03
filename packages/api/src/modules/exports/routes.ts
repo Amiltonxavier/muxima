@@ -1,5 +1,5 @@
 import db from "@muxima/db";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
 	type ExportFormat,
 	ExportNotSupportedError,
@@ -9,14 +9,13 @@ import {
 } from "../../exports";
 import type { ExportActor } from "../../exports/core";
 import {
-	ANONYMOUS_ACTOR,
 	buildExportContext,
 	loadEventInfo,
-	toPublicEventInfo,
 } from "../../exports/orchestration/export-context";
+import { requireSessionUser } from "../../shared/auth/auth-middleware";
 import { NotFoundError } from "../../shared/errors/app-error";
+import { EVENT_CODES } from "../../shared/errors/codes";
 import { DedicationService } from "../dedication/service";
-import { getPublicInvitation, getPublicSchedule } from "../invitations/service";
 
 /**
  * Export routes.
@@ -41,16 +40,10 @@ function isFormat(value: string): value is ExportFormat {
 	return FORMATS.includes(value as ExportFormat);
 }
 
-type SessionUser = { id: string; name?: string; email?: string | null };
-
 /** `?inline=1` opens the file in the browser instead of downloading it. */
 function wantsInline(request: FastifyRequest): boolean {
 	const query = request.query as { inline?: unknown } | undefined;
 	return query?.inline === "1" || query?.inline === "true";
-}
-
-function requireSessionUser(request: FastifyRequest): SessionUser | undefined {
-	return request.session?.user as SessionUser | undefined;
 }
 
 /**
@@ -66,20 +59,27 @@ async function assertMember(userId: string, eventId: string): Promise<void> {
 		select: { id: true },
 	});
 	if (!membership) {
-		throw new NotFoundError("Evento não encontrado");
+		throw new NotFoundError("Evento não encontrado", {
+			code: EVENT_CODES.NOT_FOUND,
+		});
 	}
 }
 
-function actorOf(user: SessionUser): ExportActor {
+function actorOf(user: {
+	id: string;
+	name: string;
+	email: string;
+}): ExportActor {
 	return {
 		id: user.id,
-		name: user.name ?? "Utilizador",
-		email: user.email ?? null,
+		name: user.name || "Utilizador",
+		email: user.email || null,
 	};
 }
 
-function notFound(reply: FastifyReply, message: string) {
-	return reply.status(404).send({ error: { code: "NOT_FOUND", message } });
+/** Unknown module/format: the report allowlist is closed, so this is a 404. */
+function reportNotFound(message: string): NotFoundError {
+	return new NotFoundError(message, { code: EVENT_CODES.NOT_FOUND });
 }
 
 export async function exportRoutes(app: FastifyInstance) {
@@ -89,11 +89,6 @@ export async function exportRoutes(app: FastifyInstance) {
 		"/api/v1/events/:eventId/exports/:module/:format",
 		async (request, reply) => {
 			const user = requireSessionUser(request);
-			if (!user) {
-				return reply.status(401).send({
-					error: { code: "UNAUTHORIZED", message: "Unauthorized" },
-				});
-			}
 
 			const { eventId, module, format } = request.params as {
 				eventId: string;
@@ -102,19 +97,19 @@ export async function exportRoutes(app: FastifyInstance) {
 			};
 
 			if (!isEventExportModule(module) || !isFormat(format)) {
-				return notFound(reply, "Relatório não disponível");
+				throw reportNotFound("Relatório não disponível");
 			}
 
 			await assertMember(user.id, eventId);
 
 			const event = await loadEventInfo(eventId);
 			if (!event) {
-				return notFound(reply, "Evento não encontrado");
+				throw reportNotFound("Evento não encontrado");
 			}
 
 			const reportName = getReportName(module, format);
 			if (!reportName) {
-				return notFound(reply, "Relatório não disponível neste formato");
+				throw reportNotFound("Relatório não disponível neste formato");
 			}
 
 			const context = buildExportContext({
@@ -130,7 +125,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				});
 			} catch (error) {
 				if (error instanceof ExportNotSupportedError) {
-					return notFound(reply, "Relatório não disponível neste formato");
+					throw reportNotFound("Relatório não disponível neste formato");
 				}
 				throw error;
 			}
@@ -143,11 +138,6 @@ export async function exportRoutes(app: FastifyInstance) {
 		"/api/v1/events/:eventId/dedications/:dedicationId/export/pdf",
 		async (request, reply) => {
 			const user = requireSessionUser(request);
-			if (!user) {
-				return reply.status(401).send({
-					error: { code: "UNAUTHORIZED", message: "Unauthorized" },
-				});
-			}
 
 			const { eventId, dedicationId } = request.params as {
 				eventId: string;
@@ -176,49 +166,6 @@ export async function exportRoutes(app: FastifyInstance) {
 				"pdf",
 				{ dedication },
 				context,
-			);
-		},
-	);
-
-	// ── Public invitation (PDF only) ──────────────────────────────
-
-	app.get(
-		"/api/public/invitations/:code/export/pdf",
-		async (request, reply) => {
-			const { code } = request.params as { code: string };
-
-			const [lookup, scheduleLookup] = await Promise.all([
-				getPublicInvitation(db, code),
-				getPublicSchedule(db, code),
-			]);
-
-			// Unavailable codes stay indistinguishable from each other, so this
-			// endpoint cannot be used to enumerate invitation codes.
-			if (lookup.result !== "AVAILABLE") {
-				return notFound(reply, "Convite não encontrado");
-			}
-
-			// Event info comes from the public projection, so the header and the
-			// file name carry the event name without any extra query.
-			const context = buildExportContext({
-				reportName: "Convite",
-				format: "pdf",
-				actor: ANONYMOUS_ACTOR,
-				event: toPublicEventInfo(lookup.invitation.event),
-				anonymous: true,
-			});
-
-			return await sendExport(
-				reply,
-				"invitation",
-				"pdf",
-				{
-					lookup,
-					schedule:
-						scheduleLookup.result === "AVAILABLE" ? scheduleLookup.items : [],
-				},
-				context,
-				{ inline: wantsInline(request) },
 			);
 		},
 	);

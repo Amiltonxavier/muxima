@@ -10,6 +10,7 @@ import {
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingState } from "@/shared/components/states/loading-state";
+import { handleApiError } from "@/shared/errors";
 import {
 	useDedication,
 	useDeleteDedication,
@@ -61,9 +62,9 @@ export function DedicationsDialogs({
 			toast.success("Dedicatória eliminada");
 			onClose();
 		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Não foi possível eliminar",
-			);
+			handleApiError(error, {
+				fallbackMessage: "Não foi possível eliminar",
+			});
 		}
 	};
 

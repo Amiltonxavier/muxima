@@ -100,7 +100,6 @@ function SchedulePage() {
 								toast.success("Atividade criada");
 								setShowCreate(false);
 							},
-							onError: (error) => toast.error(error.message),
 						},
 					);
 				}}

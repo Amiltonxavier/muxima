@@ -1,4 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { NOTIFICATION_CODES } from "../../shared/errors/codes";
 import {
 	type NotificationFilterParams,
 	NotificationRepository,
@@ -23,7 +24,10 @@ export const NotificationService = {
 
 	async markAsRead(id: string, userId: string) {
 		const notification = await NotificationRepository.findById(id);
-		if (!notification) throw new NotFoundError("Notificação não encontrada");
+		if (!notification)
+			throw new NotFoundError("Notificação não encontrada", {
+				code: NOTIFICATION_CODES.NOT_FOUND,
+			});
 		if (notification.userId !== userId)
 			throw new ForbiddenError(
 				"Não tem permissão para aceder a esta notificação",
@@ -37,7 +41,10 @@ export const NotificationService = {
 
 	async delete(id: string, userId: string) {
 		const notification = await NotificationRepository.findById(id);
-		if (!notification) throw new NotFoundError("Notificação não encontrada");
+		if (!notification)
+			throw new NotFoundError("Notificação não encontrada", {
+				code: NOTIFICATION_CODES.NOT_FOUND,
+			});
 		if (notification.userId !== userId)
 			throw new ForbiddenError(
 				"Não tem permissão para aceder a esta notificação",

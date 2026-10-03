@@ -1,4 +1,5 @@
 import { NotFoundError } from "../../shared/errors/app-error";
+import { TASK_CODES } from "../../shared/errors/codes";
 import { type TaskFilterParams, TaskRepository } from "./repository";
 
 export const TaskService = {
@@ -16,7 +17,10 @@ export const TaskService = {
 
 	async findById(id: string) {
 		const task = await TaskRepository.findById(id);
-		if (!task) throw new NotFoundError("Tarefa não encontrada");
+		if (!task)
+			throw new NotFoundError("Tarefa não encontrada", {
+				code: TASK_CODES.NOT_FOUND,
+			});
 		return task;
 	},
 
@@ -79,7 +83,10 @@ export const TaskService = {
 		}>,
 	) {
 		const task = await TaskRepository.findById(id);
-		if (!task) throw new NotFoundError("Tarefa não encontrada");
+		if (!task)
+			throw new NotFoundError("Tarefa não encontrada", {
+				code: TASK_CODES.NOT_FOUND,
+			});
 		return TaskRepository.update(id, {
 			...data,
 			dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
@@ -88,7 +95,10 @@ export const TaskService = {
 
 	async delete(id: string) {
 		const task = await TaskRepository.findById(id);
-		if (!task) throw new NotFoundError("Tarefa não encontrada");
+		if (!task)
+			throw new NotFoundError("Tarefa não encontrada", {
+				code: TASK_CODES.NOT_FOUND,
+			});
 		return TaskRepository.delete(id);
 	},
 

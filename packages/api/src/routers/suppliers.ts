@@ -13,6 +13,7 @@ import {
 	requireEventAccess,
 } from "../shared/auth/event-access";
 import { NotFoundError, ValidationError } from "../shared/errors/app-error";
+import { SUPPLIER_CODES } from "../shared/errors/codes";
 import { centsToUnits, fromCents, toCents } from "../shared/finance/money";
 import {
 	inferPaymentModel,
@@ -270,7 +271,10 @@ async function recalculateSupplier(
 		where: { id: supplierId },
 		select: MONEY_SELECT,
 	});
-	if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+	if (!supplier)
+		throw new NotFoundError("Fornecedor não encontrado", {
+			code: SUPPLIER_CODES.NOT_FOUND,
+		});
 
 	const price = toCents(supplier.price);
 	const payments = supplier.payments.map((p) => ({
@@ -348,14 +352,19 @@ async function loadInstallment(supplierId: string, installmentId: string) {
 		where: { id: supplierId },
 		select: { id: true, eventId: true, price: true, status: true },
 	});
-	if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+	if (!supplier)
+		throw new NotFoundError("Fornecedor não encontrado", {
+			code: SUPPLIER_CODES.NOT_FOUND,
+		});
 
 	const installment = await db.supplierInstallment.findUnique({
 		where: { id: installmentId },
 		select: { id: true, supplierId: true, position: true },
 	});
 	if (!installment || installment.supplierId !== supplier.id) {
-		throw new NotFoundError("Parcela não encontrada");
+		throw new NotFoundError("Parcela não encontrada", {
+			code: SUPPLIER_CODES.INSTALLMENT_NOT_FOUND,
+		});
 	}
 
 	return { supplier, installment };
@@ -462,7 +471,10 @@ export const suppliersRouter = {
 					installments: { orderBy: { position: "asc" } },
 				},
 			});
-			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+			if (!supplier)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
@@ -630,14 +642,20 @@ export const suppliersRouter = {
 		)
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("supplier", input.id);
-			if (!eventId) throw new NotFoundError("Fornecedor não encontrado");
+			if (!eventId)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, eventId);
 
 			const current = await db.supplier.findUnique({
 				where: { id: input.id },
 				select: { price: true, category: true, paymentStatus: true },
 			});
-			if (!current) throw new NotFoundError("Fornecedor não encontrado");
+			if (!current)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 
 			// Lowering the price below what is already paid would make the money
 			// unreadable, so it is rejected with a clear message.
@@ -645,7 +663,9 @@ export const suppliersRouter = {
 			if (nextPrice !== undefined && nextPrice !== null) {
 				const paidCents = current.paymentStatus === "PAID" ? nextPrice : null;
 				if (paidCents !== null && nextPrice < 0) {
-					throw new ValidationError("O preço não pode ser negativo.");
+					throw new ValidationError("O preço não pode ser negativo.", {
+						code: SUPPLIER_CODES.INVALID_PRICE,
+					});
 				}
 			}
 
@@ -711,14 +731,20 @@ export const suppliersRouter = {
 		)
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("supplier", input.id);
-			if (!eventId) throw new NotFoundError("Fornecedor não encontrado");
+			if (!eventId)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, eventId);
 
 			const supplier = await db.supplier.findUnique({
 				where: { id: input.id },
 				select: { id: true, status: true },
 			});
-			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+			if (!supplier)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 
 			// Existing transition rules (e.g. a completed supplier cannot reopen)
 			// live in the shared rules module.
@@ -768,7 +794,10 @@ export const suppliersRouter = {
 				where: { id: input.supplierId },
 				select: { id: true, eventId: true, price: true, status: true },
 			});
-			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+			if (!supplier)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
 			// Business rules, re-checked server side — the disabled button in the
@@ -808,7 +837,10 @@ export const suppliersRouter = {
 				where: { id: input.id },
 				select: { supplierId: true, supplier: { select: { eventId: true } } },
 			});
-			if (!payment) throw new NotFoundError("Pagamento não encontrado");
+			if (!payment)
+				throw new NotFoundError("Pagamento não encontrado", {
+					code: SUPPLIER_CODES.PAYMENT_NOT_FOUND,
+				});
 			await requireEventAccess(
 				context.session.user.id,
 				payment.supplier.eventId,
@@ -836,7 +868,10 @@ export const suppliersRouter = {
 				where: { id: input.supplierId },
 				select: { id: true, eventId: true, price: true, status: true },
 			});
-			if (!supplier) throw new NotFoundError("Fornecedor não encontrado");
+			if (!supplier)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
 			await requireEventAccess(context.session.user.id, supplier.eventId);
 
 			// Planning installments requires negotiating or confirmed.

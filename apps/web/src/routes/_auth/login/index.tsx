@@ -7,6 +7,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { handleApiError } from "@/shared/errors";
 import { loginSchema } from "@/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/login/")({
@@ -37,14 +38,18 @@ function LoginPage() {
 				});
 
 				if (error) {
-					toast.error(error.message || "Credenciais inválidas");
+					// The API boundary already answers in PT-PT; the fallback only
+					// covers a shape with nothing usable.
+					handleApiError(error, {
+						fallbackMessage: "Email ou palavra-passe incorretos.",
+					});
 					return;
 				}
 
 				toast.success("Sessão iniciada com sucesso");
 				window.location.href = "/";
-			} catch {
-				toast.error("Erro ao iniciar sessão");
+			} catch (caught) {
+				handleApiError(caught, { fallbackMessage: "Erro ao iniciar sessão" });
 			} finally {
 				setIsLoading(false);
 			}
