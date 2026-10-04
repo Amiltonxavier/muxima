@@ -58,7 +58,7 @@ export function MonthlySpendChart({ points }: { points: MonthlySpendPoint[] }) {
 										title={month.month}
 										rows={[
 											{
-												color: "var(--chart-line-primary)",
+												color: "var(--chart-1)",
 												label: "Pago",
 												value: formatCurrency(month.amount),
 											},

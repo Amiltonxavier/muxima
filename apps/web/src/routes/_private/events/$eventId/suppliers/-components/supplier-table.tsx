@@ -63,6 +63,7 @@ export function SupplierTable({
 				<TableHeader>
 					<TableRow>
 						<TableHead>Fornecedor</TableHead>
+						<TableHead>Telefone</TableHead>
 						<TableHead>Categoria</TableHead>
 						<TableHead className="text-right">Montante acordado</TableHead>
 						<TableHead className="text-right">Montante em falta</TableHead>

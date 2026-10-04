@@ -102,6 +102,7 @@ vi.mock("../../modules/users/service", () => ({
 
 vi.mock("../../shared/auth/event-access", () => ({
 	requireEventAccess: vi.fn(),
+	requireEventMutable: vi.fn(),
 }));
 
 const { call } = await import("@orpc/server");

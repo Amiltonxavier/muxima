@@ -22,7 +22,10 @@ import {
 	respondToInvitation,
 	unpublishInvitation,
 } from "../modules/invitations/service";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import {
 	publicInvitationCodeLimiter,
 	publicInvitationRespondLimiter,
@@ -103,7 +106,7 @@ export const invitationsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			return createInvitation(db, input);
 		}),
 
@@ -179,7 +182,7 @@ export const invitationsRouter = {
 	publish: protectedProcedure
 		.input(z.object({ eventId: z.string(), invitationId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			return publishInvitation(db, input);
 		}),
 
@@ -199,7 +202,7 @@ export const invitationsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			if (input.scope === "SELECTED" && input.invitationIds.length === 0) {
 				throw new BadRequestError("Seleciona pelo menos um convite", {
@@ -217,7 +220,7 @@ export const invitationsRouter = {
 	unpublish: protectedProcedure
 		.input(z.object({ eventId: z.string(), invitationId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			return unpublishInvitation(db, input);
 		}),
 
@@ -242,7 +245,7 @@ export const invitationsRouter = {
 
 			// The event comes from the invitation, not from the payload, so a
 			// user cannot respond to another event's invitation.
-			await requireEventAccess(context.session.user.id, invitation.eventId);
+			await requireEventMutable(context.session.user.id, invitation.eventId);
 			if (invitation.eventId !== input.eventId) {
 				throw new NotFoundError("Convite não encontrado", {
 					code: INVITATION_CODES.NOT_FOUND,

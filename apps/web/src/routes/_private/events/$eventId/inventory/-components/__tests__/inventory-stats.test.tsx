@@ -2,6 +2,20 @@ import type { InventoryStats as InventoryStatsDto } from "@muxima/api/shared/typ
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+// The row disables its actions when the event is operationally locked; the
+// router/query context is not available in this isolated render, so the hook
+// is stubbed to its mutable default (the lock behaviour itself is covered by
+// `shared/hooks/__tests__/use-event-lock.test.tsx`).
+vi.mock("@/shared/hooks/use-event-lock", () => ({
+	useEventLock: () => ({
+		eventId: "evt_1",
+		isEventLocked: false,
+		lockReason: null,
+		lockMessage: null,
+		isLoading: false,
+	}),
+}));
+
 import { InventoryStats } from "../inventory-stats";
 import { InventoryTable } from "../inventory-table";
 

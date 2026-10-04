@@ -13,6 +13,7 @@ import { ChartLegend, DonutChart } from "@/shared/components/charts";
 import { ErrorState } from "@/shared/components/states/error-state";
 import { LoadingState } from "@/shared/components/states/loading-state";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatCurrency } from "@/utils/format-currency";
 import {
@@ -39,6 +40,7 @@ export function SupplierDetailsDialog({
 }) {
 	const supplierQuery = useSupplier(supplierId);
 	const deletePayment = useDeleteSupplierPayment();
+	const { isEventLocked, lockMessage } = useEventLock();
 	const supplier = supplierQuery.data;
 
 	return (
@@ -307,8 +309,12 @@ export function SupplierDetailsDialog({
 												variant="ghost"
 												size="icon-sm"
 												className="shrink-0 text-destructive"
-												title="Eliminar pagamento"
-												disabled={deletePayment.isPending}
+												title={
+													isEventLocked
+														? (lockMessage ?? undefined)
+														: "Eliminar pagamento"
+												}
+												disabled={deletePayment.isPending || isEventLocked}
 												onClick={() =>
 													deletePayment.mutate(
 														{ id: payment.id },

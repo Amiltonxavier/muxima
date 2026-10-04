@@ -327,6 +327,10 @@ model Event {
   longitude          Float?
   capacity           Int?
   limitGuestCapacity Boolean     @default(false)
+  // Maximum number of PEOPLE (guests + companions) a single invitation may
+  // hold. Enforced by the backend (`assertInvitationCapacity`) on invitation
+  // creation and on every companion addition.
+  maxGuestsPerInvitation Int    @default(2)
   currency           String      @default("AOA")
   description        String?
   createdAt          DateTime    @default(now())

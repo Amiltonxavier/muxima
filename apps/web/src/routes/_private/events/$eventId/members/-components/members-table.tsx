@@ -18,6 +18,7 @@ import {
 } from "@muxima/ui/components/table";
 import { MoreHorizontal, Shield, Trash2 } from "lucide-react";
 import { QueryState } from "@/shared/components/states";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import type { AssignableMemberRole, MemberItem } from "../-types/member.types";
 import {
 	getMemberEmail,
@@ -52,6 +53,8 @@ export function MembersTable({
 	onRemove: (memberId: string) => void;
 	disabledMemberId?: string;
 }) {
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	return (
 		<QueryState
 			state={{
@@ -112,7 +115,12 @@ export function MembersTable({
 										) : (
 											<Select
 												value={memberRole}
-												disabled={disabledMemberId === member.id}
+												disabled={
+													disabledMemberId === member.id || isEventLocked
+												}
+												aria-label={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
 												onValueChange={(v) => {
 													if (v)
 														onRoleChange(member.id, v as AssignableMemberRole);
@@ -161,7 +169,12 @@ export function MembersTable({
 													variant="ghost"
 													size="icon-sm"
 													className="text-destructive"
-													title="Remover membro"
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: "Remover membro"
+													}
+													disabled={isEventLocked}
 													onClick={() => onRemove(member.id)}
 												>
 													<Trash2 className="h-3.5 w-3.5" />

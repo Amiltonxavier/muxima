@@ -8,7 +8,10 @@ import {
 	getBudgetLines,
 	getBudgetSnapshot,
 } from "../modules/budget/repository";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
 import { centsToUnits, fromCents } from "../shared/finance/money";
 
@@ -90,7 +93,7 @@ export const budgetRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			// The reserve is held back from the target, so it can never exceed it.
 			const reserve = input.reserveAmount ?? 0;

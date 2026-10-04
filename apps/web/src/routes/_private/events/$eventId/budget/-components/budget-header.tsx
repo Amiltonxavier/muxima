@@ -1,6 +1,7 @@
 import { Button } from "@muxima/ui/components/button";
 import { Pencil } from "lucide-react";
 import { ExportMenu } from "@/shared/components/export-menu";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 
 export function BudgetHeader({
 	eventId,
@@ -11,6 +12,8 @@ export function BudgetHeader({
 	hasBudget: boolean;
 	onEditTarget: () => void;
 }) {
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	return (
 		<div className="flex items-center justify-between gap-4">
 			<div>
@@ -26,6 +29,8 @@ export function BudgetHeader({
 				<Button
 					variant={hasBudget ? "outline" : "default"}
 					onClick={onEditTarget}
+					disabled={isEventLocked}
+					title={lockMessage ?? undefined}
 				>
 					<Pencil className="mr-2 h-4 w-4" />
 					{hasBudget ? "Editar meta" : "Definir meta"}

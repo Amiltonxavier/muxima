@@ -10,6 +10,7 @@ import { InventoryService } from "../modules/inventory/service";
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../shared/auth/event-access";
 import { inventoryListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
@@ -60,7 +61,7 @@ export const inventoryRouter = {
 	create: protectedProcedure
 		.input(createInventoryItemSchema.extend({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			return db.$transaction(async (tx) => {
 				const item = await InventoryService.create(
 					tx,
@@ -78,7 +79,7 @@ export const inventoryRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("inventoryItem", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 			return db.$transaction(async (tx) => {
 				const item = await InventoryService.update(tx, input.id, input);
@@ -92,7 +93,7 @@ export const inventoryRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("inventoryItem", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 			await InventoryService.delete(db, input.id);
 			return { success: true };
@@ -106,7 +107,7 @@ export const inventoryRouter = {
 				input.inventoryItemId,
 			);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 			return db.$transaction(async (tx) => {
 				const movement = await InventoryService.addMovement(

@@ -9,6 +9,7 @@ import {
 	MEMBER_CODES,
 	USER_CODES,
 } from "../../shared/errors/codes";
+import { assertEventIsMutable } from "../../shared/events/event-lock";
 import { EventRepository } from "../events/repository";
 import { type MemberFilterParams, MemberRepository } from "./repository";
 
@@ -24,6 +25,8 @@ export const MemberService = {
 			throw new NotFoundError("Evento não encontrado", {
 				code: EVENT_CODES.NOT_FOUND,
 			});
+
+		assertEventIsMutable(event);
 
 		const requester = event.members.find((m) => m.userId === userId);
 		if (!requester || !["OWNER", "ADMIN"].includes(requester.role)) {
@@ -94,6 +97,8 @@ export const MemberService = {
 				code: EVENT_CODES.NOT_FOUND,
 			});
 
+		assertEventIsMutable(event);
+
 		const requester = event.members.find((m) => m.userId === userId);
 		if (requester?.role !== "OWNER") {
 			throw new ForbiddenError("Apenas o proprietário pode alterar roles", {
@@ -116,6 +121,8 @@ export const MemberService = {
 			throw new NotFoundError("Evento não encontrado", {
 				code: EVENT_CODES.NOT_FOUND,
 			});
+
+		assertEventIsMutable(event);
 
 		const requester = event.members.find((m) => m.userId === userId);
 		if (!requester || !["OWNER", "ADMIN"].includes(requester.role)) {

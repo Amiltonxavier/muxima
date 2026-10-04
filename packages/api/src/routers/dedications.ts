@@ -8,6 +8,7 @@ import {
 	updateDedicationSchema,
 } from "../modules/dedication/schemas";
 import { DedicationService } from "../modules/dedication/service";
+import { requireEventMutable } from "../shared/auth/event-access";
 import { dedicationListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -67,13 +68,14 @@ export const dedicationsRouter = {
 
 	create: protectedProcedure
 		.input(createDedicationSchema.extend({ eventId: z.string().min(1) }))
-		.handler(async ({ context, input }) =>
-			DedicationService.create(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.create(db, {
 				eventId: input.eventId,
 				userId: context.session.user.id,
 				input,
-			}),
-		),
+			});
+		}),
 
 	update: protectedProcedure
 		.input(
@@ -82,14 +84,15 @@ export const dedicationsRouter = {
 				dedicationId: z.string().min(1),
 			}),
 		)
-		.handler(async ({ context, input }) =>
-			DedicationService.update(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.update(db, {
 				eventId: input.eventId,
 				dedicationId: input.dedicationId,
 				userId: context.session.user.id,
 				input,
-			}),
-		),
+			});
+		}),
 
 	setVisibility: protectedProcedure
 		.input(
@@ -98,14 +101,15 @@ export const dedicationsRouter = {
 				dedicationId: z.string().min(1),
 			}),
 		)
-		.handler(async ({ context, input }) =>
-			DedicationService.setVisibility(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.setVisibility(db, {
 				eventId: input.eventId,
 				dedicationId: input.dedicationId,
 				userId: context.session.user.id,
 				input,
-			}),
-		),
+			});
+		}),
 
 	listViewers: protectedProcedure
 		.input(dedicationInput)
@@ -124,35 +128,38 @@ export const dedicationsRouter = {
 				dedicationId: z.string().min(1),
 			}),
 		)
-		.handler(async ({ context, input }) =>
-			DedicationService.addViewer(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.addViewer(db, {
 				eventId: input.eventId,
 				dedicationId: input.dedicationId,
 				userId: context.session.user.id,
 				input,
-			}),
-		),
+			});
+		}),
 
 	removeViewer: protectedProcedure
 		.input(dedicationInput.extend({ viewerId: z.string().min(1) }))
-		.handler(async ({ context, input }) =>
-			DedicationService.removeViewer(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.removeViewer(db, {
 				eventId: input.eventId,
 				dedicationId: input.dedicationId,
 				viewerId: input.viewerId,
 				userId: context.session.user.id,
-			}),
-		),
+			});
+		}),
 
 	remove: protectedProcedure
 		.input(dedicationInput)
-		.handler(async ({ context, input }) =>
-			DedicationService.remove(db, {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+			return DedicationService.remove(db, {
 				eventId: input.eventId,
 				dedicationId: input.dedicationId,
 				userId: context.session.user.id,
-			}),
-		),
+			});
+		}),
 
 	getHistory: protectedProcedure
 		.input(dedicationInput)

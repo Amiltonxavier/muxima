@@ -3,6 +3,7 @@ import { Button } from "@muxima/ui/components/button";
 import { format } from "date-fns";
 import { Clock, MapPin, Trash2 } from "lucide-react";
 import { QueryState } from "@/shared/components/states";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	DEFAULT_SCHEDULE_STATUS,
 	SCHEDULE_STATUS_LABELS,
@@ -21,6 +22,8 @@ export function ScheduleList({
 	isError: boolean;
 	onDelete: (schedule: ScheduleItem) => void;
 }) {
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	return (
 		<QueryState
 			state={{
@@ -75,6 +78,8 @@ export function ScheduleList({
 								variant="ghost"
 								size="icon-sm"
 								className="text-destructive"
+								disabled={isEventLocked}
+								title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
 								onClick={() => onDelete(schedule)}
 							>
 								<Trash2 className="h-3.5 w-3.5" />

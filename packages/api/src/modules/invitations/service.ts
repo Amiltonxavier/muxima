@@ -6,7 +6,8 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../../shared/errors/app-error";
-import { INVITATION_CODES } from "../../shared/errors/codes";
+import { EVENT_CODES, INVITATION_CODES } from "../../shared/errors/codes";
+import { assertEventIsMutable } from "../../shared/events/event-lock";
 import type {
 	BulkPublishError,
 	BulkPublishItemResult,
@@ -19,6 +20,7 @@ import type {
 	PublicScheduleLookup,
 } from "../../shared/types/entities";
 import { composeEndAt } from "../events/lifecycle";
+import { assertInvitationCapacity, countGuestsPeople } from "./capacity";
 import { buildInvitationQrPayload, buildInvitationUrl } from "./qr-code";
 import { MAX_BULK_INVITATION_IDS } from "./schemas";
 
@@ -492,18 +494,47 @@ export async function createInvitation(
 	prisma: InvitationDb,
 	input: { eventId: string; guestIds: string[] },
 ): Promise<GuestInvitationCreated> {
-	// Every guest must belong to the event, otherwise the invitation would link
-	// guests from another event.
-	const validGuests = await prisma.guest.findMany({
-		where: { eventId: input.eventId, id: { in: input.guestIds } },
-		select: { id: true },
-	});
+	const [event, validGuests] = await Promise.all([
+		prisma.event.findUnique({
+			where: { id: input.eventId },
+			select: {
+				status: true,
+				eventDate: true,
+				startTime: true,
+				maxGuestsPerInvitation: true,
+			},
+		}),
+		// Every guest must belong to the event, otherwise the invitation would
+		// link guests from another event. Companion counts are fetched together
+		// so the capacity rule needs no extra round-trip.
+		prisma.guest.findMany({
+			where: { eventId: input.eventId, id: { in: input.guestIds } },
+			select: { id: true, _count: { select: { companions: true } } },
+		}),
+	]);
+
+	if (!event) {
+		throw new NotFoundError("Evento não encontrado", {
+			code: EVENT_CODES.NOT_FOUND,
+		});
+	}
+
+	// Defence in depth: the router already rejected a locked event, and the
+	// lock is re-evaluated here against the CURRENT row (never a payload).
+	assertEventIsMutable(event);
 
 	if (validGuests.length !== input.guestIds.length) {
 		throw new BadRequestError(
 			"Um ou mais convidados não pertencem a este evento",
 		);
 	}
+
+	// Guests + companions must fit `Event.maxGuestsPerInvitation`.
+	assertInvitationCapacity({
+		maxPeople: event.maxGuestsPerInvitation,
+		currentPeople: 0,
+		addedPeople: countGuestsPeople(validGuests),
+	});
 
 	for (let attempt = 0; attempt < CODE_MAX_ATTEMPTS; attempt++) {
 		const code = generateInvitationCode();

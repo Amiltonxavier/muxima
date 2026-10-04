@@ -9,6 +9,7 @@ import {
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../shared/auth/event-access";
 import { NotFoundError } from "../shared/errors/app-error";
 import { TASK_CODES } from "../shared/errors/codes";
@@ -109,6 +110,8 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+
 			const task = await db.task.create({
 				data: {
 					eventId: input.eventId,
@@ -155,6 +158,11 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("task", input.id);
+			if (eventId) {
+				await requireEventMutable(context.session.user.id, eventId);
+			}
+
 			const task = await db.task.update({
 				where: { id: input.id },
 				data: {
@@ -179,7 +187,7 @@ export const tasksRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("task", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 
 			await db.task.delete({
@@ -242,7 +250,9 @@ export const tasksRouter = {
 				responsible: z.string().optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			await requireEventMutable(context.session.user.id, input.eventId);
+
 			const schedule = await db.schedule.create({
 				data: {
 					eventId: input.eventId,
@@ -273,7 +283,12 @@ export const tasksRouter = {
 					.optional(),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const eventId = await getEventIdForResource("schedule", input.id);
+			if (eventId) {
+				await requireEventMutable(context.session.user.id, eventId);
+			}
+
 			const schedule = await db.schedule.update({
 				where: { id: input.id },
 				data: {
@@ -295,7 +310,7 @@ export const tasksRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("schedule", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 
 			await db.schedule.delete({

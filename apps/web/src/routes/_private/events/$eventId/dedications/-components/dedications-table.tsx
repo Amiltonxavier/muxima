@@ -10,6 +10,7 @@ import {
 	TableRow,
 } from "@muxima/ui/components/table";
 import { Eye, Lock, Pencil, Share2, Trash2, Unlock } from "lucide-react";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatDate } from "@/utils/format-date";
 import {
@@ -33,6 +34,8 @@ export function DedicationsTable({
 	onShare,
 	onDelete,
 }: Props) {
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	return (
 		<div className="overflow-x-auto border">
 			<Table>
@@ -110,6 +113,10 @@ export function DedicationsTable({
 												variant="ghost"
 												size="icon-sm"
 												aria-label={`Editar ${dedication.title}`}
+												title={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+												disabled={isEventLocked}
 												onClick={() => onEdit(dedication.id)}
 											>
 												<Pencil className="h-3.5 w-3.5" />
@@ -118,6 +125,10 @@ export function DedicationsTable({
 												variant="ghost"
 												size="icon-sm"
 												aria-label={`Partilhar ${dedication.title}`}
+												title={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+												disabled={isEventLocked}
 												onClick={() => onShare(dedication.id)}
 											>
 												<Share2 className="h-3.5 w-3.5" />
@@ -127,6 +138,10 @@ export function DedicationsTable({
 												size="icon-sm"
 												className="text-destructive"
 												aria-label={`Eliminar ${dedication.title}`}
+												title={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+												disabled={isEventLocked}
 												onClick={() => onDelete(dedication.id)}
 											>
 												<Trash2 className="h-3.5 w-3.5" />

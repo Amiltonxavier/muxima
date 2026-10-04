@@ -4,6 +4,7 @@ import { Checkbox } from "@muxima/ui/components/checkbox";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
 import { Eye, EyeOff, Globe, QrCode, Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { formatDate } from "@/utils/format-date";
 import {
 	getStatusColor,
@@ -33,6 +34,7 @@ export function InvitationTableRow({
 }) {
 	const publish = usePublishInvitation();
 	const unpublish = useUnpublishInvitation();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	const guests = invitation.guests.map(({ guest }) => guest);
 	const guestSummary =
@@ -141,8 +143,14 @@ export function InvitationTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title={isPublished ? "Retirar publicação" : "Publicar convite"}
-						disabled={isBusy || (!isPublished && !canPublish)}
+						title={
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: isPublished
+									? "Retirar publicação"
+									: "Publicar convite"
+						}
+						disabled={isBusy || isEventLocked || (!isPublished && !canPublish)}
 						onClick={handleTogglePublish}
 					>
 						{isPublished ? (
@@ -154,8 +162,12 @@ export function InvitationTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title="Copiar link do convite"
-						disabled={!invitationUrl}
+						title={
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: "Copiar link do convite"
+						}
+						disabled={!invitationUrl || isEventLocked}
 						onClick={handleShare}
 					>
 						<Share2 className="h-3.5 w-3.5" />

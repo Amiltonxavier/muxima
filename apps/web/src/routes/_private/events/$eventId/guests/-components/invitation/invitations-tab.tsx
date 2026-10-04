@@ -4,6 +4,7 @@ import { Link2 } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { ExportMenu } from "@/shared/components/export-menu";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { useInvitationsFilters } from "../../-hooks/use-invitations-filters";
 import { useVisibleSelection } from "../../-hooks/use-visible-selection";
 import {
@@ -36,6 +37,7 @@ export function InvitationsTab({
 }) {
 	const filters = useInvitationsFilters();
 	const publishBatch = usePublishInvitationsBatch();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	const invitationsQuery = useInvitations(eventId, {
 		page: filters.page,
@@ -91,11 +93,15 @@ export function InvitationsTab({
 				<Button
 					variant="outline"
 					size="sm"
-					disabled={unpublishedCount === 0 || publishBatch.isPending}
+					disabled={
+						unpublishedCount === 0 || publishBatch.isPending || isEventLocked
+					}
 					title={
-						unpublishedCount === 0
-							? "Não existem convites por publicar"
-							: "Publica todos os convites ainda privados deste evento"
+						isEventLocked
+							? (lockMessage ?? undefined)
+							: unpublishedCount === 0
+								? "Não existem convites por publicar"
+								: "Publica todos os convites ainda privados deste evento"
 					}
 					onClick={handlePublishAll}
 				>

@@ -6,6 +6,11 @@ import { protectedProcedure } from "../index";
 import { syncEventLifecycle } from "../modules/events/lifecycle";
 import { notifyEventMilestone } from "../modules/events/proximity-notifier";
 import {
+	assertMaxGuestsPerInvitationIsRespected,
+	MAX_MAX_GUESTS_PER_INVITATION,
+	MIN_MAX_GUESTS_PER_INVITATION,
+} from "../modules/invitations/capacity";
+import {
 	buildActivityLog,
 	submittedValues,
 } from "../shared/activity/activity-context";
@@ -280,6 +285,15 @@ export const eventsRouter = {
 				reference: z.string().optional(),
 				capacity: z.number().int().positive().optional(),
 				limitGuestCapacity: z.boolean().optional(),
+				// People (guests + companions) allowed per invitation. The default
+				// (2) lives in the database; lowering it is validated against the
+				// existing invitations before anything is written.
+				maxGuestsPerInvitation: z
+					.number()
+					.int()
+					.min(MIN_MAX_GUESTS_PER_INVITATION)
+					.max(MAX_MAX_GUESTS_PER_INVITATION)
+					.optional(),
 				description: z.string().optional(),
 				status: z
 					.enum([
@@ -323,6 +337,20 @@ export const eventsRouter = {
 			const effectiveStartTime = input.startTime ?? event.startTime;
 			const effectiveEndTime = input.endTime ?? event.endTime;
 
+			// Lowering the invitation capacity may invalidate existing data:
+			// nothing is deleted or rewritten silently — the change is rejected
+			// with the exact invitations that must be corrected first.
+			if (
+				input.maxGuestsPerInvitation !== undefined &&
+				input.maxGuestsPerInvitation !== event.maxGuestsPerInvitation
+			) {
+				await assertMaxGuestsPerInvitationIsRespected(
+					db,
+					input.id,
+					input.maxGuestsPerInvitation,
+				);
+			}
+
 			// Horário coerente: quando ambos presentes, o fim tem de ser
 			// estritamente posterior ao início ("HH:mm" compara-se como string).
 			if (
@@ -350,6 +378,7 @@ export const eventsRouter = {
 					reference: input.reference,
 					capacity: input.capacity,
 					limitGuestCapacity: input.limitGuestCapacity,
+					maxGuestsPerInvitation: input.maxGuestsPerInvitation,
 					description: input.description,
 					status: input.status,
 				},
@@ -373,6 +402,7 @@ export const eventsRouter = {
 							"endTime",
 							"venueName",
 							"capacity",
+							"maxGuestsPerInvitation",
 						]),
 					},
 				}),

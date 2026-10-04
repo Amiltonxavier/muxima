@@ -3,6 +3,7 @@ import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../../shared/auth/event-access";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { SCHEDULE_CODES, TASK_CODES } from "../../shared/errors/codes";
@@ -50,7 +51,7 @@ export async function taskRoutes(app: FastifyInstance) {
 	app.post("/api/v1/events/:eventId/tasks", async (request, reply) => {
 		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = createTaskSchema.parse(request.body);
 		const task = await TaskService.create(eventId, userId, data);
 		return reply.status(201).send(successResponse(task));
@@ -64,7 +65,7 @@ export async function taskRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Tarefa não encontrada", {
 				code: TASK_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = updateTaskSchema.parse(request.body);
 		const task = await TaskService.update(id, data);
 		return successResponse(task);
@@ -78,7 +79,7 @@ export async function taskRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Tarefa não encontrada", {
 				code: TASK_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		await TaskService.delete(id);
 		return reply.status(204).send();
 	});
@@ -107,7 +108,7 @@ export async function taskRoutes(app: FastifyInstance) {
 	app.post("/api/v1/events/:eventId/schedules", async (request, reply) => {
 		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = createScheduleSchema.parse(request.body);
 		const schedule = await TaskService.createSchedule(eventId, data);
 		return reply.status(201).send(successResponse(schedule));
@@ -121,7 +122,7 @@ export async function taskRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Agendamento não encontrado", {
 				code: SCHEDULE_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = updateScheduleSchema.parse(request.body);
 		const schedule = await TaskService.updateSchedule(id, data);
 		return successResponse(schedule);
@@ -135,7 +136,7 @@ export async function taskRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Agendamento não encontrado", {
 				code: SCHEDULE_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		await TaskService.deleteSchedule(id);
 		return reply.status(204).send();
 	});

@@ -47,6 +47,7 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	type ChecklistItemFilters,
 	type ChecklistStatusValue,
@@ -106,6 +107,7 @@ type ChecklistRow = {
  */
 function ChecklistPage() {
 	const { eventId } = Route.useParams();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	const [statusFilter, setStatusFilter] =
 		useState<ChecklistItemFilters["status"]>(undefined);
@@ -146,6 +148,7 @@ function ChecklistPage() {
 
 					<Button
 						variant="outline"
+						title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 						onClick={() =>
 							syncChecklist.mutate(
 								{ eventId },
@@ -154,7 +157,7 @@ function ChecklistPage() {
 								},
 							)
 						}
-						disabled={syncChecklist.isPending}
+						disabled={syncChecklist.isPending || isEventLocked}
 					>
 						<RefreshCw
 							className={`mr-2 h-4 w-4 ${syncChecklist.isPending ? "animate-spin" : ""}`}
@@ -166,6 +169,8 @@ function ChecklistPage() {
 							setEditingItem(null);
 							setDialogOpen(true);
 						}}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
 					>
 						<Plus className="mr-2 h-4 w-4" />
 						Novo item
@@ -330,6 +335,10 @@ function ChecklistPage() {
 										<Button
 											variant="ghost"
 											size="icon"
+											disabled={isEventLocked}
+											title={
+												isEventLocked ? (lockMessage ?? undefined) : undefined
+											}
 											onClick={() => {
 												setEditingItem(item);
 												setDialogOpen(true);
@@ -341,6 +350,10 @@ function ChecklistPage() {
 										<Button
 											variant="ghost"
 											size="icon"
+											disabled={isEventLocked}
+											title={
+												isEventLocked ? (lockMessage ?? undefined) : undefined
+											}
 											onClick={() => setDeletingItem(item)}
 											aria-label="Eliminar item"
 										>

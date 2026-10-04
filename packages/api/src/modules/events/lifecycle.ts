@@ -1,4 +1,10 @@
 import type { EventStatus } from "@muxima/db/prisma";
+import { composeEndAt, composeStartAt } from "../../shared/events/event-date";
+
+// The date+time composition is a pure rule shared with the event lock
+// (`shared/events/event-lock.ts`), so it lives in `shared/events/event-date`
+// and is re-exported here to keep every existing consumer working.
+export { composeEndAt, composeStartAt };
 
 /**
  * Temporal lifecycle of an event.
@@ -29,74 +35,6 @@ export type LifecycleEventInput = {
 
 /** Raw transition result: the status the event should be in at `now`. */
 export type DerivedLifecycleStatus = EventStatus;
-
-/**
- * Compose the effective start instant of an event from its date + time.
- *
- * `startTime` is a wall-clock "HH:mm" string stored alongside the date. When
- * absent, the event is considered to start at midnight of `eventDate`. This
- * helper contains all the date+time composition used by the lifecycle so the
- * rule lives in exactly one place.
- */
-export function composeStartAt(
-	event: Pick<LifecycleEventInput, "eventDate" | "startTime">,
-): Date | null {
-	if (!event.eventDate || Number.isNaN(event.eventDate.getTime())) {
-		return null;
-	}
-	const start = new Date(event.eventDate.getTime());
-	const { hours, minutes } = parseTimeString(event.startTime);
-	start.setHours(hours, minutes, 0, 0);
-	return start;
-}
-
-/**
- * Compose the effective end instant of an event.
- *
- * `endTime` is a wall-clock "HH:mm" string. An end time earlier than the
- * start time ("02:00" after a "20:00" start — common for parties) rolls over
- * to the next day. When there is no end time the event is considered to end
- * at the end of its start day.
- */
-export function composeEndAt(
-	event: Pick<LifecycleEventInput, "eventDate" | "startTime" | "endTime">,
-): Date | null {
-	const startAt = composeStartAt(event);
-	if (!startAt) return null;
-
-	if (!event.endTime) {
-		const end = new Date(startAt.getTime());
-		end.setHours(23, 59, 59, 999);
-		return end;
-	}
-
-	const end = new Date(startAt.getTime());
-	const { hours, minutes } = parseTimeString(event.endTime);
-	end.setHours(hours, minutes, 0, 0);
-
-	if (end.getTime() <= startAt.getTime()) {
-		end.setDate(end.getDate() + 1);
-	}
-	return end;
-}
-
-function parseTimeString(time: string | null | undefined): {
-	hours: number;
-	minutes: number;
-} {
-	if (!time) return { hours: 0, minutes: 0 };
-	const match = /^(\d{1,2}):(\d{2})/.exec(time.trim());
-	if (!match) return { hours: 0, minutes: 0 };
-	const hours = Number(match[1]);
-	const minutes = Number(match[2]);
-	if (Number.isNaN(hours) || Number.isNaN(minutes)) {
-		return { hours: 0, minutes: 0 };
-	}
-	return {
-		hours: Math.min(Math.max(hours, 0), 23),
-		minutes: Math.min(Math.max(minutes, 0), 59),
-	};
-}
 
 /**
  * Pure function: derive the status an event should have at instant `now`.

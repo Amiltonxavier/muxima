@@ -1,6 +1,7 @@
 import { Button } from "@muxima/ui/components/button";
 import { Globe, Loader2, MailPlus, X } from "lucide-react";
 import { toast } from "sonner";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateInvitation,
 	usePublishInvitationsBatch,
@@ -32,6 +33,7 @@ export function GuestsBulkToolbar({
 }) {
 	const createInvitation = useCreateInvitation();
 	const publishBatch = usePublishInvitationsBatch();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	if (selectedCount === 0) return null;
 
@@ -91,7 +93,8 @@ export function GuestsBulkToolbar({
 					<Button
 						variant="outline"
 						size="sm"
-						disabled={isBusy}
+						disabled={isBusy || isEventLocked}
+						title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 						onClick={handleCreate}
 					>
 						{createInvitation.isPending ? (
@@ -105,11 +108,13 @@ export function GuestsBulkToolbar({
 
 				<Button
 					size="sm"
-					disabled={!canPublish || isBusy}
+					disabled={!canPublish || isBusy || isEventLocked}
 					title={
-						canPublish
-							? undefined
-							: "Os convidados selecionados já têm convites publicados"
+						isEventLocked
+							? (lockMessage ?? undefined)
+							: canPublish
+								? undefined
+								: "Os convidados selecionados já têm convites publicados"
 					}
 					onClick={handlePublish}
 				>

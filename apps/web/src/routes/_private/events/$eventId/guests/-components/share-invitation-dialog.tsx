@@ -9,6 +9,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateInvitation,
 	useInvitation,
@@ -29,6 +30,7 @@ export function ShareInvitationDialog({
 	onClose: () => void;
 }) {
 	const createInvitation = useCreateInvitation();
+	const { isEventLocked, lockMessage } = useEventLock();
 	const invitationQuery = useInvitation(eventId, guest.id);
 	const invitation = invitationQuery.data;
 
@@ -108,7 +110,8 @@ export function ShareInvitationDialog({
 						</p>
 						<Button
 							onClick={handleCreateAndShare}
-							disabled={createInvitation.isPending}
+							disabled={createInvitation.isPending || isEventLocked}
+							title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 						>
 							<Plus className="mr-2 h-4 w-4" />
 							{createInvitation.isPending

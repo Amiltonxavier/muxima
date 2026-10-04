@@ -1,6 +1,7 @@
 import { Button } from "@muxima/ui/components/button";
 import { AlertTriangle, Globe, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { usePublishInvitationsBatch } from "../../-queries/invitation-queries";
 import type { BulkPublishSummary } from "../../-types/invitation.types";
 
@@ -24,6 +25,7 @@ export function InvitationsBulkToolbar({
 	onClearSelection: () => void;
 }) {
 	const publishBatch = usePublishInvitationsBatch();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	const handlePublish = () => {
 		if (publishableIds.length === 0) return;
@@ -68,7 +70,10 @@ export function InvitationsBulkToolbar({
 
 			<Button
 				size="sm"
-				disabled={publishableIds.length === 0 || publishBatch.isPending}
+				disabled={
+					publishableIds.length === 0 || publishBatch.isPending || isEventLocked
+				}
+				title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 				onClick={handlePublish}
 			>
 				{publishBatch.isPending ? (

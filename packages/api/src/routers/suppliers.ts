@@ -11,6 +11,7 @@ import { getSupplierAnalytics } from "../modules/suppliers/analytics";
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../shared/auth/event-access";
 import { NotFoundError, ValidationError } from "../shared/errors/app-error";
 import { SUPPLIER_CODES } from "../shared/errors/codes";
@@ -543,7 +544,7 @@ export const suppliersRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const price = input.price ?? 0;
 			const installments = input.installments ?? [];
@@ -646,7 +647,7 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, eventId);
+			await requireEventMutable(context.session.user.id, eventId);
 
 			const current = await db.supplier.findUnique({
 				where: { id: input.id },
@@ -735,7 +736,7 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, eventId);
+			await requireEventMutable(context.session.user.id, eventId);
 
 			const supplier = await db.supplier.findUnique({
 				where: { id: input.id },
@@ -768,7 +769,7 @@ export const suppliersRouter = {
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("supplier", input.id);
-			if (eventId) await requireEventAccess(context.session.user.id, eventId);
+			if (eventId) await requireEventMutable(context.session.user.id, eventId);
 			await db.supplier.delete({ where: { id: input.id } });
 			return { success: true };
 		}),
@@ -798,7 +799,7 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, supplier.eventId);
+			await requireEventMutable(context.session.user.id, supplier.eventId);
 
 			// Business rules, re-checked server side — the disabled button in the
 			// UI is convenience, never the security layer.
@@ -841,7 +842,7 @@ export const suppliersRouter = {
 				throw new NotFoundError("Pagamento não encontrado", {
 					code: SUPPLIER_CODES.PAYMENT_NOT_FOUND,
 				});
-			await requireEventAccess(
+			await requireEventMutable(
 				context.session.user.id,
 				payment.supplier.eventId,
 			);
@@ -872,7 +873,7 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, supplier.eventId);
+			await requireEventMutable(context.session.user.id, supplier.eventId);
 
 			// Planning installments requires negotiating or confirmed.
 			assertInstallmentsAllowedOnStatus(supplier.status);
@@ -905,7 +906,7 @@ export const suppliersRouter = {
 				input.supplierId,
 				input.id,
 			);
-			await requireEventAccess(context.session.user.id, supplier.eventId);
+			await requireEventMutable(context.session.user.id, supplier.eventId);
 
 			assertInstallmentsAllowedOnStatus(supplier.status as SupplierRuleStatus);
 
@@ -945,7 +946,7 @@ export const suppliersRouter = {
 		.input(z.object({ id: z.string(), supplierId: z.string() }))
 		.handler(async ({ context, input }) => {
 			const { supplier } = await loadInstallment(input.supplierId, input.id);
-			await requireEventAccess(context.session.user.id, supplier.eventId);
+			await requireEventMutable(context.session.user.id, supplier.eventId);
 
 			await db.$transaction(async (tx) => {
 				await tx.supplierInstallment.delete({ where: { id: input.id } });

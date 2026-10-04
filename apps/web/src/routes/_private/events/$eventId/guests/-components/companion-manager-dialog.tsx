@@ -18,6 +18,8 @@ import {
 import { Plus, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useEvent } from "@/routes/_private/events/-queries/event-queries";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { guestCompanionSchema } from "@/utils/guest-schemas";
 import { COMPANION_STATUS_LABELS, toSelectItems } from "@/utils/status-helpers";
 import {
@@ -39,7 +41,22 @@ export function CompanionManagerDialog({
 	const removeCompanion = useRemoveCompanion();
 	const [newName, setNewName] = useState("");
 
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
+	const eventQuery = useEvent(eventId ?? "");
+	const maxPeople = eventQuery.data?.maxGuestsPerInvitation ?? 2;
+
 	const companions = guest.companions ?? [];
+	// Frontend mirror of `assertInvitationCapacity`: the guest's party cannot
+	// grow past the event's limit. The backend re-checks it (including the
+	// rest of the invitation) and is the authority.
+	const currentPeople = 1 + companions.length;
+	const atCapacity = currentPeople >= maxPeople;
+	const capacityMessage = `Este convite permite no máximo ${maxPeople} ${maxPeople === 1 ? "pessoa" : "pessoas"}.`;
+	const addDisabledReason = isEventLocked
+		? lockMessage
+		: atCapacity
+			? capacityMessage
+			: null;
 
 	const handleAdd = () => {
 		const result = guestCompanionSchema.safeParse({ name: newName });
@@ -108,7 +125,12 @@ export function CompanionManagerDialog({
 						/>
 						<Button
 							onClick={handleAdd}
-							disabled={!newName.trim() || addCompanion.isPending}
+							disabled={
+								!newName.trim() ||
+								addCompanion.isPending ||
+								addDisabledReason !== null
+							}
+							title={addDisabledReason ?? undefined}
 							size="sm"
 						>
 							<Plus className="h-4 w-4" />
@@ -134,7 +156,13 @@ export function CompanionManagerDialog({
 												handleStatusChange(companion.id, v as string)
 											}
 										>
-											<SelectTrigger className="h-7 w-[120px] text-xs">
+											<SelectTrigger
+												className="h-7 w-[120px] text-xs"
+												disabled={isEventLocked}
+												aria-label={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+											>
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
@@ -151,7 +179,10 @@ export function CompanionManagerDialog({
 										size="icon-sm"
 										className="h-7 text-destructive"
 										onClick={() => handleRemove(companion.id)}
-										disabled={removeCompanion.isPending}
+										disabled={removeCompanion.isPending || isEventLocked}
+										title={
+											isEventLocked ? (lockMessage ?? undefined) : "Eliminar"
+										}
 									>
 										<Trash2 className="h-3.5 w-3.5" />
 									</Button>

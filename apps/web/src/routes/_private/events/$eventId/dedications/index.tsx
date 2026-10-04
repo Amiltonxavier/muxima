@@ -7,6 +7,7 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { EmptyState } from "@/shared/components/states/empty-state";
 import { ErrorState } from "@/shared/components/states/error-state";
 import { LoadingState } from "@/shared/components/states/loading-state";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { DedicationsDialogs } from "./-components/dedications-dialogs";
 import { DedicationsFilters } from "./-components/dedications-filters";
 import { DedicationsTable } from "./-components/dedications-table";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_private/events/$eventId/dedications/")({
 function DedicationsPage() {
 	const { eventId } = Route.useParams();
 	const page = useDedicationsPage(eventId);
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	return (
 		<div className="space-y-6">
@@ -36,7 +38,11 @@ function DedicationsPage() {
 				<div className="flex gap-2">
 					<ExportMenu eventId={eventId} module="event" />
 
-					<Button onClick={() => page.openDialog({ kind: "create" })}>
+					<Button
+						onClick={() => page.openDialog({ kind: "create" })}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
+					>
 						<Plus className="mr-2 h-4 w-4" />
 						Nova dedicatória
 					</Button>

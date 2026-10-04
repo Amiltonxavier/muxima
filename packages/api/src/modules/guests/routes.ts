@@ -3,6 +3,7 @@ import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../../shared/auth/event-access";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { GUEST_CODES } from "../../shared/errors/codes";
@@ -47,7 +48,7 @@ export async function guestRoutes(app: FastifyInstance) {
 	app.post("/api/v1/events/:eventId/guests", async (request, reply) => {
 		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = createGuestSchema.parse(request.body);
 		const guest = await GuestService.create(eventId, data);
 		return reply.status(201).send(successResponse(guest));
@@ -61,7 +62,7 @@ export async function guestRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Convidado não encontrado", {
 				code: GUEST_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = updateGuestSchema.parse(request.body);
 		const guest = await GuestService.update(id, data);
 		return successResponse(guest);
@@ -75,7 +76,7 @@ export async function guestRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Convidado não encontrado", {
 				code: GUEST_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		await GuestService.delete(id);
 		return reply.status(204).send();
 	});
@@ -103,7 +104,7 @@ export async function guestRoutes(app: FastifyInstance) {
 	app.post("/api/v1/events/:eventId/tables", async (request, reply) => {
 		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = createTableSchema.parse(request.body);
 		const table = await GuestService.createTable(eventId, data);
 		return reply.status(201).send(successResponse(table));
@@ -118,7 +119,7 @@ export async function guestRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Convidado não encontrado", {
 				code: GUEST_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		await GuestService.assignToTable(tableId, guestId);
 		return reply.status(201).send(successResponse({ success: true }));
 	});
@@ -136,7 +137,7 @@ export async function guestRoutes(app: FastifyInstance) {
 				throw new NotFoundError("Convidado não encontrado", {
 					code: GUEST_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(userId, eventId);
+			await requireEventMutable(userId, eventId);
 			await GuestService.removeFromTable(tableId, guestId);
 			return reply.status(204).send();
 		},

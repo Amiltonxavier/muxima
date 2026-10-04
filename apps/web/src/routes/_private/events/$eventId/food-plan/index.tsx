@@ -57,6 +57,7 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	type FoodPlanCategoryValue,
 	type FoodPlanStatusValue,
@@ -115,6 +116,7 @@ const CATEGORY_COLORS: Record<string, string> = {
  */
 function FoodPlanPage() {
 	const { eventId } = Route.useParams();
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	const [itemDialogOpen, setItemDialogOpen] = useState(false);
 	const [editingItem, setEditingItem] = useState<FoodPlanItemRow | null>(null);
@@ -151,7 +153,12 @@ function FoodPlanPage() {
 				<div className="flex items-center gap-2">
 					<ExportMenu eventId={eventId} module="food-plan" />
 
-					<Button variant="outline" onClick={() => setShowNotesDialog(true)}>
+					<Button
+						variant="outline"
+						onClick={() => setShowNotesDialog(true)}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
+					>
 						Notas
 					</Button>
 					<Button
@@ -159,6 +166,8 @@ function FoodPlanPage() {
 							setEditingItem(null);
 							setItemDialogOpen(true);
 						}}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
 					>
 						<Plus className="mr-2 h-4 w-4" />
 						Novo item
@@ -232,10 +241,12 @@ function FoodPlanPage() {
 					<CardContent className="flex flex-col justify-between gap-3 pt-6 sm:flex-row sm:items-center">
 						<p className="text-muted-foreground text-sm">
 							Associe o fornecedor de catering ao plano de alimentação.
-						</p>
+						</p>{" "}
 						<Button
 							variant="outline"
 							onClick={() => setShowSupplierDialog(true)}
+							disabled={isEventLocked}
+							title={lockMessage ?? undefined}
 						>
 							<ShoppingCart className="mr-2 h-4 w-4" />
 							Associar fornecedor
@@ -309,9 +320,16 @@ function FoodPlanPage() {
 												</TableCell>
 												<TableCell className="text-right">
 													<div className="flex justify-end gap-1">
+														{" "}
 														<Button
 															variant="ghost"
 															size="icon"
+															disabled={isEventLocked}
+															title={
+																isEventLocked
+																	? (lockMessage ?? undefined)
+																	: undefined
+															}
 															onClick={() => {
 																setEditingItem(item);
 																setItemDialogOpen(true);
@@ -323,6 +341,12 @@ function FoodPlanPage() {
 														<Button
 															variant="ghost"
 															size="icon"
+															disabled={isEventLocked}
+															title={
+																isEventLocked
+																	? (lockMessage ?? undefined)
+																	: undefined
+															}
 															onClick={() => setDeletingItem(item)}
 															aria-label="Eliminar item"
 														>

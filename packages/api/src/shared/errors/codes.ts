@@ -51,6 +51,9 @@ export const EVENT_CODES = {
 	ROLE_REQUIRED: "EVENT_ROLE_REQUIRED",
 	EDIT_DENIED: "EVENT_EDIT_DENIED",
 	DELETE_DENIED: "EVENT_DELETE_DENIED",
+	/** The event is frozen: cancelled, concluded without date, or past the
+	 * 5-day post-event window (`shared/events/event-lock.ts`). */
+	LOCKED: "EVENT_LOCKED",
 } as const;
 
 export const GUEST_CODES = {
@@ -98,6 +101,8 @@ export const INVITATION_CODES = {
 	ACCESS_DENIED: "INVITATION_ACCESS_DENIED",
 	INVALID_GUESTS: "INVITATION_GUESTS_REQUIRED",
 	EVENT_CAPACITY_REACHED: "INVITATION_EVENT_CAPACITY_REACHED",
+	/** The invitation would hold more people than `maxGuestsPerInvitation`. */
+	CAPACITY_REACHED: "INVITATION_CAPACITY_REACHED",
 } as const;
 
 export const DEDICATION_CODES = {

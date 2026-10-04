@@ -7,7 +7,10 @@ import {
 	resolveInventoryChecklistStatus,
 	resolveSupplierChecklistStatus,
 } from "../modules/checklist/rules";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
 import { CHECKLIST_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toCents } from "../shared/finance/money";
@@ -210,7 +213,7 @@ export const checklistRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			// The two links are mutually exclusive: a checklist item tracks either
 			// a supplier or an inventory item, never both.
@@ -288,7 +291,7 @@ export const checklistRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const existing = await db.checklistItem.findUnique({
 				where: { id: input.id },
@@ -336,7 +339,7 @@ export const checklistRouter = {
 	delete: protectedProcedure
 		.input(z.object({ id: z.string(), eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			await db.checklistItem.delete({ where: { id: input.id } });
 			return { success: true };
 		}),
@@ -345,7 +348,7 @@ export const checklistRouter = {
 	sync: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			await db.$transaction((tx) => syncEventChecklist(tx, input.eventId));
 			return { success: true };
 		}),

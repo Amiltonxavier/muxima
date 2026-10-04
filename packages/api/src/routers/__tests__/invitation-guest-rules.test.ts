@@ -49,6 +49,9 @@ let createdCompanions: { guestId: string; name: string }[] = [];
 
 const FUTURE = new Date("2026-12-20T15:00:00.000Z");
 
+/** Mirrors the database default of `Event.maxGuestsPerInvitation`. */
+const MAX_GUESTS_PER_INVITATION = 2;
+
 function makeInvitation(overrides: Partial<InvitationRow> = {}): InvitationRow {
 	return {
 		id: "inv_1",
@@ -155,6 +158,11 @@ function buildDb() {
 				return Promise.resolve({ id: "gcp_new", ...args.data });
 			},
 		},
+		event: {
+			// Only the invitation capacity rule reads the event row here.
+			findUnique: () =>
+				Promise.resolve({ maxGuestsPerInvitation: MAX_GUESTS_PER_INVITATION }),
+		},
 	};
 }
 
@@ -197,6 +205,7 @@ vi.mock("@muxima/auth", () => ({
 
 vi.mock("../../shared/auth/event-access", () => ({
 	requireEventAccess: vi.fn(() => Promise.resolve()),
+	requireEventMutable: vi.fn(() => Promise.resolve()),
 	getEventIdForResource: vi.fn((resource: string) =>
 		Promise.resolve(resource === "guest" ? "evt_1" : null),
 	),

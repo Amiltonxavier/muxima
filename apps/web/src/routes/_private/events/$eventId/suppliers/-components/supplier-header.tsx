@@ -1,6 +1,7 @@
 import { Button } from "@muxima/ui/components/button";
 import { Plus } from "lucide-react";
 import { ExportMenu } from "@/shared/components/export-menu";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 
 export function SupplierHeader({
 	eventId,
@@ -11,6 +12,8 @@ export function SupplierHeader({
 	total: number;
 	onAddSupplier: () => void;
 }) {
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	return (
 		<div className="flex items-center justify-between gap-4">
 			<div>
@@ -20,7 +23,11 @@ export function SupplierHeader({
 			<div className="flex gap-2">
 				<ExportMenu eventId={eventId} module="suppliers" />
 
-				<Button onClick={onAddSupplier}>
+				<Button
+					onClick={onAddSupplier}
+					disabled={isEventLocked}
+					title={lockMessage ?? undefined}
+				>
 					<Plus className="mr-2 h-4 w-4" />
 					Adicionar fornecedor
 				</Button>

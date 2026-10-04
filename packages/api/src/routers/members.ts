@@ -2,7 +2,10 @@ import db from "@muxima/db";
 import type { Prisma } from "@muxima/db/prisma";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import {
 	ConflictError,
 	ForbiddenError,
@@ -69,7 +72,7 @@ export const membersRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const user = await db.user.findUnique({
 				where: { email: input.email },
@@ -123,7 +126,7 @@ export const membersRouter = {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
 
-			await requireEventAccess(context.session.user.id, member.eventId);
+			await requireEventMutable(context.session.user.id, member.eventId);
 
 			const updated = await db.eventMember.update({
 				where: { id: input.memberId },
@@ -145,7 +148,7 @@ export const membersRouter = {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
 
-			await requireEventAccess(context.session.user.id, member.eventId);
+			await requireEventMutable(context.session.user.id, member.eventId);
 
 			if (member.role === "OWNER") {
 				throw new ForbiddenError("Não é possível remover o proprietário", {

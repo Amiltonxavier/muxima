@@ -7,7 +7,6 @@ import {
 	getGuestAnalytics,
 	getTableAnalytics,
 } from "../modules/guests/analytics";
-import { buildActivityLog } from "../shared/activity/activity-context";
 /**
  * NOTE: invitation operations (create / publish / respond / preview / QR Code)
  * intentionally live in the `invitations` router — the invitation is its own
@@ -17,8 +16,14 @@ import { buildActivityLog } from "../shared/activity/activity-context";
  * guests module.
  */
 import {
+	assertInvitationCapacity,
+	countInvitationPeople,
+} from "../modules/invitations/capacity";
+import { buildActivityLog } from "../shared/activity/activity-context";
+import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../shared/auth/event-access";
 import {
 	BadRequestError,
@@ -26,7 +31,7 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../shared/errors/app-error";
-import { GUEST_CODES } from "../shared/errors/codes";
+import { EVENT_CODES, GUEST_CODES } from "../shared/errors/codes";
 import { guestListInput, tableListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -151,7 +156,7 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const guest = await db.guest.create({
 				data: {
@@ -228,7 +233,7 @@ export const guestsRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("guest", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 
 			const previous = await db.guest.findUnique({
@@ -280,7 +285,7 @@ export const guestsRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("guest", input.id);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 
 			await db.guest.delete({
@@ -313,7 +318,7 @@ export const guestsRouter = {
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("guest", input.guestId);
 			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
+				await requireEventMutable(context.session.user.id, eventId);
 			}
 
 			// Companion rule (mirrored in the table row UI, but authoritative
@@ -329,7 +334,10 @@ export const guestsRouter = {
 					invitationGuests: {
 						take: 1,
 						orderBy: { invitation: { createdAt: "desc" } },
-						select: { invitation: { select: { rsvpStatus: true } } },
+						select: {
+							invitationId: true,
+							invitation: { select: { rsvpStatus: true } },
+						},
 					},
 				},
 			});
@@ -352,6 +360,39 @@ export const guestsRouter = {
 				);
 			}
 
+			// Capacity rule (single source: `assertInvitationCapacity`). The
+			// people count always comes from the database: everyone already in
+			// the guest's invitation, or the guest's own party when there is no
+			// invitation yet. Adding one person must not cross the event's
+			// `maxGuestsPerInvitation`.
+			if (!eventId) {
+				throw new NotFoundError("Convidado não encontrado", {
+					code: GUEST_CODES.NOT_FOUND,
+				});
+			}
+
+			const invitationId = guest.invitationGuests[0]?.invitationId ?? null;
+			const currentPeople = invitationId
+				? await countInvitationPeople(db, invitationId)
+				: 1 + guest._count.companions;
+
+			const event = await db.event.findUnique({
+				where: { id: eventId },
+				select: { maxGuestsPerInvitation: true },
+			});
+
+			if (!event) {
+				throw new NotFoundError("Evento não encontrado", {
+					code: EVENT_CODES.NOT_FOUND,
+				});
+			}
+
+			assertInvitationCapacity({
+				maxPeople: event.maxGuestsPerInvitation,
+				currentPeople,
+				addedPeople: 1,
+			});
+
 			const companion = await db.guestCompanion.create({
 				data: {
 					guestId: input.guestId,
@@ -371,7 +412,7 @@ export const guestsRouter = {
 				include: { guest: { select: { eventId: true } } },
 			});
 			if (companion) {
-				await requireEventAccess(
+				await requireEventMutable(
 					context.session.user.id,
 					companion.guest.eventId,
 				);
@@ -436,7 +477,7 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const table = await db.table.create({
 				data: {
@@ -469,7 +510,7 @@ export const guestsRouter = {
 				select: { eventId: true },
 			});
 			if (table) {
-				await requireEventAccess(context.session.user.id, table.eventId);
+				await requireEventMutable(context.session.user.id, table.eventId);
 			}
 
 			const updated = await db.table.update({
@@ -494,7 +535,7 @@ export const guestsRouter = {
 				select: { eventId: true },
 			});
 			if (table) {
-				await requireEventAccess(context.session.user.id, table.eventId);
+				await requireEventMutable(context.session.user.id, table.eventId);
 			}
 
 			// Soft delete: set deletedAt, remove all guest assignments
@@ -542,7 +583,7 @@ export const guestsRouter = {
 				);
 			}
 
-			await requireEventAccess(context.session.user.id, table.eventId);
+			await requireEventMutable(context.session.user.id, table.eventId);
 
 			const existing = await db.tableGuest.findFirst({
 				where: {
@@ -581,7 +622,7 @@ export const guestsRouter = {
 				});
 			}
 
-			await requireEventAccess(
+			await requireEventMutable(
 				context.session.user.id,
 				tableGuest.table.eventId,
 			);
@@ -607,7 +648,7 @@ export const guestsRouter = {
 				include: { guest: { select: { eventId: true } } },
 			});
 			if (companion) {
-				await requireEventAccess(
+				await requireEventMutable(
 					context.session.user.id,
 					companion.guest.eventId,
 				);

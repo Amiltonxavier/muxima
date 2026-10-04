@@ -17,6 +17,7 @@ import {
 } from "@muxima/ui/components/select";
 import { Mail, Shield, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import type { AssignableMemberRole, MemberItem } from "../-types/member.types";
 import {
 	getMemberEmail,
@@ -50,6 +51,7 @@ export function MemberDetailsDialog({
 	isUpdating: boolean;
 	isRemoving: boolean;
 }) {
+	const { isEventLocked, lockMessage } = useEventLock();
 	const isOwner = isOwnerRole(member.role);
 	// The owner cannot be re-assigned, so there is no assignable role to seed.
 	// The guard is repeated inline because narrowing through the `isOwner`
@@ -137,7 +139,8 @@ export function MemberDetailsDialog({
 					{roleChanged && (
 						<Button
 							className="w-full"
-							disabled={isUpdating}
+							disabled={isUpdating || isEventLocked}
+							title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 							onClick={() => onRoleChange(member.id, role)}
 						>
 							{isUpdating ? "A guardar..." : "Guardar novo papel"}
@@ -160,7 +163,8 @@ export function MemberDetailsDialog({
 						<Button
 							variant="outline"
 							className="text-destructive"
-							disabled={isRemoving}
+							disabled={isRemoving || isEventLocked}
+							title={isEventLocked ? (lockMessage ?? undefined) : undefined}
 							onClick={() => onRemove(member.id)}
 						>
 							<Trash2 className="mr-2 h-4 w-4" />

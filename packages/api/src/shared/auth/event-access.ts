@@ -1,5 +1,7 @@
 import db from "@muxima/db";
-import { ForbiddenError } from "../errors/app-error";
+import { ForbiddenError, NotFoundError } from "../errors/app-error";
+import { EVENT_CODES } from "../errors/codes";
+import { assertEventIsMutable } from "../events/event-lock";
 
 /**
  * Verify that a user is an ACTIVE member of the given event.
@@ -35,6 +37,45 @@ export async function requireEventAccess(
 			},
 		);
 	}
+}
+
+/**
+ * Assert that the event currently accepts mutations (`EVENT_LOCKED`).
+ *
+ * The event row is re-read on every call so the check always uses the
+ * CURRENT state — nothing sent by the client is trusted. Throws the standard
+ * `409 EVENT_LOCKED` envelope (PT-PT message), never a plain `Error`.
+ */
+export async function assertEventIsMutableById(eventId: string): Promise<void> {
+	const event = await db.event.findUnique({
+		where: { id: eventId },
+		select: { status: true, eventDate: true, startTime: true },
+	});
+
+	if (!event) {
+		throw new NotFoundError("Evento não encontrado", {
+			code: EVENT_CODES.NOT_FOUND,
+		});
+	}
+
+	assertEventIsMutable(event);
+}
+
+/**
+ * Every guard an event-scoped MUTATION needs: active membership (and role,
+ * when supplied) plus the global operational lock (`EVENT_LOCKED`).
+ *
+ * Read-only procedures keep using `requireEventAccess`. Maintenance of the
+ * event itself (editing its fields, changing its status, deleting it) is not
+ * an event-data mutation and therefore does not go through this guard.
+ */
+export async function requireEventMutable(
+	userId: string,
+	eventId: string,
+	allowedRoles?: string[],
+): Promise<void> {
+	await requireEventAccess(userId, eventId, allowedRoles);
+	await assertEventIsMutableById(eventId);
 }
 
 /**

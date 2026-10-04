@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { EventCountdownBanner } from "@/shared/components/event-countdown-banner";
+import { EventLockBanner } from "@/shared/components/event-lock-banner";
 import { Sidebar } from "@/shared/components/sidebar";
 import { LoadingState } from "@/shared/components/states/loading-state";
 import { Topbar } from "@/shared/components/topbar";
@@ -39,6 +40,7 @@ function PrivateLayout() {
 			<Sidebar />
 			<div className="flex flex-1 flex-col overflow-hidden">
 				<EventCountdownBanner />
+				<EventLockBanner />
 				<Topbar />
 				<main className="flex-1 overflow-y-auto p-4 lg:p-6">
 					<Outlet />

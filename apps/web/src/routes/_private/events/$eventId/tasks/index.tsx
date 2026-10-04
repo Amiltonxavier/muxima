@@ -59,6 +59,7 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { ExportMenu } from "@/shared/components/export-menu";
 import { QueryState } from "@/shared/components/states";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateTask,
 	useDeleteTask,
@@ -111,6 +112,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 function TasksPage() {
 	const { eventId } = Route.useParams();
+	const { isEventLocked, lockMessage } = useEventLock();
 	const [page, setPage] = useState(1);
 	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
@@ -232,7 +234,11 @@ function TasksPage() {
 				<div className="flex gap-2">
 					<ExportMenu eventId={eventId} module="tasks" />
 
-					<Button onClick={() => setShowCreateDialog(true)}>
+					<Button
+						onClick={() => setShowCreateDialog(true)}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
+					>
 						<Plus className="mr-2 h-4 w-4" />
 						Criar tarefa
 					</Button>
@@ -403,6 +409,12 @@ function TasksPage() {
 														<Button
 															variant="ghost"
 															size="icon-sm"
+															disabled={isEventLocked}
+															title={
+																isEventLocked
+																	? (lockMessage ?? undefined)
+																	: undefined
+															}
 															onClick={(e) => {
 																e.stopPropagation();
 																setEditingTask(item);
@@ -417,6 +429,12 @@ function TasksPage() {
 															variant="ghost"
 															size="icon-sm"
 															className="text-destructive"
+															disabled={isEventLocked}
+															title={
+																isEventLocked
+																	? (lockMessage ?? undefined)
+																	: undefined
+															}
 															onClick={(e) => {
 																e.stopPropagation();
 																setDeleteId(item.id);
@@ -506,6 +524,12 @@ function TasksPage() {
 																<Button
 																	variant="ghost"
 																	size="icon-sm"
+																	disabled={isEventLocked}
+																	title={
+																		isEventLocked
+																			? (lockMessage ?? undefined)
+																			: undefined
+																	}
 																	onClick={() =>
 																		setEditingTask(
 																			kanbanData.find(
@@ -523,6 +547,12 @@ function TasksPage() {
 																	variant="ghost"
 																	size="icon-sm"
 																	className="text-destructive"
+																	disabled={isEventLocked}
+																	title={
+																		isEventLocked
+																			? (lockMessage ?? undefined)
+																			: undefined
+																	}
 																	onClick={() => setDeleteId(task.id)}
 																>
 																	<Trash2 className="h-3.5 w-3.5" />

@@ -6,7 +6,10 @@ import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { profileSelect, UserService } from "../modules/users/service";
 import { buildActivityLog } from "../shared/activity/activity-context";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import {
 	BadRequestError,
 	ConflictError,
@@ -229,7 +232,7 @@ export const usersRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const existingMember = await db.eventMember.findFirst({
 				where: {
@@ -269,7 +272,7 @@ export const usersRouter = {
 				throw new NotFoundError("Membro não encontrado", {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, member.eventId);
+			await requireEventMutable(context.session.user.id, member.eventId);
 			if (member.role === "OWNER")
 				throw new ForbiddenError("Não é possível remover o proprietário", {
 					code: MEMBER_CODES.OWNER_PROTECTED,
@@ -297,7 +300,7 @@ export const usersRouter = {
 				throw new NotFoundError("Membro não encontrado", {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(context.session.user.id, member.eventId, [
+			await requireEventMutable(context.session.user.id, member.eventId, [
 				"OWNER",
 			]);
 			const updatedMember = await db.eventMember.update({

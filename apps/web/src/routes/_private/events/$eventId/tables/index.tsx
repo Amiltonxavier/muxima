@@ -28,6 +28,7 @@ import { BackButton } from "@/shared/components/back-to";
 import { StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateTable,
 	useDeleteTable,
@@ -67,6 +68,8 @@ function TablesPage() {
 	);
 	const [showAnalytics, setShowAnalytics] = useState(false);
 
+	const { isEventLocked, lockMessage } = useEventLock();
+
 	// Filters
 	const [searchQuery, setSearchQuery] = useState("");
 
@@ -104,7 +107,11 @@ function TablesPage() {
 						<ChartPie className="mr-2 h-4 w-4" />
 						Analytics
 					</Button>
-					<Button onClick={() => setShowCreate(true)}>
+					<Button
+						onClick={() => setShowCreate(true)}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
+					>
 						<Plus className="mr-2 h-4 w-4" />
 						Criar mesa
 					</Button>
@@ -210,7 +217,12 @@ function TablesPage() {
 												<Button
 													variant="ghost"
 													size="icon-sm"
-													title="Editar"
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: "Editar"
+													}
+													disabled={isEventLocked}
 													onClick={() => setEditingTable(table)}
 												>
 													<Pencil className="h-3.5 w-3.5" />
@@ -219,7 +231,12 @@ function TablesPage() {
 													variant="ghost"
 													size="icon-sm"
 													className="text-destructive"
-													title="Eliminar"
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: "Eliminar"
+													}
+													disabled={isEventLocked}
 													onClick={() => setDeletingTable(table)}
 												>
 													<Trash2 className="h-3.5 w-3.5" />

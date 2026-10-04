@@ -7,7 +7,10 @@ import type {
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getFoodPlanStats } from "../modules/food-plan/stats";
-import { requireEventAccess } from "../shared/auth/event-access";
+import {
+	requireEventAccess,
+	requireEventMutable,
+} from "../shared/auth/event-access";
 import { ValidationError } from "../shared/errors/app-error";
 import { FOOD_PLAN_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toJsonInput } from "../shared/utils/json";
@@ -99,7 +102,7 @@ export const foodPlanRouter = {
 	setSupplier: protectedProcedure
 		.input(eventInput.extend({ supplierId: z.string().nullable() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			if (input.supplierId) {
 				const supplier = await db.supplier.findUnique({
@@ -134,7 +137,7 @@ export const foodPlanRouter = {
 	updateNotes: protectedProcedure
 		.input(eventInput.extend({ notes: z.string().trim().optional() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 			return db.foodPlan.upsert({
 				where: { eventId: input.eventId },
 				create: { eventId: input.eventId, notes: input.notes },
@@ -147,7 +150,7 @@ export const foodPlanRouter = {
 	addItem: protectedProcedure
 		.input(eventInput.extend(itemInput.shape))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			return db.$transaction(async (tx) => {
 				const plan = await tx.foodPlan.upsert({
@@ -198,7 +201,7 @@ export const foodPlanRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const existing = await db.foodPlanItem.findUnique({
 				where: { id: input.id },
@@ -233,7 +236,7 @@ export const foodPlanRouter = {
 	deleteItem: protectedProcedure
 		.input(z.object({ id: z.string(), eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventMutable(context.session.user.id, input.eventId);
 
 			const existing = await db.foodPlanItem.findUnique({
 				where: { id: input.id },

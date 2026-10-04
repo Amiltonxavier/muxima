@@ -14,6 +14,7 @@ import {
 	Users,
 } from "lucide-react";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { getStatusLabel, getStatusTone } from "@/utils/status-helpers";
 import type { GuestItem } from "../-types/guest.types";
 import {
@@ -53,6 +54,10 @@ export function GuestsTableRow({
 	const canAddCompanion =
 		invitation?.rsvpStatus === "DECLINED" ||
 		companions.length < (guest.companionsLimit ?? 0);
+	// Locked event: only viewing stays available — every mutation button is
+	// disabled with the reason as feedback (the backend rejects it anyway).
+	const { isEventLocked, lockMessage } = useEventLock();
+	const lockedTitle = lockMessage ?? undefined;
 
 	return (
 		<TableRow data-state={isSelected ? "selected" : undefined}>
@@ -95,6 +100,8 @@ export function GuestsTableRow({
 						variant="ghost"
 						size="icon-sm"
 						className="h-7 gap-1 text-xs"
+						disabled={isEventLocked}
+						title={isEventLocked ? lockedTitle : undefined}
 						onClick={() => onManageCompanions(guest)}
 					>
 						<Users className="h-3.5 w-3.5" />
@@ -105,11 +112,14 @@ export function GuestsTableRow({
 						variant="ghost"
 						size="icon-sm"
 						className="h-7 text-muted-foreground"
+						disabled={isEventLocked}
 						onClick={() => onManageCompanions(guest)}
 						title={
-							canAddCompanion
-								? "Adicionar acompanhante"
-								: "Convite recusado — adicionar acompanhante"
+							isEventLocked
+								? lockedTitle
+								: canAddCompanion
+									? "Adicionar acompanhante"
+									: "Convite recusado — adicionar acompanhante"
 						}
 						aria-label={`Gerir acompanhantes de ${guest.name}`}
 					>
@@ -153,7 +163,8 @@ export function GuestsTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title="Partilhar convite"
+						disabled={isEventLocked}
+						title={isEventLocked ? lockedTitle : "Partilhar convite"}
 						onClick={() => onShareInvitation(guest)}
 					>
 						<Share2 className="h-3.5 w-3.5" />
@@ -161,7 +172,8 @@ export function GuestsTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title="Editar"
+						disabled={isEventLocked}
+						title={isEventLocked ? lockedTitle : "Editar"}
 						onClick={() => onEditGuest(guest)}
 					>
 						<Pencil className="h-3.5 w-3.5" />
@@ -170,7 +182,8 @@ export function GuestsTableRow({
 						variant="ghost"
 						size="icon-sm"
 						className="text-destructive"
-						title="Eliminar"
+						disabled={isEventLocked}
+						title={isEventLocked ? lockedTitle : "Eliminar"}
 						onClick={() => onDeleteGuest(guest)}
 					>
 						<Trash2 className="h-3.5 w-3.5" />

@@ -10,6 +10,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatCurrency } from "@/utils/format-currency";
 import {
@@ -39,6 +40,7 @@ export function SupplierTableRow({
 }) {
 	const agreed = supplier.price ?? 0;
 	const missing = supplier.pending ?? 0;
+	const { isEventLocked, lockMessage } = useEventLock();
 
 	// Column "Pagamento": single payment vs installment plan. The API resolves
 	// the payment model; the row only renders it.
@@ -64,8 +66,17 @@ export function SupplierTableRow({
 		<TableRow>
 			<TableCell>
 				<p className="font-medium">{supplier.name}</p>
-				{supplier.phone && (
-					<p className="text-muted-foreground text-xs">{supplier.phone}</p>
+			</TableCell>
+			<TableCell>
+				{supplier.phone ? (
+					<a
+						href={`tel:${supplier.phone}`}
+						className="text-muted-foreground text-xs hover:underline"
+					>
+						{supplier.phone}
+					</a>
+				) : (
+					<p className="text-muted-foreground text-xs">Sem telefone</p>
 				)}
 			</TableCell>
 			<TableCell>
@@ -134,15 +145,17 @@ export function SupplierTableRow({
 						variant="ghost"
 						size="icon-sm"
 						title={
-							canPay
-								? "Registar pagamento"
-								: supplier.status !== "CONFIRMED"
-									? "Só é possível pagar a um fornecedor confirmado"
-									: agreed <= 0
-										? "Defina primeiro o montante acordado"
-										: "Montante já liquidado"
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: canPay
+									? "Registar pagamento"
+									: supplier.status !== "CONFIRMED"
+										? "Só é possível pagar a um fornecedor confirmado"
+										: agreed <= 0
+											? "Defina primeiro o montante acordado"
+											: "Montante já liquidado"
 						}
-						disabled={!canPay}
+						disabled={!canPay || isEventLocked}
 						onClick={() => onAddPayment(supplier)}
 					>
 						<Banknote className="h-3.5 w-3.5" />
@@ -151,13 +164,15 @@ export function SupplierTableRow({
 						variant="ghost"
 						size="icon-sm"
 						title={
-							canPlanInstallments
-								? "Plano de parcelas"
-								: agreed <= 0
-									? "Defina primeiro o montante acordado"
-									: "Parcelas apenas em negociação ou confirmado"
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: canPlanInstallments
+									? "Plano de parcelas"
+									: agreed <= 0
+										? "Defina primeiro o montante acordado"
+										: "Parcelas apenas em negociação ou confirmado"
 						}
-						disabled={!canPlanInstallments}
+						disabled={!canPlanInstallments || isEventLocked}
 						onClick={() => onManageInstallments(supplier)}
 					>
 						<CalendarClock className="h-3.5 w-3.5" />
@@ -165,7 +180,8 @@ export function SupplierTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title="Mudar estado"
+						title={isEventLocked ? (lockMessage ?? undefined) : "Mudar estado"}
+						disabled={isEventLocked}
 						onClick={() => onChangeStatus(supplier)}
 					>
 						<History className="h-3.5 w-3.5" />
@@ -173,7 +189,8 @@ export function SupplierTableRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						title="Editar"
+						title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
+						disabled={isEventLocked}
 						onClick={() => onEdit(supplier)}
 					>
 						<Pencil className="h-3.5 w-3.5" />
@@ -182,7 +199,8 @@ export function SupplierTableRow({
 						variant="ghost"
 						size="icon-sm"
 						className="text-destructive"
-						title="Eliminar"
+						title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
+						disabled={isEventLocked}
 						onClick={() => onDelete(supplier)}
 					>
 						<Trash2 className="h-3.5 w-3.5" />

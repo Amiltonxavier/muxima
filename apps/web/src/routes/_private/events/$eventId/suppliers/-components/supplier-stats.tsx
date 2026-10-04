@@ -1,5 +1,5 @@
 import { MetricCard, StatsGrid } from "@/shared/components/metrics";
-import { formatCurrency } from "@/utils/format-currency";
+import { formatCurrencyCompact } from "@/utils/format-currency";
 import type { SupplierStatsDto } from "../-queries/suppliers-queries";
 
 /**
@@ -17,12 +17,15 @@ export function SupplierStats({ stats }: { stats?: SupplierStatsDto | null }) {
 		<StatsGrid columns={4}>
 			<MetricCard
 				title="Montante contratado"
-				value={formatCurrency(stats.totalPrice ?? 0)}
+				value={formatCurrencyCompact(stats.totalPrice ?? 0)}
 			/>
-			<MetricCard title="Pago" value={formatCurrency(stats.totalPaid ?? 0)} />
+			<MetricCard
+				title="Pago"
+				value={formatCurrencyCompact(stats.totalPaid ?? 0)}
+			/>
 			<MetricCard
 				title="Por pagar"
-				value={formatCurrency(stats.totalPending ?? 0)}
+				value={formatCurrencyCompact(stats.totalPending ?? 0)}
 			/>
 			<MetricCard
 				title="Em atraso"

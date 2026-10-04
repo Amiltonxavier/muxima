@@ -21,6 +21,7 @@ import { GuestsStats } from "./-components/guests-stats";
 import { GuestsTable } from "./-components/guests-table";
 import { InvitationsTab } from "./-components/invitation/invitations-tab";
 import { ViewInvitationDialog } from "./-components/invitation/view-invitation-dialog";
+import { InvitationCapacitySetting } from "./-components/invitation-capacity-setting";
 import { ShareInvitationDialog } from "./-components/share-invitation-dialog";
 import { useGuestActions } from "./-hooks/use-guest-actions";
 import { useGuestDialog } from "./-hooks/use-guest-dialog";
@@ -75,6 +76,8 @@ function GuestsPage() {
 				eventId={eventId}
 				onAddGuest={guestDialog.openCreateDialog}
 			/>
+
+			<InvitationCapacitySetting eventId={eventId} />
 
 			<Tabs
 				value={activeTab}

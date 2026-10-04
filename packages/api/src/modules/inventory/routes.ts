@@ -4,6 +4,7 @@ import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
 	requireEventAccess,
+	requireEventMutable,
 } from "../../shared/auth/event-access";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { INVENTORY_CODES } from "../../shared/errors/codes";
@@ -60,6 +61,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	app.post("/api/v1/events/:eventId/inventory", async (request, reply) => {
 		const userId = requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
+		await requireEventMutable(userId, eventId);
 		const data = createInventoryItemSchema.parse(request.body);
 		const item = await db.$transaction((tx) =>
 			InventoryService.create(tx, eventId, userId, data),
@@ -75,7 +77,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Item de inventário não encontrado", {
 				code: INVENTORY_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		const data = updateInventoryItemSchema.parse(request.body);
 		const item = await db.$transaction((tx) =>
 			InventoryService.update(tx, id, data),
@@ -91,7 +93,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Item de inventário não encontrado", {
 				code: INVENTORY_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventMutable(userId, eventId);
 		await InventoryService.delete(db, id);
 		return reply.status(204).send();
 	});
@@ -125,7 +127,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 				throw new NotFoundError("Item de inventário não encontrado", {
 					code: INVENTORY_CODES.NOT_FOUND,
 				});
-			await requireEventAccess(userId, eventId);
+			await requireEventMutable(userId, eventId);
 			const data = addMovementSchema.parse(request.body);
 			const movement = await db.$transaction((tx) =>
 				InventoryService.addMovement(tx, inventoryItemId, userId, data),
