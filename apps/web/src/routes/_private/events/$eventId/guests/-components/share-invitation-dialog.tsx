@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
@@ -9,6 +10,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { Plus, Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateInvitation,
@@ -31,6 +33,10 @@ export function ShareInvitationDialog({
 }) {
 	const createInvitation = useCreateInvitation();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Sharing an EXISTING link is a read; creating the invitation first is a
+	// write and needs its own capability. Without it the fallback branch just
+	// explains that no invitation exists — the backend would refuse anyway.
+	const mayCreate = useEventCan(eventId, PERMISSIONS.INVITATION_CREATE);
 	const invitationQuery = useInvitation(eventId, guest.id);
 	const invitation = invitationQuery.data;
 
@@ -108,16 +114,18 @@ export function ShareInvitationDialog({
 						<p className="text-muted-foreground text-sm">
 							Ainda não existe convite para este convidado.
 						</p>
-						<Button
-							onClick={handleCreateAndShare}
-							disabled={createInvitation.isPending || isEventLocked}
-							title={isEventLocked ? (lockMessage ?? undefined) : undefined}
-						>
-							<Plus className="mr-2 h-4 w-4" />
-							{createInvitation.isPending
-								? "A criar..."
-								: "Criar e partilhar convite"}
-						</Button>
+						{mayCreate && (
+							<Button
+								onClick={handleCreateAndShare}
+								disabled={createInvitation.isPending || isEventLocked}
+								title={isEventLocked ? (lockMessage ?? undefined) : undefined}
+							>
+								<Plus className="mr-2 h-4 w-4" />
+								{createInvitation.isPending
+									? "A criar..."
+									: "Criar e partilhar convite"}
+							</Button>
+						)}
 					</div>
 				)}
 				<DialogFooter>

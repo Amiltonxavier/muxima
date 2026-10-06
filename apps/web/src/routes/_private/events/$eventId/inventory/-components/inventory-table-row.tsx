@@ -1,9 +1,11 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { Progress } from "@muxima/ui/components/progress";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
 import { Eye, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { formatCurrency } from "@/utils/format-currency";
 import {
@@ -40,7 +42,17 @@ export function InventoryTableRow({
 	// additions regardless.
 	const cannotAddMore = item.remainingQuantity <= 0;
 	const unitLabel = INVENTORY_UNIT_LABELS[item.unit] || item.unit;
-	const { isEventLocked, lockMessage } = useEventLock();
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
+	// Viewing details/history are reads (all roles); editing, restocking and
+	// deleting are separate write capabilities — hidden without them.
+	const canUpdate = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.INVENTORY_UPDATE,
+	);
+	const canDelete = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.INVENTORY_DELETE,
+	);
 
 	return (
 		<TableRow>
@@ -106,30 +118,34 @@ export function InventoryTableRow({
 					>
 						<Eye className="h-3.5 w-3.5" />
 					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
-						disabled={isEventLocked}
-						onClick={() => onEditItem(item)}
-					>
-						<Pencil className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={
-							isEventLocked
-								? (lockMessage ?? undefined)
-								: cannotAddMore
-									? "Quantidade planeada concluída"
-									: "Adicionar quantidade"
-						}
-						disabled={cannotAddMore || isEventLocked}
-						onClick={() => onAddQuantity(item)}
-					>
-						<Plus className="h-3.5 w-3.5" />
-					</Button>
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
+							disabled={isEventLocked}
+							onClick={() => onEditItem(item)}
+						>
+							<Pencil className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={
+								isEventLocked
+									? (lockMessage ?? undefined)
+									: cannotAddMore
+										? "Quantidade planeada concluída"
+										: "Adicionar quantidade"
+							}
+							disabled={cannotAddMore || isEventLocked}
+							onClick={() => onAddQuantity(item)}
+						>
+							<Plus className="h-3.5 w-3.5" />
+						</Button>
+					)}
 					<Button
 						variant="ghost"
 						size="icon-sm"
@@ -138,16 +154,18 @@ export function InventoryTableRow({
 					>
 						<History className="h-3.5 w-3.5" />
 					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="text-destructive"
-						title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
-						disabled={isEventLocked}
-						onClick={() => onDeleteItem(item)}
-					>
-						<Trash2 className="h-3.5 w-3.5" />
-					</Button>
+					{canDelete && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="text-destructive"
+							title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
+							disabled={isEventLocked}
+							onClick={() => onDeleteItem(item)}
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+						</Button>
+					)}
 				</div>
 			</TableCell>
 		</TableRow>

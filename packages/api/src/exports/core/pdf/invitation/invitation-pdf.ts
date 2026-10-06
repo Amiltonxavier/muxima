@@ -104,13 +104,6 @@ function renderNames(
 	doc.text(split, INV_MARGIN, current);
 	current += split.length * (INV_SIZE.name * 1.2);
 
-	if (false) {
-		doc.setFontSize(INV_SIZE.subtitle);
-		doc.setTextColor(INV_MUTED.r, INV_MUTED.g, INV_MUTED.b);
-		doc.text(`e convidados de ${null}`, INV_MARGIN, current);
-		current += INV_SIZE.subtitle * 1.4;
-	}
-
 	return current + 8;
 }
 

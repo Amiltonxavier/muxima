@@ -5,14 +5,16 @@ import type {
 	SupplierPaymentModel,
 	SupplierStatus,
 } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getSupplierAnalytics } from "../modules/suppliers/analytics";
 import {
 	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { NotFoundError, ValidationError } from "../shared/errors/app-error";
 import { SUPPLIER_CODES } from "../shared/errors/codes";
 import { centsToUnits, fromCents, toCents } from "../shared/finance/money";
@@ -400,7 +402,11 @@ export const suppliersRouter = {
 	list: protectedProcedure
 		.input(supplierListInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SUPPLIER_READ,
+			);
 			const { page, limit, skip } = parsePagination(input);
 			const now = new Date();
 
@@ -477,7 +483,11 @@ export const suppliersRouter = {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
 
-			await requireEventAccess(context.session.user.id, supplier.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				supplier.eventId,
+				PERMISSIONS.SUPPLIER_READ,
+			);
 
 			const now = new Date();
 			const money = projectSupplier(supplier, now);
@@ -544,7 +554,11 @@ export const suppliersRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SUPPLIER_CREATE,
+			);
 
 			const price = input.price ?? 0;
 			const installments = input.installments ?? [];
@@ -647,7 +661,11 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			const current = await db.supplier.findUnique({
 				where: { id: input.id },
@@ -736,7 +754,11 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			const supplier = await db.supplier.findUnique({
 				where: { id: input.id },
@@ -769,7 +791,18 @@ export const suppliersRouter = {
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
 			const eventId = await getEventIdForResource("supplier", input.id);
-			if (eventId) await requireEventMutable(context.session.user.id, eventId);
+			// A missing row must not skip the check: `if (eventId)` here would let
+			// an unauthorized caller through to the delete whenever the id does
+			// not resolve, which is exactly the shape of an IDOR probe.
+			if (!eventId)
+				throw new NotFoundError("Fornecedor não encontrado", {
+					code: SUPPLIER_CODES.NOT_FOUND,
+				});
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.SUPPLIER_DELETE,
+			);
 			await db.supplier.delete({ where: { id: input.id } });
 			return { success: true };
 		}),
@@ -799,7 +832,11 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, supplier.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				supplier.eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			// Business rules, re-checked server side — the disabled button in the
 			// UI is convenience, never the security layer.
@@ -842,9 +879,10 @@ export const suppliersRouter = {
 				throw new NotFoundError("Pagamento não encontrado", {
 					code: SUPPLIER_CODES.PAYMENT_NOT_FOUND,
 				});
-			await requireEventMutable(
+			await requireEventPermissionMutable(
 				context.session.user.id,
 				payment.supplier.eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
 			);
 
 			await db.$transaction(async (tx) => {
@@ -873,7 +911,11 @@ export const suppliersRouter = {
 				throw new NotFoundError("Fornecedor não encontrado", {
 					code: SUPPLIER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, supplier.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				supplier.eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			// Planning installments requires negotiating or confirmed.
 			assertInstallmentsAllowedOnStatus(supplier.status);
@@ -906,7 +948,11 @@ export const suppliersRouter = {
 				input.supplierId,
 				input.id,
 			);
-			await requireEventMutable(context.session.user.id, supplier.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				supplier.eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			assertInstallmentsAllowedOnStatus(supplier.status as SupplierRuleStatus);
 
@@ -946,7 +992,11 @@ export const suppliersRouter = {
 		.input(z.object({ id: z.string(), supplierId: z.string() }))
 		.handler(async ({ context, input }) => {
 			const { supplier } = await loadInstallment(input.supplierId, input.id);
-			await requireEventMutable(context.session.user.id, supplier.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				supplier.eventId,
+				PERMISSIONS.SUPPLIER_UPDATE,
+			);
 
 			await db.$transaction(async (tx) => {
 				await tx.supplierInstallment.delete({ where: { id: input.id } });
@@ -961,7 +1011,11 @@ export const suppliersRouter = {
 	getStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SUPPLIER_READ,
+			);
 			return getSupplierAnalytics(db, input.eventId);
 		}),
 };

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { userKeys } from "@/routes/_private/profile/-queries/user-queries";
+import { accessKeys } from "@/shared/hooks/use-can";
 import { orpc } from "@/utils/orpc";
 import type {
 	MemberRole,
@@ -48,7 +50,16 @@ export function useMembers(eventId: string, params: MemberListParams) {
 
 function useInvalidateMembers() {
 	const queryClient = useQueryClient();
-	return () => queryClient.invalidateQueries({ queryKey: memberKeys.all });
+	return () => {
+		queryClient.invalidateQueries({ queryKey: memberKeys.all });
+		// F-13: a role or membership change alters what the affected users are
+		// ALLOWED to see. `event-access` (used by `useEventCan` and by the
+		// `/events/$eventId` route guard) and the profile's roles/permissions
+		// must be re-read, otherwise the UI keeps drawing (or hiding) actions
+		// from the previous role until the stale time expires.
+		queryClient.invalidateQueries({ queryKey: accessKeys.all });
+		queryClient.invalidateQueries({ queryKey: userKeys.profile() });
+	};
 }
 
 export function useAddMember() {

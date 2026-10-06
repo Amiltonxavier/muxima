@@ -1,6 +1,7 @@
 import db from "@muxima/db";
 import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
@@ -21,10 +22,11 @@ import {
 } from "../modules/invitations/capacity";
 import { buildActivityLog } from "../shared/activity/activity-context";
 import {
-	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventIdForResource,
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import {
 	BadRequestError,
 	ConflictError,
@@ -39,7 +41,11 @@ export const guestsRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }).merge(guestListInput))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.GUEST_READ,
+			);
 			const { page, limit, skip } = parsePagination(input);
 
 			const filterConditions: Prisma.GuestWhereInput[] = [
@@ -127,7 +133,11 @@ export const guestsRouter = {
 				});
 			}
 
-			await requireEventAccess(context.session.user.id, guest.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				guest.eventId,
+				PERMISSIONS.GUEST_READ,
+			);
 
 			return guest;
 		}),
@@ -156,7 +166,11 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.GUEST_CREATE,
+			);
 
 			const guest = await db.guest.create({
 				data: {
@@ -231,10 +245,12 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("guest", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("guest", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.GUEST_UPDATE,
+			);
 
 			const previous = await db.guest.findUnique({
 				where: { id: input.id },
@@ -283,10 +299,12 @@ export const guestsRouter = {
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("guest", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("guest", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.GUEST_DELETE,
+			);
 
 			await db.guest.delete({
 				where: { id: input.id },
@@ -316,10 +334,12 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("guest", input.guestId);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("guest", input.guestId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.GUEST_CREATE,
+			);
 
 			// Companion rule (mirrored in the table row UI, but authoritative
 			// here): a guest whose latest invitation is DECLINED may still have
@@ -412,9 +432,10 @@ export const guestsRouter = {
 				include: { guest: { select: { eventId: true } } },
 			});
 			if (companion) {
-				await requireEventMutable(
+				await requireEventPermissionMutable(
 					context.session.user.id,
 					companion.guest.eventId,
+					PERMISSIONS.GUEST_DELETE,
 				);
 			}
 
@@ -428,7 +449,11 @@ export const guestsRouter = {
 	getTables: protectedProcedure
 		.input(z.object({ eventId: z.string() }).merge(tableListInput))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TABLE_READ,
+			);
 			const { page, limit, skip } = parsePagination(input);
 
 			const filterConditions: Prisma.TableWhereInput[] = [
@@ -477,7 +502,11 @@ export const guestsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TABLE_CREATE,
+			);
 
 			const table = await db.table.create({
 				data: {
@@ -510,7 +539,11 @@ export const guestsRouter = {
 				select: { eventId: true },
 			});
 			if (table) {
-				await requireEventMutable(context.session.user.id, table.eventId);
+				await requireEventPermissionMutable(
+					context.session.user.id,
+					table.eventId,
+					PERMISSIONS.TABLE_UPDATE,
+				);
 			}
 
 			const updated = await db.table.update({
@@ -535,7 +568,11 @@ export const guestsRouter = {
 				select: { eventId: true },
 			});
 			if (table) {
-				await requireEventMutable(context.session.user.id, table.eventId);
+				await requireEventPermissionMutable(
+					context.session.user.id,
+					table.eventId,
+					PERMISSIONS.TABLE_DELETE,
+				);
 			}
 
 			// Soft delete: set deletedAt, remove all guest assignments
@@ -583,7 +620,11 @@ export const guestsRouter = {
 				);
 			}
 
-			await requireEventMutable(context.session.user.id, table.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				table.eventId,
+				PERMISSIONS.TABLE_UPDATE,
+			);
 
 			const existing = await db.tableGuest.findFirst({
 				where: {
@@ -622,9 +663,10 @@ export const guestsRouter = {
 				});
 			}
 
-			await requireEventMutable(
+			await requireEventPermissionMutable(
 				context.session.user.id,
 				tableGuest.table.eventId,
+				PERMISSIONS.TABLE_UPDATE,
 			);
 
 			await db.tableGuest.delete({
@@ -648,9 +690,10 @@ export const guestsRouter = {
 				include: { guest: { select: { eventId: true } } },
 			});
 			if (companion) {
-				await requireEventMutable(
+				await requireEventPermissionMutable(
 					context.session.user.id,
 					companion.guest.eventId,
+					PERMISSIONS.GUEST_UPDATE,
 				);
 			}
 
@@ -668,14 +711,22 @@ export const guestsRouter = {
 	getGuestStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.GUEST_READ,
+			);
 			return getGuestAnalytics(db, input.eventId);
 		}),
 
 	getTableStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TABLE_READ,
+			);
 			return getTableAnalytics(db, input.eventId);
 		}),
 };

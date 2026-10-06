@@ -149,10 +149,12 @@ export default function UserMenu() {
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancelar</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={() => {
-								authClient.signOut({
+							onClick={async () => {
+								await authClient.signOut({
 									fetchOptions: {
-										onSuccess: () => {
+										onSuccess: async () => {
+											const { queryClient } = await import("@/utils/orpc");
+											queryClient.clear();
 											navigate({ to: "/" });
 										},
 									},

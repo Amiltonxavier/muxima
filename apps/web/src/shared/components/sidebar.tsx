@@ -1,7 +1,8 @@
+import { PERMISSIONS, type Permission } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Dialog, DialogContent } from "@muxima/ui/components/dialog";
 import { cn } from "@muxima/ui/lib/utils";
-import { Link, useMatchRoute } from "@tanstack/react-router";
+import { Link, useMatchRoute, useParams } from "@tanstack/react-router";
 import {
 	ArrowLeft,
 	Bell,
@@ -24,18 +25,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { useAccountPermissions, useEventAccess } from "../hooks/use-can";
 import { initials } from "../utils/string";
-
-interface NavItem {
-	label: string;
-	icon: React.ReactNode;
-	to: string;
-}
-
-interface NavGroup {
-	label: string;
-	items: NavItem[];
-}
+import { filterNavGroups, type NavGroup } from "./nav-permissions";
 
 const eventNavGroups: NavGroup[] = [
 	{
@@ -45,6 +37,7 @@ const eventNavGroups: NavGroup[] = [
 				label: "Visão geral",
 				icon: <Home className="h-4 w-4" />,
 				to: "/events/$eventId",
+				permission: PERMISSIONS.EVENT_READ,
 			},
 		],
 	},
@@ -55,31 +48,37 @@ const eventNavGroups: NavGroup[] = [
 				label: "Orçamento",
 				icon: <CreditCard className="h-4 w-4" />,
 				to: "/events/$eventId/budget",
+				permission: PERMISSIONS.BUDGET_READ,
 			},
 			{
 				label: "Fornecedores",
 				icon: <ShoppingCart className="h-4 w-4" />,
 				to: "/events/$eventId/suppliers",
+				permission: PERMISSIONS.SUPPLIER_READ,
 			},
 			{
 				label: "Tarefas",
 				icon: <LayoutGrid className="h-4 w-4" />,
 				to: "/events/$eventId/tasks",
+				permission: PERMISSIONS.TASK_READ,
 			},
 			{
 				label: "Cronograma",
 				icon: <Calendar className="h-4 w-4" />,
 				to: "/events/$eventId/schedule",
+				permission: PERMISSIONS.SCHEDULE_READ,
 			},
 			{
 				label: "Alimentação",
 				icon: <UtensilsCrossed className="h-4 w-4" />,
 				to: "/events/$eventId/food-plan",
+				permission: PERMISSIONS.FOOD_PLAN_READ,
 			},
 			{
 				label: "Checklist",
 				icon: <ListChecks className="h-4 w-4" />,
 				to: "/events/$eventId/checklist",
+				permission: PERMISSIONS.CHECKLIST_READ,
 			},
 		],
 	},
@@ -90,11 +89,13 @@ const eventNavGroups: NavGroup[] = [
 				label: "Lista de convidados",
 				icon: <Users className="h-4 w-4" />,
 				to: "/events/$eventId/guests",
+				permission: PERMISSIONS.GUEST_READ,
 			},
 			{
 				label: "Mesas",
 				icon: <TableProperties className="h-4 w-4" />,
 				to: "/events/$eventId/tables",
+				permission: PERMISSIONS.TABLE_READ,
 			},
 		],
 	},
@@ -105,6 +106,7 @@ const eventNavGroups: NavGroup[] = [
 				label: "Dedicatórias & Votos",
 				icon: <Feather className="h-4 w-4" />,
 				to: "/events/$eventId/dedications",
+				permission: PERMISSIONS.DEDICATION_READ,
 			},
 		],
 	},
@@ -115,6 +117,7 @@ const eventNavGroups: NavGroup[] = [
 				label: "Inventário",
 				icon: <Package className="h-4 w-4" />,
 				to: "/events/$eventId/inventory",
+				permission: PERMISSIONS.INVENTORY_READ,
 			},
 		],
 	},
@@ -125,6 +128,7 @@ const eventNavGroups: NavGroup[] = [
 				label: "Membros",
 				icon: <Users className="h-4 w-4" />,
 				to: "/events/$eventId/members",
+				permission: PERMISSIONS.MEMBER_READ,
 			},
 		],
 	},
@@ -139,11 +143,13 @@ const globalNavGroups: NavGroup[] = [
 				label: "Eventos",
 				icon: <Gift className="h-4 w-4" />,
 				to: "/events",
+				permission: PERMISSIONS.EVENT_READ,
 			},
 			{
 				label: "Perfil",
 				icon: <User className="h-4 w-4" />,
 				to: "/profile",
+				permission: PERMISSIONS.PROFILE_READ,
 			},
 		],
 	},
@@ -154,32 +160,68 @@ const globalNavGroups: NavGroup[] = [
 				label: "Notificações",
 				icon: <Bell className="h-4 w-4" />,
 				to: "/notifications",
+				permission: PERMISSIONS.NOTIFICATION_READ,
 			},
 			{
 				label: "Configurações",
 				icon: <Settings className="h-4 w-4" />,
 				to: "/settings",
+				permission: PERMISSIONS.PROFILE_READ,
 			},
 		],
 	},
 ];
 
+/**
+ * The groups the caller may actually see, already filtered.
+ *
+ * The event menu needs the caller's grants IN THAT EVENT: the session's union
+ * would offer a VIEWER the sections their OWNER membership elsewhere unlocks,
+ * and every one of those clicks would 403. The global menu is account-level, so
+ * it uses the session instead.
+ *
+ * Both hooks are called unconditionally and the result picked afterwards,
+ * because the number of hooks a render runs may not change with the route — and
+ * here it does: `isEventContext` flips between the two menus.
+ */
+function useVisibleNavGroups(isEventContext: boolean): NavGroup[] {
+	const params = useParams({ strict: false }) as
+		| { eventId?: string }
+		| undefined;
+	const eventId = params?.eventId;
+
+	const { permissions: eventPermissions } = useEventAccess(
+		isEventContext ? eventId : undefined,
+	);
+	const accountPermissions = useAccountPermissions();
+
+	const granted = new Set<Permission>(
+		isEventContext ? eventPermissions : accountPermissions,
+	);
+
+	return filterNavGroups(
+		isEventContext ? eventNavGroups : globalNavGroups,
+		granted,
+	);
+}
+
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 	const matchRoute = useMatchRoute();
 	const isEventContext = matchRoute({ to: "/events/$eventId", fuzzy: true });
 
-	const navGroups = isEventContext ? eventNavGroups : globalNavGroups;
+	const navGroups = useVisibleNavGroups(!!isEventContext);
 
-	const eventIdMatch = window.location.pathname.match(/\/events\/([^/]+)/);
-	const eventId = eventIdMatch?.[1];
+	const eventId = useParams({ strict: false }) as
+		| { eventId?: string }
+		| undefined;
 
 	return (
 		<div className="flex h-full flex-col">
 			<div className="flex h-14 items-center px-4">
-				{isEventContext && eventId ? (
+				{isEventContext && eventId?.eventId ? (
 					<Link
 						to="/events/$eventId"
-						params={{ eventId }}
+						params={{ eventId: eventId.eventId }}
 						className="flex items-center gap-2 font-semibold"
 						onClick={onNavigate}
 					>
@@ -198,7 +240,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 				)}
 			</div>
 
-			{isEventContext && eventId && (
+			{isEventContext && eventId?.eventId && (
 				<div className="px-3 pb-2">
 					<Link
 						to="/events"
@@ -232,7 +274,11 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 								<Link
 									key={item.to}
 									to={item.to}
-									params={isEventContext && eventId ? { eventId } : undefined}
+									params={
+										isEventContext && eventId?.eventId
+											? { eventId: eventId.eventId }
+											: undefined
+									}
 									onClick={onNavigate}
 									className={cn(
 										"flex items-center gap-3 px-2 py-1.5 font-medium text-sm transition-colors",
@@ -278,9 +324,11 @@ function SidebarUserInfo() {
 function CollapsedNav() {
 	const matchRoute = useMatchRoute();
 	const isEventContext = matchRoute({ to: "/events/$eventId", fuzzy: true });
-	const navGroups = isEventContext ? eventNavGroups : globalNavGroups;
-	const eventIdMatch = window.location.pathname.match(/\/events\/([^/]+)/);
-	const eventId = eventIdMatch?.[1];
+	const navGroups = useVisibleNavGroups(!!isEventContext);
+	const params = useParams({ strict: false }) as
+		| { eventId?: string }
+		| undefined;
+	const eventId = params?.eventId;
 
 	return (
 		<nav className="flex flex-col items-center gap-1 px-2">

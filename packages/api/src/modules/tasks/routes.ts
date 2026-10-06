@@ -1,10 +1,11 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import type { FastifyInstance } from "fastify";
 import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../../shared/auth/authorization";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { SCHEDULE_CODES, TASK_CODES } from "../../shared/errors/codes";
 import { listResponse, successResponse } from "../../shared/http/response";
@@ -26,9 +27,9 @@ import { TaskService } from "./service";
 
 export async function taskRoutes(app: FastifyInstance) {
 	app.get("/api/v1/events/:eventId/tasks", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventPermission(userId, eventId, PERMISSIONS.TASK_READ);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -49,45 +50,57 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/tasks", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.TASK_CREATE,
+		);
 		const data = createTaskSchema.parse(request.body);
 		const task = await TaskService.create(eventId, userId, data);
 		return reply.status(201).send(successResponse(task));
 	});
 
 	app.patch("/api/v1/tasks/:id", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
 			throw new NotFoundError("Tarefa não encontrada", {
 				code: TASK_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.TASK_UPDATE,
+		);
 		const data = updateTaskSchema.parse(request.body);
 		const task = await TaskService.update(id, data);
 		return successResponse(task);
 	});
 
 	app.delete("/api/v1/tasks/:id", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("task", id);
 		if (!eventId)
 			throw new NotFoundError("Tarefa não encontrada", {
 				code: TASK_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.TASK_DELETE,
+		);
 		await TaskService.delete(id);
 		return reply.status(204).send();
 	});
 
 	app.get("/api/v1/events/:eventId/schedules", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventPermission(userId, eventId, PERMISSIONS.SCHEDULE_READ);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -106,37 +119,49 @@ export async function taskRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/schedules", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.SCHEDULE_CREATE,
+		);
 		const data = createScheduleSchema.parse(request.body);
 		const schedule = await TaskService.createSchedule(eventId, data);
 		return reply.status(201).send(successResponse(schedule));
 	});
 
 	app.patch("/api/v1/schedules/:id", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
 			throw new NotFoundError("Agendamento não encontrado", {
 				code: SCHEDULE_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.SCHEDULE_UPDATE,
+		);
 		const data = updateScheduleSchema.parse(request.body);
 		const schedule = await TaskService.updateSchedule(id, data);
 		return successResponse(schedule);
 	});
 
 	app.delete("/api/v1/schedules/:id", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("schedule", id);
 		if (!eventId)
 			throw new NotFoundError("Agendamento não encontrado", {
 				code: SCHEDULE_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.SCHEDULE_DELETE,
+		);
 		await TaskService.deleteSchedule(id);
 		return reply.status(204).send();
 	});

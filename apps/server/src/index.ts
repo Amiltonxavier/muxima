@@ -43,7 +43,10 @@ async function main() {
 
 		rpcApp.all("/rpc/*", async (request, reply) => {
 			const { matched } = await rpcHandler.handle(request, reply, {
-				context: await createContext(request.headers, { ip: request.ip }),
+				context: await createContext(request.headers, {
+					ip: request.ip,
+					reply,
+				}),
 				prefix: "/rpc",
 			});
 			if (!matched) reply.status(404).send(errorEnvelope(rpcNotFound()));
@@ -51,7 +54,10 @@ async function main() {
 
 		rpcApp.all("/api-reference/*", async (request, reply) => {
 			const { matched } = await apiHandler.handle(request, reply, {
-				context: await createContext(request.headers, { ip: request.ip }),
+				context: await createContext(request.headers, {
+					ip: request.ip,
+					reply,
+				}),
 				prefix: "/api-reference",
 			});
 			if (!matched) reply.status(404).send(errorEnvelope(rpcNotFound()));

@@ -11,6 +11,7 @@ export function InvitationResponse({
 	onMaybe,
 	onDecline,
 	isResponding,
+	canRespond = true,
 }: {
 	status: string;
 	response: string | null;
@@ -19,10 +20,15 @@ export function InvitationResponse({
 	onMaybe: () => void;
 	onDecline: () => void;
 	isResponding: boolean;
+	/**
+	 * `invitations.respond` no evento. Sem ela só os botões desaparecem — a
+	 * resposta já dada continua visível, porque é informação de leitura.
+	 */
+	canRespond?: boolean;
 }) {
 	return (
 		<>
-			{status !== "RESPONDED" && status !== "EXPIRED" && (
+			{canRespond && status !== "RESPONDED" && status !== "EXPIRED" && (
 				<section className="space-y-2 border-y py-4">
 					<Button
 						className="w-full bg-green-600 text-white hover:bg-green-700"

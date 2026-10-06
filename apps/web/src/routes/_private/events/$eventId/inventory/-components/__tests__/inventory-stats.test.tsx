@@ -16,6 +16,13 @@ vi.mock("@/shared/hooks/use-event-lock", () => ({
 	}),
 }));
 
+// The row hides its mutation buttons without the matching permission; the
+// router/query context is not available in this isolated render, so the hook
+// is stubbed to "granted" — authorization has its own tests elsewhere.
+vi.mock("@/shared/hooks/use-can", () => ({
+	useEventCan: () => true,
+}));
+
 import { InventoryStats } from "../inventory-stats";
 import { InventoryTable } from "../inventory-table";
 

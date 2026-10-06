@@ -88,10 +88,21 @@ export class ValidationError extends AppError {
 	}
 }
 
+export interface RateLimitErrorOptions extends AppErrorOptions {
+	/**
+	 * Seconds the caller should wait before retrying, taken from the window
+	 * that was exceeded. Transport layers turn it into the `Retry-After`
+	 * header; it stays out of `details` so the response envelope is unchanged.
+	 */
+	retryAfterSeconds?: number;
+}
+
 export class RateLimitError extends AppError {
+	public readonly retryAfterSeconds?: number;
+
 	constructor(
 		message = "Demasiadas tentativas. Tente novamente dentro de alguns instantes.",
-		options?: AppErrorOptions,
+		options?: RateLimitErrorOptions,
 	) {
 		super(
 			message,
@@ -99,6 +110,7 @@ export class RateLimitError extends AppError {
 			options?.code ?? "RATE_LIMIT_EXCEEDED",
 			options?.details,
 		);
+		this.retryAfterSeconds = options?.retryAfterSeconds;
 	}
 }
 

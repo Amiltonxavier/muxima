@@ -36,6 +36,13 @@ import {
  * Members as a table instead of a card grid: with search, role and status
  * filters a table is far easier to scan, and it matches the guests module.
  */
+/**
+ * `canChangeRole` / `canRemove` come from the caller's grants in THIS event, not
+ * from their role name: `members.update-role` is OWNER-only while
+ * `members.remove` also covers the tiers that manage the team, and the two must
+ * not be collapsed into one "is an admin" check. Without them a VIEWER is shown
+ * an editable role dropdown that fails with 403 on selection.
+ */
 export function MembersTable({
 	members,
 	isLoading,
@@ -44,6 +51,8 @@ export function MembersTable({
 	onViewDetails,
 	onRemove,
 	disabledMemberId,
+	canChangeRole,
+	canRemove,
 }: {
 	members: MemberItem[];
 	isLoading: boolean;
@@ -52,6 +61,8 @@ export function MembersTable({
 	onViewDetails: (member: MemberItem) => void;
 	onRemove: (memberId: string) => void;
 	disabledMemberId?: string;
+	canChangeRole: boolean;
+	canRemove: boolean;
 }) {
 	const { isEventLocked, lockMessage } = useEventLock();
 

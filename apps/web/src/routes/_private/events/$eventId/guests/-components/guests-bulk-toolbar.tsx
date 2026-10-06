@@ -1,6 +1,8 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Globe, Loader2, MailPlus, X } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateInvitation,
@@ -34,6 +36,10 @@ export function GuestsBulkToolbar({
 	const createInvitation = useCreateInvitation();
 	const publishBatch = usePublishInvitationsBatch();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Each bulk action is a separate capability: creating invitations is not
+	// the same grant as publishing them, so each button checks its own.
+	const mayCreate = useEventCan(eventId, PERMISSIONS.INVITATION_CREATE);
+	const mayPublish = useEventCan(eventId, PERMISSIONS.INVITATION_PUBLISH);
 
 	if (selectedCount === 0) return null;
 
@@ -89,7 +95,7 @@ export function GuestsBulkToolbar({
 			</div>
 
 			<div className="flex flex-wrap gap-2">
-				{canCreate && (
+				{mayCreate && canCreate && (
 					<Button
 						variant="outline"
 						size="sm"
@@ -106,27 +112,29 @@ export function GuestsBulkToolbar({
 					</Button>
 				)}
 
-				<Button
-					size="sm"
-					disabled={!canPublish || isBusy || isEventLocked}
-					title={
-						isEventLocked
-							? (lockMessage ?? undefined)
-							: canPublish
-								? undefined
-								: "Os convidados selecionados já têm convites publicados"
-					}
-					onClick={handlePublish}
-				>
-					{publishBatch.isPending ? (
-						<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-					) : (
-						<Globe className="mr-2 h-4 w-4" />
-					)}
-					{publishBatch.isPending
-						? "A publicar..."
-						: `Publicar convites (${invitationIdsToPublish.length})`}
-				</Button>
+				{mayPublish && (
+					<Button
+						size="sm"
+						disabled={!canPublish || isBusy || isEventLocked}
+						title={
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: canPublish
+									? undefined
+									: "Os convidados selecionados já têm convites publicados"
+						}
+						onClick={handlePublish}
+					>
+						{publishBatch.isPending ? (
+							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+						) : (
+							<Globe className="mr-2 h-4 w-4" />
+						)}{" "}
+						{publishBatch.isPending
+							? "A publicar..."
+							: `Publicar convites (${invitationIdsToPublish.length})`}
+					</Button>
+				)}
 			</div>
 		</div>
 	);

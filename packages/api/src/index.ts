@@ -4,7 +4,11 @@ import db from "@muxima/db";
 import { ORPCError, os } from "@orpc/server";
 
 import type { Context } from "./context";
-import { ForbiddenError, UnauthorizedError } from "./shared/errors/app-error";
+import {
+	ForbiddenError,
+	RateLimitError,
+	UnauthorizedError,
+} from "./shared/errors/app-error";
 import { ERROR_CODES } from "./shared/errors/codes";
 import { mapError } from "./shared/errors/map-error";
 
@@ -22,7 +26,7 @@ export const ACCOUNT_BLOCKED_CODE = ERROR_CODES.ACCOUNT_BLOCKED;
  * `code`, `status` and PT-PT `message`. `details` travels in the oRPC `data`
  * field — that is the envelope's slot for structured information.
  */
-const errorMapper = o.middleware(async ({ next }) => {
+const errorMapper = o.middleware(async ({ context, next }) => {
 	try {
 		return await next();
 	} catch (error) {
@@ -33,6 +37,16 @@ const errorMapper = o.middleware(async ({ next }) => {
 		// interceptor, so nothing internal is lost — it is only replaced here by
 		// the public, PT-PT version the client is allowed to see.
 		const appError = mapError(error);
+
+		// The RPC surface does not go through the REST error handler, so the
+		// `Retry-After` header is set here, before oRPC serialises the 429.
+		if (
+			appError instanceof RateLimitError &&
+			appError.retryAfterSeconds !== undefined &&
+			!context.reply?.hasHeader("retry-after")
+		) {
+			context.reply?.header("Retry-After", String(appError.retryAfterSeconds));
+		}
 
 		throw new ORPCError(appError.code, {
 			status: appError.statusCode,

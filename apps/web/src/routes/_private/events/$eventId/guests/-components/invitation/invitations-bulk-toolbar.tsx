@@ -1,6 +1,8 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { AlertTriangle, Globe, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { usePublishInvitationsBatch } from "../../-queries/invitation-queries";
 import type { BulkPublishSummary } from "../../-types/invitation.types";
@@ -26,6 +28,10 @@ export function InvitationsBulkToolbar({
 }) {
 	const publishBatch = usePublishInvitationsBatch();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Publishing is its own capability — the toolbar itself stays (the
+	// selection UI is harmless) but the action button disappears for a role
+	// that may only draft invitations.
+	const mayPublish = useEventCan(eventId, PERMISSIONS.INVITATION_PUBLISH);
 
 	const handlePublish = () => {
 		if (publishableIds.length === 0) return;
@@ -68,23 +74,27 @@ export function InvitationsBulkToolbar({
 				)}
 			</div>
 
-			<Button
-				size="sm"
-				disabled={
-					publishableIds.length === 0 || publishBatch.isPending || isEventLocked
-				}
-				title={isEventLocked ? (lockMessage ?? undefined) : undefined}
-				onClick={handlePublish}
-			>
-				{publishBatch.isPending ? (
-					<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-				) : (
-					<Globe className="mr-2 h-4 w-4" />
-				)}
-				{publishBatch.isPending
-					? "A publicar..."
-					: `Publicar ${publishableIds.length} convite(s)`}
-			</Button>
+			{mayPublish && (
+				<Button
+					size="sm"
+					disabled={
+						publishableIds.length === 0 ||
+						publishBatch.isPending ||
+						isEventLocked
+					}
+					title={isEventLocked ? (lockMessage ?? undefined) : undefined}
+					onClick={handlePublish}
+				>
+					{publishBatch.isPending ? (
+						<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+					) : (
+						<Globe className="mr-2 h-4 w-4" />
+					)}
+					{publishBatch.isPending
+						? "A publicar..."
+						: `Publicar ${publishableIds.length} convite(s)`}
+				</Button>
+			)}
 		</div>
 	);
 }

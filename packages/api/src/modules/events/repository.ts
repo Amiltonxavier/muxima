@@ -12,7 +12,7 @@ function buildEventWhere(
 	filters?: EventFilterParams,
 ): Prisma.EventWhereInput {
 	const membershipWhere: Prisma.EventWhereInput = {
-		members: { some: { userId } },
+		members: { some: { userId, status: "ACTIVE" } },
 	};
 
 	const filterConditions: Prisma.EventWhereInput[] = [];

@@ -1,31 +1,42 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getBudgetSnapshot } from "../modules/budget/repository";
-import { requireEventAccess } from "../shared/auth/event-access";
+import { requireEventPermission } from "../shared/auth/authorization";
+
 import { centsToUnits } from "../shared/finance/money";
 
 export const dashboardRouter = {
 	getGlobalStats: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
 
+		// F-08: scope by ACTIVE membership, not by `event.ownerId`.
+		// `ownerId` answers "events I created"; the dashboard answers "my
+		// events", and a PARTNER or ADMIN of an event they did not create
+		// must not see zeros everywhere. `dashboard.read` is held by every
+		// role's read tier, so ACTIVE membership is the deciding factor here.
+		const myEvent = {
+			members: { some: { userId, status: "ACTIVE" as const } },
+		};
+
 		const [events, guests, invitations, suppliers, budgets, members] =
 			await Promise.all([
-				db.event.count({ where: { ownerId: userId } }),
+				db.event.count({ where: myEvent }),
 				db.guest.count({
-					where: { event: { ownerId: userId } },
+					where: { event: myEvent },
 				}),
 				db.guestInvitation.count({
-					where: { event: { ownerId: userId } },
+					where: { event: myEvent },
 				}),
 				db.supplier.count({
-					where: { event: { ownerId: userId } },
+					where: { event: myEvent },
 				}),
 				db.budget.count({
-					where: { event: { ownerId: userId } },
+					where: { event: myEvent },
 				}),
 				db.eventMember.count({
-					where: { event: { ownerId: userId } },
+					where: { event: myEvent },
 				}),
 			]);
 
@@ -42,7 +53,11 @@ export const dashboardRouter = {
 	getGuestChart: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.DASHBOARD_READ,
+			);
 
 			const event = await db.event.findUnique({
 				where: { id: input.eventId },
@@ -76,7 +91,11 @@ export const dashboardRouter = {
 	getBudgetChart: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.DASHBOARD_READ,
+			);
 			const { totals, breakdown } = await getBudgetSnapshot(input.eventId);
 
 			return {

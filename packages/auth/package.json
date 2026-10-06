@@ -16,7 +16,8 @@
 		"@muxima/env": "workspace:*",
 		"better-auth": "catalog:",
 		"dotenv": "catalog:",
-		"zod": "catalog:"
+		"zod": "catalog:",
+		"@muxima/permissions": "workspace:*"
 	},
 	"devDependencies": {
 		"@muxima/config": "workspace:*",

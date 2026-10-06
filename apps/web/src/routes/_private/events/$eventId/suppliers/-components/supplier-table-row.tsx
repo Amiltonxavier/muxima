@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Progress } from "@muxima/ui/components/progress";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
@@ -10,6 +11,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatCurrency } from "@/utils/format-currency";
@@ -40,7 +42,18 @@ export function SupplierTableRow({
 }) {
 	const agreed = supplier.price ?? 0;
 	const missing = supplier.pending ?? 0;
-	const { isEventLocked, lockMessage } = useEventLock();
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
+	// Viewing is a read (all roles); registering payments, plans, status and
+	// edits are `suppliers.update`, deleting is `suppliers.delete`. Hidden when
+	// the grant is absent — the backend rejects the same mutations regardless.
+	const canUpdate = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.SUPPLIER_UPDATE,
+	);
+	const canDelete = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.SUPPLIER_DELETE,
+	);
 
 	// Column "Pagamento": single payment vs installment plan. The API resolves
 	// the payment model; the row only renders it.
@@ -141,70 +154,82 @@ export function SupplierTableRow({
 					>
 						<Eye className="h-3.5 w-3.5" />
 					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={
-							isEventLocked
-								? (lockMessage ?? undefined)
-								: canPay
-									? "Registar pagamento"
-									: supplier.status !== "CONFIRMED"
-										? "Só é possível pagar a um fornecedor confirmado"
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={
+								isEventLocked
+									? (lockMessage ?? undefined)
+									: canPay
+										? "Registar pagamento"
+										: supplier.status !== "CONFIRMED"
+											? "Só é possível pagar a um fornecedor confirmado"
+											: agreed <= 0
+												? "Defina primeiro o montante acordado"
+												: "Montante já liquidado"
+							}
+							disabled={!canPay || isEventLocked}
+							onClick={() => onAddPayment(supplier)}
+						>
+							<Banknote className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={
+								isEventLocked
+									? (lockMessage ?? undefined)
+									: canPlanInstallments
+										? "Plano de parcelas"
 										: agreed <= 0
 											? "Defina primeiro o montante acordado"
-											: "Montante já liquidado"
-						}
-						disabled={!canPay || isEventLocked}
-						onClick={() => onAddPayment(supplier)}
-					>
-						<Banknote className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={
-							isEventLocked
-								? (lockMessage ?? undefined)
-								: canPlanInstallments
-									? "Plano de parcelas"
-									: agreed <= 0
-										? "Defina primeiro o montante acordado"
-										: "Parcelas apenas em negociação ou confirmado"
-						}
-						disabled={!canPlanInstallments || isEventLocked}
-						onClick={() => onManageInstallments(supplier)}
-					>
-						<CalendarClock className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={isEventLocked ? (lockMessage ?? undefined) : "Mudar estado"}
-						disabled={isEventLocked}
-						onClick={() => onChangeStatus(supplier)}
-					>
-						<History className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
-						disabled={isEventLocked}
-						onClick={() => onEdit(supplier)}
-					>
-						<Pencil className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="text-destructive"
-						title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
-						disabled={isEventLocked}
-						onClick={() => onDelete(supplier)}
-					>
-						<Trash2 className="h-3.5 w-3.5" />
-					</Button>
+											: "Parcelas apenas em negociação ou confirmado"
+							}
+							disabled={!canPlanInstallments || isEventLocked}
+							onClick={() => onManageInstallments(supplier)}
+						>
+							<CalendarClock className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={
+								isEventLocked ? (lockMessage ?? undefined) : "Mudar estado"
+							}
+							disabled={isEventLocked}
+							onClick={() => onChangeStatus(supplier)}
+						>
+							<History className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
+							disabled={isEventLocked}
+							onClick={() => onEdit(supplier)}
+						>
+							<Pencil className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canDelete && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="text-destructive"
+							title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
+							disabled={isEventLocked}
+							onClick={() => onDelete(supplier)}
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+						</Button>
+					)}
 				</div>
 			</TableCell>
 		</TableRow>

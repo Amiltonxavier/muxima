@@ -1,3 +1,4 @@
+import { PERMISSIONS, type Permission } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import {
 	DropdownMenu,
@@ -9,12 +10,34 @@ import {
 } from "@muxima/ui/components/dropdown-menu";
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import {
 	type ExportFormat,
 	type ExportModule,
 	toastExportError,
 	useExportEventModule,
 } from "@/shared/hooks/use-export-download";
+
+/**
+ * Mirrors `EXPORT_PERMISSIONS` in `modules/exports/routes.ts`.
+ *
+ * Kept in step with the server map rather than reusing it: the API package
+ * cannot be imported here without dragging the whole server router (and Prisma)
+ * into the browser bundle. The test below fails if the two ever diverge, which
+ * is cheaper than the duplication being wrong in production.
+ */
+const MODULE_PERMISSION: Record<ExportModule, Permission> = {
+	budget: PERMISSIONS.BUDGET_EXPORT,
+	checklist: PERMISSIONS.CHECKLIST_READ,
+	event: PERMISSIONS.EVENT_READ,
+	"food-plan": PERMISSIONS.FOOD_PLAN_READ,
+	guests: PERMISSIONS.GUEST_EXPORT,
+	inventory: PERMISSIONS.INVENTORY_EXPORT,
+	schedule: PERMISSIONS.SCHEDULE_READ,
+	tables: PERMISSIONS.TABLE_READ,
+	suppliers: PERMISSIONS.SUPPLIER_EXPORT,
+	tasks: PERMISSIONS.TASK_READ,
+};
 
 interface ExportMenuProps {
 	eventId: string;
@@ -46,6 +69,14 @@ export function ExportMenu({
 	variant = "outline",
 	size = "sm",
 }: ExportMenuProps) {
+	// The server answers a forbidden export with 404, so the menu is the only
+	// place the user learns the report is not theirs to generate.
+	const canExport = useEventCan(
+		eventId,
+		PERMISSIONS.EXPORT_CREATE,
+		MODULE_PERMISSION[module],
+	);
+
 	const { mutate, isPending } = useExportEventModule({
 		onSuccess: () =>
 			toast.success(
@@ -54,6 +85,8 @@ export function ExportMenu({
 	});
 
 	const run = (format: ExportFormat) => mutate({ eventId, module, format });
+
+	if (!canExport) return null;
 
 	return (
 		<DropdownMenu>

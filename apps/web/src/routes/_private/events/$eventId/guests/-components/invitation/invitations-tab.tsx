@@ -1,9 +1,11 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Pagination } from "@muxima/ui/components/pagination";
 import { Link2 } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { ExportMenu } from "@/shared/components/export-menu";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { useInvitationsFilters } from "../../-hooks/use-invitations-filters";
 import { useVisibleSelection } from "../../-hooks/use-visible-selection";
@@ -38,6 +40,8 @@ export function InvitationsTab({
 	const filters = useInvitationsFilters();
 	const publishBatch = usePublishInvitationsBatch();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// "Publicar todos" is the bulk form of `invitations.publish`.
+	const mayPublish = useEventCan(eventId, PERMISSIONS.INVITATION_PUBLISH);
 
 	const invitationsQuery = useInvitations(eventId, {
 		page: filters.page,
@@ -88,25 +92,30 @@ export function InvitationsTab({
 			/>
 
 			<div className="flex flex-wrap items-center justify-end gap-2">
-				<ExportMenu eventId={eventId} module="invitations" size="sm" />
+				{/* The guest list is the event-scoped export that exists. There is
+				    no invitations export on the server — the previous
+				    `module="invitations"` hit a 404 on every click. */}
+				<ExportMenu eventId={eventId} module="guests" size="sm" />
 
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={
-						unpublishedCount === 0 || publishBatch.isPending || isEventLocked
-					}
-					title={
-						isEventLocked
-							? (lockMessage ?? undefined)
-							: unpublishedCount === 0
-								? "Não existem convites por publicar"
-								: "Publica todos os convites ainda privados deste evento"
-					}
-					onClick={handlePublishAll}
-				>
-					Publicar todos
-				</Button>
+				{mayPublish && (
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={
+							unpublishedCount === 0 || publishBatch.isPending || isEventLocked
+						}
+						title={
+							isEventLocked
+								? (lockMessage ?? undefined)
+								: unpublishedCount === 0
+									? "Não existem convites por publicar"
+									: "Publica todos os convites ainda privados deste evento"
+						}
+						onClick={handlePublishAll}
+					>
+						Publicar todos
+					</Button>
+				)}
 			</div>
 
 			<InvitationsFilters

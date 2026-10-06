@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
@@ -59,6 +60,7 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { ExportMenu } from "@/shared/components/export-menu";
 import { QueryState } from "@/shared/components/states";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateTask,
@@ -113,6 +115,12 @@ const PRIORITY_LABELS: Record<string, string> = {
 function TasksPage() {
 	const { eventId } = Route.useParams();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Authorization for this module's actions, decided by the caller's grants
+	// in THIS event. Hidden (not disabled) when the capability is absent — the
+	// backend rejects the same mutation regardless of what the UI draws.
+	const canCreate = useEventCan(eventId, PERMISSIONS.TASK_CREATE);
+	const canUpdate = useEventCan(eventId, PERMISSIONS.TASK_UPDATE);
+	const canDelete = useEventCan(eventId, PERMISSIONS.TASK_DELETE);
 	const [page, setPage] = useState(1);
 	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
@@ -167,6 +175,9 @@ function TasksPage() {
 		(event: DragEndEvent) => {
 			const { active, over } = event;
 			if (!over) return;
+			// A drag is a status UPDATE: without `tasks.update` the card must not
+			// move at all, exactly like the edit form would be refused.
+			if (!canUpdate) return;
 
 			const taskId = active.id as string;
 			const newStatus = over.id as string;
@@ -195,7 +206,7 @@ function TasksPage() {
 				);
 			}
 		},
-		[tasks, updateTask],
+		[tasks, updateTask, canUpdate],
 	);
 
 	// ── Kanban data mapping ──────────────────────────────────────
@@ -234,14 +245,16 @@ function TasksPage() {
 				<div className="flex gap-2">
 					<ExportMenu eventId={eventId} module="tasks" />
 
-					<Button
-						onClick={() => setShowCreateDialog(true)}
-						disabled={isEventLocked}
-						title={lockMessage ?? undefined}
-					>
-						<Plus className="mr-2 h-4 w-4" />
-						Criar tarefa
-					</Button>
+					{canCreate && (
+						<Button
+							onClick={() => setShowCreateDialog(true)}
+							disabled={isEventLocked}
+							title={lockMessage ?? undefined}
+						>
+							<Plus className="mr-2 h-4 w-4" />
+							Criar tarefa
+						</Button>
+					)}
 				</div>
 			</div>
 
@@ -406,42 +419,46 @@ function TasksPage() {
 														)}
 													</div>
 													<div className="flex justify-end gap-1 pt-1">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															disabled={isEventLocked}
-															title={
-																isEventLocked
-																	? (lockMessage ?? undefined)
-																	: undefined
-															}
-															onClick={(e) => {
-																e.stopPropagation();
-																setEditingTask(item);
-															}}
-														>
-															<Pencil
-																className="h-3.5 w-3.5"
-																aria-label="Editar tarefa"
-															/>
-														</Button>
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															className="text-destructive"
-															disabled={isEventLocked}
-															title={
-																isEventLocked
-																	? (lockMessage ?? undefined)
-																	: undefined
-															}
-															onClick={(e) => {
-																e.stopPropagation();
-																setDeleteId(item.id);
-															}}
-														>
-															<Trash2 className="h-3.5 w-3.5" />
-														</Button>
+														{canUpdate && (
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																disabled={isEventLocked}
+																title={
+																	isEventLocked
+																		? (lockMessage ?? undefined)
+																		: undefined
+																}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	setEditingTask(item);
+																}}
+															>
+																<Pencil
+																	className="h-3.5 w-3.5"
+																	aria-label="Editar tarefa"
+																/>
+															</Button>
+														)}
+														{canDelete && (
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																className="text-destructive"
+																disabled={isEventLocked}
+																title={
+																	isEventLocked
+																		? (lockMessage ?? undefined)
+																		: undefined
+																}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	setDeleteId(item.id);
+																}}
+															>
+																<Trash2 className="h-3.5 w-3.5" />
+															</Button>
+														)}
 													</div>
 												</div>
 											</KanbanCard>
@@ -521,42 +538,46 @@ function TasksPage() {
 																			task.priority}
 																	</Badge>
 																)}
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	disabled={isEventLocked}
-																	title={
-																		isEventLocked
-																			? (lockMessage ?? undefined)
-																			: undefined
-																	}
-																	onClick={() =>
-																		setEditingTask(
-																			kanbanData.find(
-																				(k) => k.id === task.id,
-																			) ?? null,
-																		)
-																	}
-																>
-																	<Pencil
-																		className="h-3.5 w-3.5"
-																		aria-label="Editar tarefa"
-																	/>
-																</Button>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	className="text-destructive"
-																	disabled={isEventLocked}
-																	title={
-																		isEventLocked
-																			? (lockMessage ?? undefined)
-																			: undefined
-																	}
-																	onClick={() => setDeleteId(task.id)}
-																>
-																	<Trash2 className="h-3.5 w-3.5" />
-																</Button>
+																{canUpdate && (
+																	<Button
+																		variant="ghost"
+																		size="icon-sm"
+																		disabled={isEventLocked}
+																		title={
+																			isEventLocked
+																				? (lockMessage ?? undefined)
+																				: undefined
+																		}
+																		onClick={() =>
+																			setEditingTask(
+																				kanbanData.find(
+																					(k) => k.id === task.id,
+																				) ?? null,
+																			)
+																		}
+																	>
+																		<Pencil
+																			className="h-3.5 w-3.5"
+																			aria-label="Editar tarefa"
+																		/>
+																	</Button>
+																)}
+																{canDelete && (
+																	<Button
+																		variant="ghost"
+																		size="icon-sm"
+																		className="text-destructive"
+																		disabled={isEventLocked}
+																		title={
+																			isEventLocked
+																				? (lockMessage ?? undefined)
+																				: undefined
+																		}
+																		onClick={() => setDeleteId(task.id)}
+																	>
+																		<Trash2 className="h-3.5 w-3.5" />
+																	</Button>
+																)}
 															</div>
 														</ListItem>
 													))

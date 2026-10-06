@@ -1,9 +1,11 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { Checkbox } from "@muxima/ui/components/checkbox";
 import { TableCell, TableRow } from "@muxima/ui/components/table";
 import { Eye, EyeOff, Globe, QrCode, Share2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { formatDate } from "@/utils/format-date";
 import {
@@ -34,7 +36,15 @@ export function InvitationTableRow({
 }) {
 	const publish = usePublishInvitation();
 	const unpublish = useUnpublishInvitation();
-	const { isEventLocked, lockMessage } = useEventLock();
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
+	// Publish/unpublish is the privileged lifecycle action; without
+	// `invitations.publish` the button is not drawn at all (the backend
+	// rejects the same mutation regardless). Copying an existing link is a
+	// read and stays available.
+	const mayPublish = useEventCan(
+		eventId ?? invitation.eventId,
+		PERMISSIONS.INVITATION_PUBLISH,
+	);
 
 	const guests = invitation.guests.map(({ guest }) => guest);
 	const guestSummary =
@@ -140,25 +150,29 @@ export function InvitationTableRow({
 							<Eye className="h-3.5 w-3.5" />
 						</Button>
 					)}
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title={
-							isEventLocked
-								? (lockMessage ?? undefined)
-								: isPublished
-									? "Retirar publicação"
-									: "Publicar convite"
-						}
-						disabled={isBusy || isEventLocked || (!isPublished && !canPublish)}
-						onClick={handleTogglePublish}
-					>
-						{isPublished ? (
-							<EyeOff className="h-3.5 w-3.5" />
-						) : (
-							<Globe className="h-3.5 w-3.5" />
-						)}
-					</Button>
+					{mayPublish && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							title={
+								isEventLocked
+									? (lockMessage ?? undefined)
+									: isPublished
+										? "Retirar publicação"
+										: "Publicar convite"
+							}
+							disabled={
+								isBusy || isEventLocked || (!isPublished && !canPublish)
+							}
+							onClick={handleTogglePublish}
+						>
+							{isPublished ? (
+								<EyeOff className="h-3.5 w-3.5" />
+							) : (
+								<Globe className="h-3.5 w-3.5" />
+							)}
+						</Button>
+					)}
 					<Button
 						variant="ghost"
 						size="icon-sm"

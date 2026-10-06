@@ -1,6 +1,8 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Plus } from "lucide-react";
 import { ExportMenu } from "@/shared/components/export-menu";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 
 export function SupplierHeader({
@@ -13,6 +15,8 @@ export function SupplierHeader({
 	onAddSupplier: () => void;
 }) {
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Hidden without `suppliers.create` — the backend re-rejects the mutation.
+	const canCreate = useEventCan(eventId, PERMISSIONS.SUPPLIER_CREATE);
 
 	return (
 		<div className="flex items-center justify-between gap-4">
@@ -23,14 +27,16 @@ export function SupplierHeader({
 			<div className="flex gap-2">
 				<ExportMenu eventId={eventId} module="suppliers" />
 
-				<Button
-					onClick={onAddSupplier}
-					disabled={isEventLocked}
-					title={lockMessage ?? undefined}
-				>
-					<Plus className="mr-2 h-4 w-4" />
-					Adicionar fornecedor
-				</Button>
+				{canCreate && (
+					<Button
+						onClick={onAddSupplier}
+						disabled={isEventLocked}
+						title={lockMessage ?? undefined}
+					>
+						<Plus className="mr-2 h-4 w-4" />
+						Adicionar fornecedor
+					</Button>
+				)}
 			</div>
 		</div>
 	);

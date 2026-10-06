@@ -1,4 +1,5 @@
 import type { DedicationListItem } from "@muxima/api/shared/types/entities";
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
@@ -10,6 +11,7 @@ import {
 	TableRow,
 } from "@muxima/ui/components/table";
 import { Eye, Lock, Pencil, Share2, Trash2, Unlock } from "lucide-react";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatDate } from "@/utils/format-date";
@@ -35,6 +37,13 @@ export function DedicationsTable({
 	onDelete,
 }: Props) {
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Sem lista não há botões para mostrar, logo `undefined` é seguro aqui.
+	// Sem a permissão o controlo nem aparece; a API rejeita o mesmo de qualquer
+	// forma, e o acesso por autoria continua a ser verificado no backend.
+	const eventId = dedications[0]?.eventId;
+	const canUpdate = useEventCan(eventId, PERMISSIONS.DEDICATION_UPDATE);
+	const canShare = useEventCan(eventId, PERMISSIONS.DEDICATION_SHARE);
+	const canDelete = useEventCan(eventId, PERMISSIONS.DEDICATION_DELETE);
 
 	return (
 		<div className="overflow-x-auto border">
@@ -105,47 +114,59 @@ export function DedicationsTable({
 										onClick={() => onView(dedication.id)}
 									>
 										<Eye className="h-3.5 w-3.5" />
-									</Button>
+									</Button>{" "}
 									{/* Only the author may change, share or delete. */}
 									{dedication.access === "OWNER" ? (
 										<>
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												aria-label={`Editar ${dedication.title}`}
-												title={
-													isEventLocked ? (lockMessage ?? undefined) : undefined
-												}
-												disabled={isEventLocked}
-												onClick={() => onEdit(dedication.id)}
-											>
-												<Pencil className="h-3.5 w-3.5" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												aria-label={`Partilhar ${dedication.title}`}
-												title={
-													isEventLocked ? (lockMessage ?? undefined) : undefined
-												}
-												disabled={isEventLocked}
-												onClick={() => onShare(dedication.id)}
-											>
-												<Share2 className="h-3.5 w-3.5" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												className="text-destructive"
-												aria-label={`Eliminar ${dedication.title}`}
-												title={
-													isEventLocked ? (lockMessage ?? undefined) : undefined
-												}
-												disabled={isEventLocked}
-												onClick={() => onDelete(dedication.id)}
-											>
-												<Trash2 className="h-3.5 w-3.5" />
-											</Button>
+											{canUpdate && (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													aria-label={`Editar ${dedication.title}`}
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: undefined
+													}
+													disabled={isEventLocked}
+													onClick={() => onEdit(dedication.id)}
+												>
+													<Pencil className="h-3.5 w-3.5" />
+												</Button>
+											)}
+											{canShare && (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													aria-label={`Partilhar ${dedication.title}`}
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: undefined
+													}
+													disabled={isEventLocked}
+													onClick={() => onShare(dedication.id)}
+												>
+													<Share2 className="h-3.5 w-3.5" />
+												</Button>
+											)}
+											{canDelete && (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													className="text-destructive"
+													aria-label={`Eliminar ${dedication.title}`}
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: undefined
+													}
+													disabled={isEventLocked}
+													onClick={() => onDelete(dedication.id)}
+												>
+													<Trash2 className="h-3.5 w-3.5" />
+												</Button>
+											)}
 										</>
 									) : null}
 								</div>

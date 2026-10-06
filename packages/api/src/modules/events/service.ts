@@ -1,8 +1,21 @@
-import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error";
+import { PERMISSIONS } from "@muxima/permissions";
+import { requireEventPermission } from "../../shared/auth/authorization";
+import { NotFoundError } from "../../shared/errors/app-error";
 import { EVENT_CODES } from "../../shared/errors/codes";
 import { syncEventLifecycle } from "./lifecycle";
 import { type EventFilterParams, EventRepository } from "./repository";
 
+/**
+ * The REST surface of events.
+ *
+ * Authorization lives in `shared/auth/authorization.ts` and is expressed in
+ * CAPABILITIES (`events.read` / `events.update` / `events.delete`), not in role
+ * lists. That matters here specifically: this service used to hardcode
+ * `["OWNER", "ADMIN"]` and `role === "OWNER"`, so the REST routes and the oRPC
+ * routers could disagree about who may manage the team. Both now ask the same
+ * guards and read the same `RolePermission` rows, so a change to the matrix
+ * reaches both at once.
+ */
 export const EventService = {
 	async create(
 		userId: string,
@@ -21,7 +34,9 @@ export const EventService = {
 			description: data.description,
 		});
 
-		// Auto-add creator as OWNER
+		// Creating an event grants its creator `OWNER`. `MemberRepository.create`
+		// resolves the `Role` row, so the membership's `roleId` points at a real
+		// role and authorization never has to fall back to the enum.
 		await (await import("../members/repository")).MemberRepository.create({
 			eventId: event.id,
 			userId,
@@ -39,11 +54,7 @@ export const EventService = {
 				code: EVENT_CODES.NOT_FOUND,
 			});
 
-		const isMember = event.members.some((m) => m.userId === userId);
-		if (!isMember)
-			throw new ForbiddenError("Não tem acesso a este evento", {
-				code: EVENT_CODES.ACCESS_DENIED,
-			});
+		await requireEventPermission(userId, id, PERMISSIONS.EVENT_READ);
 
 		// Lazy lifecycle sync (backend is the authority for status changes).
 		const status = await syncEventLifecycle(event);
@@ -88,16 +99,7 @@ export const EventService = {
 				| "CANCELLED";
 		}>,
 	) {
-		const event = await EventRepository.findById(id);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
-
-		const member = event.members.find((m) => m.userId === userId);
-		if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
-			throw new ForbiddenError("Não tem permissão para editar este evento");
-		}
+		await requireEventPermission(userId, id, PERMISSIONS.EVENT_UPDATE);
 
 		return EventRepository.update(id, {
 			...data,
@@ -106,16 +108,7 @@ export const EventService = {
 	},
 
 	async delete(id: string, userId: string) {
-		const event = await EventRepository.findById(id);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
-
-		const member = event.members.find((m) => m.userId === userId);
-		if (member?.role !== "OWNER") {
-			throw new ForbiddenError("Apenas o proprietário pode eliminar o evento");
-		}
+		await requireEventPermission(userId, id, PERMISSIONS.EVENT_DELETE);
 
 		return EventRepository.delete(id);
 	},

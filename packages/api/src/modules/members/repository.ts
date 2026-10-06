@@ -33,8 +33,24 @@ function buildMemberWhere(
 	return { AND: conditions };
 }
 
+/**
+ * Resolve the persisted `Role` row for a role name.
+ *
+ * `EventMember` keeps BOTH the `role` enum and the `roleId` foreign key, and
+ * authorization reads `roleId` first. Writing the enum without the FK would
+ * leave the membership pointing at nothing, so the two are always set together
+ * from this single place rather than at each call site.
+ */
+async function resolveRoleId(role: MemberRole): Promise<string | null> {
+	const row = await db.role.findUnique({
+		where: { name: role },
+		select: { id: true },
+	});
+	return row?.id ?? null;
+}
+
 export const MemberRepository = {
-	create(data: {
+	async create(data: {
 		eventId: string;
 		userId: string;
 		role: "OWNER" | "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER";
@@ -44,6 +60,7 @@ export const MemberRepository = {
 			data: {
 				...data,
 				status: data.status || "PENDING",
+				roleId: await resolveRoleId(data.role),
 			},
 		});
 	},
@@ -76,13 +93,10 @@ export const MemberRepository = {
 		return db.eventMember.count({ where: buildMemberWhere(eventId, filters) });
 	},
 
-	updateRole(
-		id: string,
-		role: "OWNER" | "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
-	) {
+	async updateRole(id: string, role: MemberRole) {
 		return db.eventMember.update({
 			where: { id },
-			data: { role },
+			data: { role, roleId: await resolveRoleId(role) },
 		});
 	},
 

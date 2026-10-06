@@ -1,7 +1,9 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Pagination } from "@muxima/ui/components/pagination";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { AddMemberDialog } from "./-components/add-member-dialog";
 import { MemberDetailsDialog } from "./-components/member-details-dialog";
 import { MembersFilters } from "./-components/members-filters";
@@ -37,6 +39,14 @@ function MembersPage() {
 	const updateRole = useUpdateMemberRole();
 	const removeMember = useRemoveMember();
 
+	// The three team capabilities are granted to different tiers: adding is open
+	// to the team-management roles, removing to the same set, and changing a
+	// role to the OWNER alone. Each is resolved against THIS event so an OWNER
+	// of another event does not see controls that would 403 here.
+	const canAddMembers = useEventCan(eventId, PERMISSIONS.MEMBER_ADD);
+	const canChangeRole = useEventCan(eventId, PERMISSIONS.MEMBER_UPDATE_ROLE);
+	const canRemoveMembers = useEventCan(eventId, PERMISSIONS.MEMBER_REMOVE);
+
 	const [showAddDialog, setShowAddDialog] = useState(false);
 	const [detailsMember, setDetailsMember] = useState<MemberItem | null>(null);
 	const [removingMember, setRemovingMember] = useState<MemberItem | null>(null);
@@ -57,7 +67,7 @@ function MembersPage() {
 
 			<MembersHeader
 				memberCount={members.length}
-				canAdd={!addMember.isPending}
+				canAdd={canAddMembers && !addMember.isPending}
 				onAdd={() => setShowAddDialog(true)}
 			/>
 
@@ -84,6 +94,8 @@ function MembersPage() {
 						members.find((member) => member.id === memberId) ?? null,
 					)
 				}
+				canChangeRole={canChangeRole}
+				canRemove={canRemoveMembers}
 			/>
 
 			{meta && (
@@ -95,8 +107,10 @@ function MembersPage() {
 				/>
 			)}
 
+			{/* Mounted only with the grant: the trigger is hidden, and an open
+			    dialog left over from a revoked role cannot be submitted either. */}
 			<AddMemberDialog
-				open={showAddDialog}
+				open={canAddMembers && showAddDialog}
 				onOpenChange={setShowAddDialog}
 				onSubmit={(values) =>
 					addMember.mutate(
@@ -109,6 +123,8 @@ function MembersPage() {
 
 			{detailsMember && (
 				<MemberDetailsDialog
+					canChangeRole={canChangeRole}
+					canRemove={canRemoveMembers}
 					member={detailsMember}
 					onClose={() => setDetailsMember(null)}
 					onRoleChange={handleRoleChange}
@@ -124,7 +140,7 @@ function MembersPage() {
 			)}
 
 			<RemoveMemberDialog
-				member={removingMember}
+				member={canRemoveMembers ? removingMember : null}
 				onClose={() => setRemovingMember(null)}
 				onConfirm={(memberId) =>
 					removeMember.mutate(

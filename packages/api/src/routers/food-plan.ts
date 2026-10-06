@@ -4,13 +4,15 @@ import type {
 	FoodPlanStatus,
 	FoodPlanUnit,
 } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getFoodPlanStats } from "../modules/food-plan/stats";
 import {
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { ValidationError } from "../shared/errors/app-error";
 import { FOOD_PLAN_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toJsonInput } from "../shared/utils/json";
@@ -72,7 +74,11 @@ export const foodPlanRouter = {
 	get: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_READ,
+			);
 
 			const plan = await db.foodPlan.upsert({
 				where: { eventId: input.eventId },
@@ -102,7 +108,11 @@ export const foodPlanRouter = {
 	setSupplier: protectedProcedure
 		.input(eventInput.extend({ supplierId: z.string().nullable() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_UPDATE,
+			);
 
 			if (input.supplierId) {
 				const supplier = await db.supplier.findUnique({
@@ -137,7 +147,11 @@ export const foodPlanRouter = {
 	updateNotes: protectedProcedure
 		.input(eventInput.extend({ notes: z.string().trim().optional() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_UPDATE,
+			);
 			return db.foodPlan.upsert({
 				where: { eventId: input.eventId },
 				create: { eventId: input.eventId, notes: input.notes },
@@ -150,7 +164,11 @@ export const foodPlanRouter = {
 	addItem: protectedProcedure
 		.input(eventInput.extend(itemInput.shape))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_CREATE,
+			);
 
 			return db.$transaction(async (tx) => {
 				const plan = await tx.foodPlan.upsert({
@@ -201,7 +219,11 @@ export const foodPlanRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_UPDATE,
+			);
 
 			const existing = await db.foodPlanItem.findUnique({
 				where: { id: input.id },
@@ -236,7 +258,11 @@ export const foodPlanRouter = {
 	deleteItem: protectedProcedure
 		.input(z.object({ id: z.string(), eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_DELETE,
+			);
 
 			const existing = await db.foodPlanItem.findUnique({
 				where: { id: input.id },
@@ -256,7 +282,11 @@ export const foodPlanRouter = {
 	getStats: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.FOOD_PLAN_READ,
+			);
 			return getFoodPlanStats(input.eventId);
 		}),
 };

@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import {
 	Select,
 	SelectContent,
@@ -11,6 +12,7 @@ import {
 	useEvent,
 	useUpdateEvent,
 } from "@/routes/_private/events/-queries/event-queries";
+import { useEventCan } from "@/shared/hooks/use-can";
 
 /**
  * "Máximo de pessoas por convite" — the event-level capacity of a single
@@ -30,6 +32,8 @@ const DEFAULT_CAPACITY = 2;
 export function InvitationCapacitySetting({ eventId }: { eventId: string }) {
 	const eventQuery = useEvent(eventId);
 	const updateEvent = useUpdateEvent();
+	// Sem `events.update` o bloco nem renderiza: a API rejeita o mesmo update.
+	const canUpdate = useEventCan(eventId, PERMISSIONS.EVENT_UPDATE);
 
 	const value = eventQuery.data?.maxGuestsPerInvitation ?? DEFAULT_CAPACITY;
 	const isSaving = updateEvent.isPending;
@@ -48,6 +52,9 @@ export function InvitationCapacitySetting({ eventId }: { eventId: string }) {
 			},
 		);
 	};
+
+	// Sem a permissão não há nada a mostrar — nem um select desativado.
+	if (!canUpdate) return null;
 
 	return (
 		<div

@@ -12,7 +12,7 @@ import { MemberService } from "./service";
 
 export async function memberRoutes(app: FastifyInstance) {
 	app.get("/api/v1/events/:eventId/members", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 
 		const { eventId } = request.params as { eventId: string };
 		const query = request.query as Record<string, string>;
@@ -35,7 +35,7 @@ export async function memberRoutes(app: FastifyInstance) {
 	});
 
 	app.post("/api/v1/events/:eventId/members", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 
 		const body = request.body as { email?: string; role?: string };
 		const params = request.params as { eventId: string };
@@ -50,7 +50,7 @@ export async function memberRoutes(app: FastifyInstance) {
 	});
 
 	app.patch("/api/v1/members/:memberId/role", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 
 		const { memberId } = request.params as { memberId: string };
 		const { role } = updateMemberRoleSchema.parse(request.body);
@@ -59,7 +59,7 @@ export async function memberRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/members/:memberId", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 
 		const { memberId } = request.params as { memberId: string };
 		await MemberService.removeMember(memberId, userId);

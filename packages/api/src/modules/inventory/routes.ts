@@ -1,11 +1,12 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
 import type { FastifyInstance } from "fastify";
 import { requireSessionUserId } from "../../shared/auth/auth-middleware";
 import {
 	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../../shared/auth/authorization";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { INVENTORY_CODES } from "../../shared/errors/codes";
 import { listResponse, successResponse } from "../../shared/http/response";
@@ -24,9 +25,9 @@ import { InventoryService } from "./service";
 
 export async function inventoryRoutes(app: FastifyInstance) {
 	app.get("/api/v1/events/:eventId/inventory", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventPermission(userId, eventId, PERMISSIONS.INVENTORY_READ);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -51,17 +52,21 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	});
 
 	app.get("/api/v1/events/:eventId/inventory/stats", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventAccess(userId, eventId);
+		await requireEventPermission(userId, eventId, PERMISSIONS.INVENTORY_READ);
 		const stats = await InventoryService.getStats(db, eventId);
 		return successResponse(stats);
 	});
 
 	app.post("/api/v1/events/:eventId/inventory", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = request.params as { eventId: string };
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.INVENTORY_CREATE,
+		);
 		const data = createInventoryItemSchema.parse(request.body);
 		const item = await db.$transaction((tx) =>
 			InventoryService.create(tx, eventId, userId, data),
@@ -70,14 +75,18 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	});
 
 	app.patch("/api/v1/inventory/:id", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("inventoryItem", id);
 		if (!eventId)
 			throw new NotFoundError("Item de inventário não encontrado", {
 				code: INVENTORY_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.INVENTORY_UPDATE,
+		);
 		const data = updateInventoryItemSchema.parse(request.body);
 		const item = await db.$transaction((tx) =>
 			InventoryService.update(tx, id, data),
@@ -86,20 +95,24 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	});
 
 	app.delete("/api/v1/inventory/:id", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const eventId = await getEventIdForResource("inventoryItem", id);
 		if (!eventId)
 			throw new NotFoundError("Item de inventário não encontrado", {
 				code: INVENTORY_CODES.NOT_FOUND,
 			});
-		await requireEventMutable(userId, eventId);
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.INVENTORY_DELETE,
+		);
 		await InventoryService.delete(db, id);
 		return reply.status(204).send();
 	});
 
 	app.get("/api/v1/inventory/:inventoryItemId/movements", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { inventoryItemId } = request.params as { inventoryItemId: string };
 		const eventId = await getEventIdForResource(
 			"inventoryItem",
@@ -109,7 +122,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 			throw new NotFoundError("Item de inventário não encontrado", {
 				code: INVENTORY_CODES.NOT_FOUND,
 			});
-		await requireEventAccess(userId, eventId);
+		await requireEventPermission(userId, eventId, PERMISSIONS.INVENTORY_READ);
 		const history = await InventoryService.getHistory(db, inventoryItemId);
 		return successResponse(history);
 	});
@@ -117,7 +130,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 	app.post(
 		"/api/v1/inventory/:inventoryItemId/movements",
 		async (request, reply) => {
-			const userId = requireSessionUserId(request);
+			const userId = await requireSessionUserId(request);
 			const { inventoryItemId } = request.params as { inventoryItemId: string };
 			const eventId = await getEventIdForResource(
 				"inventoryItem",
@@ -127,7 +140,11 @@ export async function inventoryRoutes(app: FastifyInstance) {
 				throw new NotFoundError("Item de inventário não encontrado", {
 					code: INVENTORY_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(userId, eventId);
+			await requireEventPermissionMutable(
+				userId,
+				eventId,
+				PERMISSIONS.INVENTORY_UPDATE,
+			);
 			const data = addMovementSchema.parse(request.body);
 			const movement = await db.$transaction((tx) =>
 				InventoryService.addMovement(tx, inventoryItemId, userId, data),

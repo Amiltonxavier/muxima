@@ -1,5 +1,6 @@
 import db from "@muxima/db";
 import type { ChecklistStatus, Prisma } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getChecklistAnalytics } from "../modules/checklist/analytics";
@@ -8,9 +9,10 @@ import {
 	resolveSupplierChecklistStatus,
 } from "../modules/checklist/rules";
 import {
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { ValidationError } from "../shared/errors/app-error";
 import { CHECKLIST_CODES, SUPPLIER_CODES } from "../shared/errors/codes";
 import { toCents } from "../shared/finance/money";
@@ -170,7 +172,11 @@ export const checklistRouter = {
 	list: protectedProcedure
 		.input(eventInput.extend({ status: STATUS_ENUM.optional() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_READ,
+			);
 
 			return db.checklistItem.findMany({
 				where: {
@@ -213,7 +219,11 @@ export const checklistRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_CREATE,
+			);
 
 			// The two links are mutually exclusive: a checklist item tracks either
 			// a supplier or an inventory item, never both.
@@ -291,7 +301,11 @@ export const checklistRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_UPDATE,
+			);
 
 			const existing = await db.checklistItem.findUnique({
 				where: { id: input.id },
@@ -339,7 +353,11 @@ export const checklistRouter = {
 	delete: protectedProcedure
 		.input(z.object({ id: z.string(), eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_DELETE,
+			);
 			await db.checklistItem.delete({ where: { id: input.id } });
 			return { success: true };
 		}),
@@ -348,7 +366,11 @@ export const checklistRouter = {
 	sync: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_UPDATE,
+			);
 			await db.$transaction((tx) => syncEventChecklist(tx, input.eventId));
 			return { success: true };
 		}),
@@ -356,7 +378,11 @@ export const checklistRouter = {
 	getStats: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.CHECKLIST_READ,
+			);
 			return getChecklistAnalytics(db, input.eventId);
 		}),
 };

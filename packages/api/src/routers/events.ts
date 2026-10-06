@@ -1,6 +1,7 @@
 import db from "@muxima/db";
 import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { syncEventLifecycle } from "../modules/events/lifecycle";
@@ -10,15 +11,17 @@ import {
 	MAX_MAX_GUESTS_PER_INVITATION,
 	MIN_MAX_GUESTS_PER_INVITATION,
 } from "../modules/invitations/capacity";
+import { MemberRepository } from "../modules/members/repository";
 import {
 	buildActivityLog,
 	submittedValues,
 } from "../shared/activity/activity-context";
 import {
-	ForbiddenError,
-	NotFoundError,
-	ValidationError,
-} from "../shared/errors/app-error";
+	getEventPermissions,
+	getEventRole,
+	requireEventPermission,
+} from "../shared/auth/authorization";
+import { NotFoundError, ValidationError } from "../shared/errors/app-error";
 import { EVENT_CODES } from "../shared/errors/codes";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
@@ -48,6 +51,7 @@ export const eventsRouter = {
 				members: {
 					some: {
 						userId: context.session.user.id,
+						status: "ACTIVE",
 					},
 				},
 			};
@@ -125,15 +129,11 @@ export const eventsRouter = {
 				});
 			}
 
-			const isMember = event.members.some(
-				(member) => member.userId === context.session.user.id,
+			await requireEventPermission(
+				context.session.user.id,
+				input.id,
+				PERMISSIONS.EVENT_READ,
 			);
-
-			if (!isMember) {
-				throw new ForbiddenError("Não tem acesso a este evento", {
-					code: EVENT_CODES.ACCESS_DENIED,
-				});
-			}
 
 			// Lazy lifecycle sync: derive CONFIRMED→ONGOING→COMPLETED from the
 			// calendar and persist the transition when the stored status lags
@@ -148,6 +148,34 @@ export const eventsRouter = {
 			}
 
 			return status === event.status ? event : { ...event, status };
+		}),
+
+	/**
+	 * The caller's access to ONE event: their role there and the capabilities
+	 * that role grants.
+	 *
+	 * The session payload carries the union of every membership, which is the
+	 * right answer for account-level surfaces but the WRONG one for an action
+	 * inside an event: someone who owns one event and is only a VIEWER in this
+	 * one would see `events.delete` offered and get a 403 on click. The UI
+	 * therefore asks about the event it is currently showing.
+	 *
+	 * Returns no role and no permissions for a non-member rather than throwing,
+	 * so a client can render the "no access" state instead of an error boundary.
+	 */
+	getMyAccess: protectedProcedure
+		.input(z.object({ id: z.string() }))
+		.handler(async ({ context, input }) => {
+			const role = await getEventRole(context.session.user.id, input.id);
+			if (!role) return { role: null, permissions: [] };
+
+			return {
+				role,
+				permissions: await getEventPermissions(
+					context.session.user.id,
+					input.id,
+				),
+			};
 		}),
 
 	create: protectedProcedure
@@ -212,14 +240,14 @@ export const eventsRouter = {
 				},
 			});
 
-			await db.eventMember.create({
-				data: {
-					eventId: event.id,
-					userId: context.session.user.id,
-					role: "OWNER",
-					status: "ACTIVE",
-					joinedAt: new Date(),
-				},
+			// Goes through the repository so the `roleId` FK is resolved from
+			// the `Role` table: authorization reads `roleId` first, and a
+			// membership written without it would only resolve by fallback.
+			await MemberRepository.create({
+				eventId: event.id,
+				userId: context.session.user.id,
+				role: "OWNER",
+				status: "ACTIVE",
 			});
 
 			if (input.budgetAmount) {
@@ -321,17 +349,11 @@ export const eventsRouter = {
 				});
 			}
 
-			const isMember = event.members.some(
-				(member) =>
-					member.userId === context.session.user.id &&
-					["OWNER", "ADMIN"].includes(member.role),
+			await requireEventPermission(
+				context.session.user.id,
+				input.id,
+				PERMISSIONS.EVENT_UPDATE,
 			);
-
-			if (!isMember) {
-				throw new ForbiddenError("Não tem permissão para editar este evento", {
-					code: EVENT_CODES.EDIT_DENIED,
-				});
-			}
 
 			// Horário efectivo: campos não enviados mantêm o valor guardado.
 			const effectiveStartTime = input.startTime ?? event.startTime;
@@ -427,19 +449,11 @@ export const eventsRouter = {
 				});
 			}
 
-			const isOwner = event.members.some(
-				(member) =>
-					member.userId === context.session.user.id && member.role === "OWNER",
+			await requireEventPermission(
+				context.session.user.id,
+				input.id,
+				PERMISSIONS.EVENT_DELETE,
 			);
-
-			if (!isOwner) {
-				throw new ForbiddenError(
-					"Apenas o proprietário pode eliminar o evento",
-					{
-						code: EVENT_CODES.DELETE_DENIED,
-					},
-				);
-			}
 
 			await db.event.delete({
 				where: { id: input.id },

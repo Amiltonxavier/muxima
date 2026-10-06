@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { Checkbox } from "@muxima/ui/components/checkbox";
@@ -14,6 +15,7 @@ import {
 	Users,
 } from "lucide-react";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { getStatusLabel, getStatusTone } from "@/utils/status-helpers";
 import type { GuestItem } from "../-types/guest.types";
@@ -56,8 +58,14 @@ export function GuestsTableRow({
 		companions.length < (guest.companionsLimit ?? 0);
 	// Locked event: only viewing stays available — every mutation button is
 	// disabled with the reason as feedback (the backend rejects it anyway).
-	const { isEventLocked, lockMessage } = useEventLock();
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
 	const lockedTitle = lockMessage ?? undefined;
+	// Authorization, decided by the caller's grants in THIS event: editing the
+	// guest (and their companions) and deleting are separate capabilities, so a
+	// role may hold one without the other. Hidden while unknown, so a control
+	// never flashes into view only to fail with 403.
+	const canUpdate = useEventCan(eventId ?? undefined, PERMISSIONS.GUEST_UPDATE);
+	const canDelete = useEventCan(eventId ?? undefined, PERMISSIONS.GUEST_DELETE);
 
 	return (
 		<TableRow data-state={isSelected ? "selected" : undefined}>
@@ -95,39 +103,41 @@ export function GuestsTableRow({
 				)}
 			</TableCell>
 			<TableCell>
-				{companions.length > 0 ? (
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="h-7 gap-1 text-xs"
-						disabled={isEventLocked}
-						title={isEventLocked ? lockedTitle : undefined}
-						onClick={() => onManageCompanions(guest)}
-					>
-						<Users className="h-3.5 w-3.5" />
-						{companions.length}
-					</Button>
-				) : (
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="h-7 text-muted-foreground"
-						disabled={isEventLocked}
-						onClick={() => onManageCompanions(guest)}
-						title={
-							isEventLocked
-								? lockedTitle
-								: canAddCompanion
-									? "Adicionar acompanhante"
-									: "Convite recusado — adicionar acompanhante"
-						}
-						aria-label={`Gerir acompanhantes de ${guest.name}`}
-					>
-						<Plus
-							className={`h-3.5 w-3.5 ${canAddCompanion ? "" : "opacity-70"}`}
-						/>
-					</Button>
-				)}
+				{canUpdate ? (
+					companions.length > 0 ? (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="h-7 gap-1 text-xs"
+							disabled={isEventLocked}
+							title={isEventLocked ? lockedTitle : undefined}
+							onClick={() => onManageCompanions(guest)}
+						>
+							<Users className="h-3.5 w-3.5" />
+							{companions.length}
+						</Button>
+					) : (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="h-7 text-muted-foreground"
+							disabled={isEventLocked}
+							onClick={() => onManageCompanions(guest)}
+							title={
+								isEventLocked
+									? lockedTitle
+									: canAddCompanion
+										? "Adicionar acompanhante"
+										: "Convite recusado — adicionar acompanhante"
+							}
+							aria-label={`Gerir acompanhantes de ${guest.name}`}
+						>
+							<Plus
+								className={`h-3.5 w-3.5 ${canAddCompanion ? "" : "opacity-70"}`}
+							/>
+						</Button>
+					)
+				) : null}
 			</TableCell>
 			<TableCell>
 				<StatusDot
@@ -169,25 +179,29 @@ export function GuestsTableRow({
 					>
 						<Share2 className="h-3.5 w-3.5" />
 					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						disabled={isEventLocked}
-						title={isEventLocked ? lockedTitle : "Editar"}
-						onClick={() => onEditGuest(guest)}
-					>
-						<Pencil className="h-3.5 w-3.5" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="text-destructive"
-						disabled={isEventLocked}
-						title={isEventLocked ? lockedTitle : "Eliminar"}
-						onClick={() => onDeleteGuest(guest)}
-					>
-						<Trash2 className="h-3.5 w-3.5" />
-					</Button>
+					{canUpdate && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							disabled={isEventLocked}
+							title={isEventLocked ? lockedTitle : "Editar"}
+							onClick={() => onEditGuest(guest)}
+						>
+							<Pencil className="h-3.5 w-3.5" />
+						</Button>
+					)}
+					{canDelete && (
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="text-destructive"
+							disabled={isEventLocked}
+							title={isEventLocked ? lockedTitle : "Eliminar"}
+							onClick={() => onDeleteGuest(guest)}
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+						</Button>
+					)}
 				</div>
 			</TableCell>
 		</TableRow>

@@ -372,11 +372,79 @@ model EventMember {
   event           Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user            User               @relation(fields: [userId], references: [id])
   dedicationViews DedicationViewer[]
+  roleRef         Role?              @relation(fields: [roleId], references: [id])
+  roleId          String?
 
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
+  @@index([roleId])
   @@map("event_member")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RBAC tables
+//
+// `EventMember.role` (the `MemberRole` enum) stays the membership's role — it
+// is never dropped, so existing rows keep working untouched. These tables make
+// the authorization vocabulary persistent and auditable:
+//
+//   EventMember ──roleId──► Role ──1:N──► RolePermission ──N:1──► Permission
+//
+// The DATABASE is the single source of truth for authorization; the TypeScript
+// catalogue (`packages/auth/src/access.ts`) exists only to type the permission
+// keys and to drive the seed/upsert. Permissions are immutable at runtime:
+// no CRUD endpoint creates, renames or deletes them.
+// ────────────────────────────────────────────────────────────────────────────
+
+/// A named job inside an event. Only the five official roles exist.
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  members     EventMember[]
+
+  @@map("role")
+}
+
+/// One atomic capability, keyed `resource.action` (e.g. `guests.update`).
+/// Immutable: seeded once, never mutated through the application.
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?
+  resource    String
+  action      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@map("permission")
+}
+
+/// Grants a set of permissions to a role. This join table is the official
+/// authorization source: `role → permission` is always read from here.
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permission")
 }
 
 model EventInvitation {

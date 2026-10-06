@@ -5,13 +5,13 @@ import { UserService } from "./service";
 
 export async function userRoutes(app: FastifyInstance) {
 	app.get("/api/v1/users/profile", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const profile = await UserService.getProfile(userId);
 		return successResponse(profile);
 	});
 
 	app.patch("/api/v1/users/profile", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const data = request.body as {
 			name?: string;
 			email?: string;

@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import {
@@ -47,6 +48,7 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { MetricProgressCard, StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	type ChecklistItemFilters,
@@ -108,6 +110,11 @@ type ChecklistRow = {
 function ChecklistPage() {
 	const { eventId } = Route.useParams();
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Gating de UX: sem a permissão correspondente os controlos nem aparecem.
+	// A API rejeita exatamente a mesma mutação — o frontend não é autoridade.
+	const canCreate = useEventCan(eventId, PERMISSIONS.CHECKLIST_CREATE);
+	const canUpdate = useEventCan(eventId, PERMISSIONS.CHECKLIST_UPDATE);
+	const canDelete = useEventCan(eventId, PERMISSIONS.CHECKLIST_DELETE);
 
 	const [statusFilter, setStatusFilter] =
 		useState<ChecklistItemFilters["status"]>(undefined);
@@ -146,35 +153,39 @@ function ChecklistPage() {
 				<div className="flex items-center gap-2">
 					<ExportMenu eventId={eventId} module="checklist" />
 
-					<Button
-						variant="outline"
-						title={isEventLocked ? (lockMessage ?? undefined) : undefined}
-						onClick={() =>
-							syncChecklist.mutate(
-								{ eventId },
-								{
-									onSuccess: () => toast.success("Checklist sincronizado"),
-								},
-							)
-						}
-						disabled={syncChecklist.isPending || isEventLocked}
-					>
-						<RefreshCw
-							className={`mr-2 h-4 w-4 ${syncChecklist.isPending ? "animate-spin" : ""}`}
-						/>
-						Sincronizar
-					</Button>
-					<Button
-						onClick={() => {
-							setEditingItem(null);
-							setDialogOpen(true);
-						}}
-						disabled={isEventLocked}
-						title={lockMessage ?? undefined}
-					>
-						<Plus className="mr-2 h-4 w-4" />
-						Novo item
-					</Button>
+					{canUpdate && (
+						<Button
+							variant="outline"
+							title={isEventLocked ? (lockMessage ?? undefined) : undefined}
+							onClick={() =>
+								syncChecklist.mutate(
+									{ eventId },
+									{
+										onSuccess: () => toast.success("Checklist sincronizado"),
+									},
+								)
+							}
+							disabled={syncChecklist.isPending || isEventLocked}
+						>
+							<RefreshCw
+								className={`mr-2 h-4 w-4 ${syncChecklist.isPending ? "animate-spin" : ""}`}
+							/>
+							Sincronizar
+						</Button>
+					)}
+					{canCreate && (
+						<Button
+							onClick={() => {
+								setEditingItem(null);
+								setDialogOpen(true);
+							}}
+							disabled={isEventLocked}
+							title={lockMessage ?? undefined}
+						>
+							<Plus className="mr-2 h-4 w-4" />
+							Novo item
+						</Button>
+					)}
 				</div>
 			</div>
 
@@ -270,7 +281,10 @@ function ChecklistPage() {
 							const isCompleted = item.status === "COMPLETED";
 							const isCancelled = item.status === "CANCELLED";
 							const canToggle =
-								!item.autoManaged && !isCancelled && !itemsQuery.isLoading;
+								!item.autoManaged &&
+								!isCancelled &&
+								!itemsQuery.isLoading &&
+								canUpdate;
 							const isOverdue =
 								item.dueDate !== null &&
 								!isCompleted &&
@@ -332,33 +346,37 @@ function ChecklistPage() {
 										</div>
 									</div>
 									<div className="flex items-center gap-1">
-										<Button
-											variant="ghost"
-											size="icon"
-											disabled={isEventLocked}
-											title={
-												isEventLocked ? (lockMessage ?? undefined) : undefined
-											}
-											onClick={() => {
-												setEditingItem(item);
-												setDialogOpen(true);
-											}}
-											aria-label="Editar item"
-										>
-											<Pencil className="h-4 w-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											disabled={isEventLocked}
-											title={
-												isEventLocked ? (lockMessage ?? undefined) : undefined
-											}
-											onClick={() => setDeletingItem(item)}
-											aria-label="Eliminar item"
-										>
-											<Trash2 className="h-4 w-4 text-destructive" />
-										</Button>
+										{canUpdate && (
+											<Button
+												variant="ghost"
+												size="icon"
+												disabled={isEventLocked}
+												title={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+												onClick={() => {
+													setEditingItem(item);
+													setDialogOpen(true);
+												}}
+												aria-label="Editar item"
+											>
+												<Pencil className="h-4 w-4" />
+											</Button>
+										)}
+										{canDelete && (
+											<Button
+												variant="ghost"
+												size="icon"
+												disabled={isEventLocked}
+												title={
+													isEventLocked ? (lockMessage ?? undefined) : undefined
+												}
+												onClick={() => setDeletingItem(item)}
+												aria-label="Eliminar item"
+											>
+												<Trash2 className="h-4 w-4 text-destructive" />
+											</Button>
+										)}
 									</div>
 								</div>
 							);

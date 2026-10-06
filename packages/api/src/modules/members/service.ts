@@ -1,16 +1,15 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
+import {
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../../shared/auth/authorization";
 import {
 	ConflictError,
 	ForbiddenError,
 	NotFoundError,
 } from "../../shared/errors/app-error";
-import {
-	EVENT_CODES,
-	MEMBER_CODES,
-	USER_CODES,
-} from "../../shared/errors/codes";
-import { assertEventIsMutable } from "../../shared/events/event-lock";
-import { EventRepository } from "../events/repository";
+import { MEMBER_CODES, USER_CODES } from "../../shared/errors/codes";
 import { type MemberFilterParams, MemberRepository } from "./repository";
 
 export const MemberService = {
@@ -20,20 +19,11 @@ export const MemberService = {
 		email: string,
 		role: "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
 	) {
-		const event = await EventRepository.findById(eventId);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
-
-		assertEventIsMutable(event);
-
-		const requester = event.members.find((m) => m.userId === userId);
-		if (!requester || !["OWNER", "ADMIN"].includes(requester.role)) {
-			throw new ForbiddenError("Não tem permissão para adicionar membros", {
-				code: EVENT_CODES.ROLE_REQUIRED,
-			});
-		}
+		await requireEventPermissionMutable(
+			userId,
+			eventId,
+			PERMISSIONS.MEMBER_ADD,
+		);
 
 		// The email identifies the account to invite; the membership row needs
 		// the user id (passing the email here used to fail the foreign key).
@@ -61,17 +51,7 @@ export const MemberService = {
 		pagination: { page: number; limit: number },
 		filters?: MemberFilterParams,
 	) {
-		const event = await EventRepository.findById(eventId);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
-
-		const isMember = event.members.some((m) => m.userId === userId);
-		if (!isMember)
-			throw new ForbiddenError("Não tem acesso a este evento", {
-				code: EVENT_CODES.ACCESS_DENIED,
-			});
+		await requireEventPermission(userId, eventId, PERMISSIONS.MEMBER_READ);
 
 		const [data, total] = await Promise.all([
 			MemberRepository.findByEvent(eventId, pagination, filters),
@@ -91,18 +71,18 @@ export const MemberService = {
 				code: MEMBER_CODES.NOT_FOUND,
 			});
 
-		const event = await EventRepository.findById(member.eventId);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
+		await requireEventPermissionMutable(
+			userId,
+			member.eventId,
+			PERMISSIONS.MEMBER_UPDATE_ROLE,
+		);
 
-		assertEventIsMutable(event);
-
-		const requester = event.members.find((m) => m.userId === userId);
-		if (requester?.role !== "OWNER") {
-			throw new ForbiddenError("Apenas o proprietário pode alterar roles", {
-				code: EVENT_CODES.ROLE_REQUIRED,
+		// Same rule as the oRPC path (`members.updateRole`): the OWNER row is
+		// never a valid target of a role update. Without this, REST would let a
+		// caller demote the owner while oRPC refused — one policy, both surfaces.
+		if (member.role === "OWNER") {
+			throw new ForbiddenError("A role do proprietário não pode ser alterada", {
+				code: MEMBER_CODES.OWNER_PROTECTED,
 			});
 		}
 
@@ -116,20 +96,11 @@ export const MemberService = {
 				code: MEMBER_CODES.NOT_FOUND,
 			});
 
-		const event = await EventRepository.findById(member.eventId);
-		if (!event)
-			throw new NotFoundError("Evento não encontrado", {
-				code: EVENT_CODES.NOT_FOUND,
-			});
-
-		assertEventIsMutable(event);
-
-		const requester = event.members.find((m) => m.userId === userId);
-		if (!requester || !["OWNER", "ADMIN"].includes(requester.role)) {
-			throw new ForbiddenError("Não tem permissão para remover membros", {
-				code: EVENT_CODES.ROLE_REQUIRED,
-			});
-		}
+		await requireEventPermissionMutable(
+			userId,
+			member.eventId,
+			PERMISSIONS.MEMBER_REMOVE,
+		);
 
 		if (member.role === "OWNER") {
 			throw new ForbiddenError("Não é possível remover o proprietário", {

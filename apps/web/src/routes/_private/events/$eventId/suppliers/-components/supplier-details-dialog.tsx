@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
@@ -13,6 +14,7 @@ import { ChartLegend, DonutChart } from "@/shared/components/charts";
 import { ErrorState } from "@/shared/components/states/error-state";
 import { LoadingState } from "@/shared/components/states/loading-state";
 import { StatusDot } from "@/shared/components/status-dot";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
 import { formatCurrency } from "@/utils/format-currency";
@@ -42,6 +44,10 @@ export function SupplierDetailsDialog({
 	const deletePayment = useDeleteSupplierPayment();
 	const { isEventLocked, lockMessage } = useEventLock();
 	const supplier = supplierQuery.data;
+	// Sem pagamentos carregados não há botão para esconder, logo `undefined`
+	// é seguro. Sem `suppliers.update` o apagar de pagamentos nem aparece —
+	// a API rejeita a mesma mutação de qualquer forma.
+	const canUpdate = useEventCan(supplier?.eventId, PERMISSIONS.SUPPLIER_UPDATE);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -303,30 +309,31 @@ export function SupplierDetailsDialog({
 														payment.method}
 													{payment.reference ? ` · ${payment.reference}` : ""}
 												</p>
-											</div>
-
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												className="shrink-0 text-destructive"
-												title={
-													isEventLocked
-														? (lockMessage ?? undefined)
-														: "Eliminar pagamento"
-												}
-												disabled={deletePayment.isPending || isEventLocked}
-												onClick={() =>
-													deletePayment.mutate(
-														{ id: payment.id },
-														{
-															onSuccess: () =>
-																toast.success("Pagamento eliminado."),
-														},
-													)
-												}
-											>
-												<Trash2 className="size-4" />
-											</Button>
+											</div>{" "}
+											{canUpdate && (
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													className="shrink-0 text-destructive"
+													title={
+														isEventLocked
+															? (lockMessage ?? undefined)
+															: "Eliminar pagamento"
+													}
+													disabled={deletePayment.isPending || isEventLocked}
+													onClick={() =>
+														deletePayment.mutate(
+															{ id: payment.id },
+															{
+																onSuccess: () =>
+																	toast.success("Pagamento eliminado."),
+															},
+														)
+													}
+												>
+													<Trash2 className="size-4" />
+												</Button>
+											)}
 										</li>
 									))}
 								</ul>

@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import { Pagination } from "@muxima/ui/components/pagination";
 import { createFileRoute } from "@tanstack/react-router";
@@ -7,6 +8,7 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { EmptyState } from "@/shared/components/states/empty-state";
 import { ErrorState } from "@/shared/components/states/error-state";
 import { LoadingState } from "@/shared/components/states/loading-state";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { DedicationsDialogs } from "./-components/dedications-dialogs";
 import { DedicationsFilters } from "./-components/dedications-filters";
@@ -21,6 +23,8 @@ function DedicationsPage() {
 	const { eventId } = Route.useParams();
 	const page = useDedicationsPage(eventId);
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Hidden without `dedications.create` — the backend re-rejects the mutation.
+	const canCreate = useEventCan(eventId, PERMISSIONS.DEDICATION_CREATE);
 
 	return (
 		<div className="space-y-6">
@@ -38,14 +42,16 @@ function DedicationsPage() {
 				<div className="flex gap-2">
 					<ExportMenu eventId={eventId} module="event" />
 
-					<Button
-						onClick={() => page.openDialog({ kind: "create" })}
-						disabled={isEventLocked}
-						title={lockMessage ?? undefined}
-					>
-						<Plus className="mr-2 h-4 w-4" />
-						Nova dedicatória
-					</Button>
+					{canCreate && (
+						<Button
+							onClick={() => page.openDialog({ kind: "create" })}
+							disabled={isEventLocked}
+							title={lockMessage ?? undefined}
+						>
+							<Plus className="mr-2 h-4 w-4" />
+							Nova dedicatória
+						</Button>
+					)}
 				</div>
 			</div>
 

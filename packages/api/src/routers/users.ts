@@ -1,15 +1,18 @@
+import { randomBytes } from "node:crypto";
 import { auth, getUserAccess } from "@muxima/auth";
 import db from "@muxima/db";
 import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
+import { PERMISSIONS } from "@muxima/permissions";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { MemberRepository } from "../modules/members/repository";
 import { profileSelect, UserService } from "../modules/users/service";
 import { buildActivityLog } from "../shared/activity/activity-context";
 import {
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
 import {
 	BadRequestError,
 	ConflictError,
@@ -219,7 +222,11 @@ export const usersRouter = {
 	getMembers: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.MEMBER_READ,
+			);
 			return UserService.getMembers(input.eventId);
 		}),
 
@@ -232,7 +239,11 @@ export const usersRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.MEMBER_INVITE,
+			);
 
 			const existingMember = await db.eventMember.findFirst({
 				where: {
@@ -253,7 +264,10 @@ export const usersRouter = {
 					invitedBy: context.session.user.id,
 					email: input.email,
 					role: input.role,
-					token: Math.random().toString(36).substring(2, 15),
+					// F-11: cryptographically secure token. `Math.random()` was
+					// predictable enough to matter once this token becomes a
+					// credential — generating it securely now costs nothing.
+					token: randomBytes(32).toString("base64url"),
 					expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 				},
 			});
@@ -272,7 +286,11 @@ export const usersRouter = {
 				throw new NotFoundError("Membro não encontrado", {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, member.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				member.eventId,
+				PERMISSIONS.MEMBER_REMOVE,
+			);
 			if (member.role === "OWNER")
 				throw new ForbiddenError("Não é possível remover o proprietário", {
 					code: MEMBER_CODES.OWNER_PROTECTED,
@@ -294,21 +312,29 @@ export const usersRouter = {
 		.handler(async ({ context, input }) => {
 			const member = await db.eventMember.findUnique({
 				where: { id: input.id },
-				select: { eventId: true },
+				select: { eventId: true, role: true },
 			});
 			if (!member)
 				throw new NotFoundError("Membro não encontrado", {
 					code: MEMBER_CODES.NOT_FOUND,
 				});
-			await requireEventMutable(context.session.user.id, member.eventId, [
-				"OWNER",
-			]);
-			const updatedMember = await db.eventMember.update({
-				where: { id: input.id },
-				data: {
-					role: input.role,
-				},
-			});
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				member.eventId,
+				PERMISSIONS.MEMBER_UPDATE_ROLE,
+			);
+
+			if (member.role === "OWNER") {
+				throw new ForbiddenError(
+					"A role do proprietário não pode ser alterada",
+					{ code: MEMBER_CODES.OWNER_PROTECTED },
+				);
+			}
+
+			const updatedMember = await MemberRepository.updateRole(
+				input.id,
+				input.role,
+			);
 
 			return updatedMember;
 		}),

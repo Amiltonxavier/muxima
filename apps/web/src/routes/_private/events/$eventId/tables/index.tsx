@@ -1,4 +1,5 @@
 import type { TableWithGuests } from "@muxima/api/shared/types/entities";
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { Card } from "@muxima/ui/components/card";
@@ -28,6 +29,7 @@ import { BackButton } from "@/shared/components/back-to";
 import { StatsGrid } from "@/shared/components/metrics";
 import { QueryState } from "@/shared/components/states";
 import { StatsCard } from "@/shared/components/stats-card/stats-card";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	useCreateTable,
@@ -69,6 +71,10 @@ function TablesPage() {
 	const [showAnalytics, setShowAnalytics] = useState(false);
 
 	const { isEventLocked, lockMessage } = useEventLock();
+	// Capability checks: hidden without the grant (the backend re-rejects).
+	const canCreate = useEventCan(eventId, PERMISSIONS.TABLE_CREATE);
+	const canUpdate = useEventCan(eventId, PERMISSIONS.TABLE_UPDATE);
+	const canDelete = useEventCan(eventId, PERMISSIONS.TABLE_DELETE);
 
 	// Filters
 	const [searchQuery, setSearchQuery] = useState("");
@@ -107,14 +113,16 @@ function TablesPage() {
 						<ChartPie className="mr-2 h-4 w-4" />
 						Analytics
 					</Button>
-					<Button
-						onClick={() => setShowCreate(true)}
-						disabled={isEventLocked}
-						title={lockMessage ?? undefined}
-					>
-						<Plus className="mr-2 h-4 w-4" />
-						Criar mesa
-					</Button>
+					{canCreate && (
+						<Button
+							onClick={() => setShowCreate(true)}
+							disabled={isEventLocked}
+							title={lockMessage ?? undefined}
+						>
+							<Plus className="mr-2 h-4 w-4" />
+							Criar mesa
+						</Button>
+					)}
 				</div>
 			</div>
 
@@ -214,33 +222,37 @@ function TablesPage() {
 												>
 													<Eye className="h-3.5 w-3.5" />
 												</Button>
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													title={
-														isEventLocked
-															? (lockMessage ?? undefined)
-															: "Editar"
-													}
-													disabled={isEventLocked}
-													onClick={() => setEditingTable(table)}
-												>
-													<Pencil className="h-3.5 w-3.5" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													className="text-destructive"
-													title={
-														isEventLocked
-															? (lockMessage ?? undefined)
-															: "Eliminar"
-													}
-													disabled={isEventLocked}
-													onClick={() => setDeletingTable(table)}
-												>
-													<Trash2 className="h-3.5 w-3.5" />
-												</Button>
+												{canUpdate && (
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														title={
+															isEventLocked
+																? (lockMessage ?? undefined)
+																: "Editar"
+														}
+														disabled={isEventLocked}
+														onClick={() => setEditingTable(table)}
+													>
+														<Pencil className="h-3.5 w-3.5" />
+													</Button>
+												)}
+												{canDelete && (
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														className="text-destructive"
+														title={
+															isEventLocked
+																? (lockMessage ?? undefined)
+																: "Eliminar"
+														}
+														disabled={isEventLocked}
+														onClick={() => setDeletingTable(table)}
+													>
+														<Trash2 className="h-3.5 w-3.5" />
+													</Button>
+												)}
 											</div>
 										</TableCell>
 									</TableRow>

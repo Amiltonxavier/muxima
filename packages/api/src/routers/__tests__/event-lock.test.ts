@@ -1,3 +1,4 @@
+import { getRolePermissions, type Permission } from "@muxima/permissions";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -34,6 +35,13 @@ type GuestRow = {
 		invitation: { rsvpStatus: string };
 	}[];
 };
+
+/** `RolePermission` rows for a role, as a seeded database would return them. */
+function grantsFor(role: string) {
+	return getRolePermissions(
+		role as Parameters<typeof getRolePermissions>[0],
+	).map((key) => ({ permission: { key: key as Permission } }));
+}
 
 const FUTURE = new Date(2027, 5, 20, 18, 0, 0, 0);
 const PAST = new Date(2020, 0, 1, 18, 0, 0, 0);
@@ -83,6 +91,11 @@ function buildDb() {
 			findFirst: () =>
 				Promise.resolve({ role: "OWNER", status: "ACTIVE", eventId: "evt_1" }),
 		},
+		// Authorization reads the granted capabilities from `RolePermission`,
+		// so the double answers with the OWNER grants the seed would have
+		// written. Serving the real matrix keeps this suite honest about which
+		// capability each procedure needs instead of granting everything.
+		rolePermission: { findMany: () => Promise.resolve(grantsFor("OWNER")) },
 		event: {
 			// One row feeds both the lock guard (`select`) and `events.update`
 			// (`include.members`), so the returned shape covers the two.

@@ -5,15 +5,27 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * UX contract of the operational lock: on a locked event the mutation buttons
- * stay visible but disabled, carrying the PT-PT reason as feedback. The
- * backend re-validates every request independently.
+ * UX contracts of this header:
+ *  1. the operational lock — on a locked event the mutation buttons stay
+ *     visible but disabled, carrying the PT-PT reason as feedback;
+ *  2. authorization — without `guests.create` the create button is not drawn
+ *     at all (hidden ≠ disabled). The backend re-validates both independently.
  */
 
-const hoisted = vi.hoisted(() => ({ eventId: "evt_lock" }));
+const hoisted = vi.hoisted(() => ({
+	eventId: "evt_lock",
+	/** Flip per describe-block to exercise both authorization answers. */
+	canCreate: true,
+}));
 
 vi.mock("@tanstack/react-router", () => ({
 	useParams: () => ({ eventId: hoisted.eventId }),
+}));
+
+// The real hook would query `events.getMyAccess`; the header only needs the
+// boolean, and the hook's own behaviour is covered by `use-can` consumers.
+vi.mock("@/shared/hooks/use-can", () => ({
+	useEventCan: () => hoisted.canCreate,
 }));
 
 // Not relevant for this assertion and pulls in the export machinery.
@@ -63,6 +75,7 @@ function renderHeader(event: Record<string, unknown>, onAddGuest = vi.fn()) {
 describe("GuestsHeader — event lock", () => {
 	beforeEach(() => {
 		hoisted.eventId = "evt_lock";
+		hoisted.canCreate = true;
 	});
 
 	it("disables the create button with the PT-PT reason when CANCELLED", async () => {
@@ -121,5 +134,30 @@ describe("GuestsHeader — event lock", () => {
 		expect(
 			screen.getByRole("button", { name: /adicionar convidado/i }),
 		).toBeEnabled();
+	});
+});
+
+describe("GuestsHeader — authorization", () => {
+	beforeEach(() => {
+		hoisted.eventId = "evt_lock";
+	});
+
+	it("hides the create button entirely without guests.create", () => {
+		hoisted.canCreate = false;
+		renderHeader(makeEvent());
+
+		// Hidden, not disabled: the action is not the caller's to attempt.
+		expect(
+			screen.queryByRole("button", { name: /adicionar convidado/i }),
+		).toBeNull();
+	});
+
+	it("shows the create button when guests.create is held", () => {
+		hoisted.canCreate = true;
+		renderHeader(makeEvent());
+
+		expect(
+			screen.getByRole("button", { name: /adicionar convidado/i }),
+		).toBeInTheDocument();
 	});
 });

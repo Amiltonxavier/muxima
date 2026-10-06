@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { registerRoutes } from "./routes";
 import { authMiddleware } from "./shared/auth/auth-middleware";
 import { mapBetterAuthError } from "./shared/auth/better-auth-error";
+import { rateLimitKey, sessionIdentity } from "./shared/auth/rate-limit";
 import { ERROR_CODES } from "./shared/errors/codes";
 import {
 	errorEnvelope,
@@ -28,10 +29,26 @@ export async function buildApp(): Promise<FastifyInstance> {
 		maxAge: 86400,
 	});
 
-	// Rate limiting
+	// Transport-level abuse net (NOT the policy engine). It exists so a
+	// brute-forcing client can never pin the node down, no matter which
+	// endpoint it abuses; the per-endpoint / per-risk policy lives in
+	// `shared/auth/rate-limit.ts`, which call sites invoke with the real user
+	// id. The key carries endpoint + method + IP + session identity, so one
+	// noisy route does not burn the budget of another and authenticated users
+	// behind the same NAT get their own buckets.
 	await fastify.register(rateLimit, {
 		max: 100,
 		timeWindow: "1 minute",
+		keyGenerator: (request) =>
+			rateLimitKey({
+				// At onRequest the route is already matched, so `routeOptions.url`
+				// is the pattern (e.g. `/api/v1/events/:eventId`), not a concrete
+				// id — two different events never get separate buckets.
+				endpoint: request.routeOptions?.url ?? request.url,
+				method: request.method,
+				ip: request.ip,
+				userId: sessionIdentity(request.headers),
+			}),
 	});
 
 	// Global error handler + 404 envelope for unmatched routes

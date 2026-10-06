@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Button } from "@muxima/ui/components/button";
 import {
 	Dialog,
@@ -8,6 +9,7 @@ import {
 } from "@muxima/ui/components/dialog";
 import { EyeOff, Globe, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { formatDate } from "@/utils/format-date";
 import {
 	getStatusLabel,
@@ -45,6 +47,11 @@ export function ViewInvitationDialog({
 	const respondToInvitation = useRespondToInvitation();
 	const publish = usePublishInvitation();
 	const unpublish = useUnpublishInvitation();
+	// Gating de UX: sem a permissão o controlo não aparece. A API rejeita a
+	// mesma mutação de qualquer forma (o backend é a autoridade).
+	const canCreate = useEventCan(eventId, PERMISSIONS.INVITATION_CREATE);
+	const canPublish = useEventCan(eventId, PERMISSIONS.INVITATION_PUBLISH);
+	const canRespond = useEventCan(eventId, PERMISSIONS.INVITATION_RESPOND);
 
 	const invitation = invitationQuery.data;
 	const event = invitation?.event;
@@ -204,37 +211,35 @@ export function ViewInvitationDialog({
 										Partilhe o QR Code ou o link com os convidados.
 									</p>
 								</div>
-
 								<div className="flex justify-center border-b pb-5 sm:justify-start">
 									<InvitationQrCode qrCode={invitation.qrCode} size={168} />
 								</div>
-
 								<InvitationLink url={invitationUrl} onCopy={handleCopyLink} />
-
 								<InvitationCode
 									code={invitation.code}
 									onCopy={handleCopyCode}
-								/>
-
+								/>{" "}
 								<div className="border-t pt-4">
-									<Button
-										variant={isPublished ? "outline" : "default"}
-										className="w-full"
-										disabled={publish.isPending || unpublish.isPending}
-										onClick={handleTogglePublish}
-									>
-										{isPublished ? (
-											<>
-												<EyeOff className="mr-2 size-4" />
-												Retirar publicação
-											</>
-										) : (
-											<>
-												<Globe className="mr-2 size-4" />
-												Publicar convite
-											</>
-										)}
-									</Button>
+									{canPublish && (
+										<Button
+											variant={isPublished ? "outline" : "default"}
+											className="w-full"
+											disabled={publish.isPending || unpublish.isPending}
+											onClick={handleTogglePublish}
+										>
+											{isPublished ? (
+												<>
+													<EyeOff className="mr-2 size-4" />
+													Retirar publicação
+												</>
+											) : (
+												<>
+													<Globe className="mr-2 size-4" />
+													Publicar convite
+												</>
+											)}
+										</Button>
+									)}
 
 									<p className="mt-2 text-muted-foreground text-xs">
 										{isPublished
@@ -296,6 +301,7 @@ export function ViewInvitationDialog({
 							onMaybe={() => handleResponse("MAYBE")}
 							onDecline={() => handleResponse("DECLINE")}
 							isResponding={respondToInvitation.isPending}
+							canRespond={canRespond}
 						/>
 
 						{/* EVENT */}
@@ -322,14 +328,16 @@ export function ViewInvitationDialog({
 							público.
 						</p>
 
-						<Button
-							className="mt-5"
-							onClick={handleCreate}
-							disabled={createInvitation.isPending}
-						>
-							<Plus className="mr-2 size-4" />
-							{createInvitation.isPending ? "A criar..." : "Criar convite"}
-						</Button>
+						{canCreate && (
+							<Button
+								className="mt-5"
+								onClick={handleCreate}
+								disabled={createInvitation.isPending}
+							>
+								<Plus className="mr-2 size-4" />
+								{createInvitation.isPending ? "A criar..." : "Criar convite"}
+							</Button>
+						)}
 					</div>
 				)}
 

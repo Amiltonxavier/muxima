@@ -1,4 +1,5 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
@@ -8,10 +9,11 @@ import {
 } from "../modules/inventory/schemas";
 import { InventoryService } from "../modules/inventory/service";
 import {
-	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventIdForResource,
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { inventoryListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 import { syncChecklistForInventoryItem } from "./checklist";
@@ -20,7 +22,11 @@ export const inventoryRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }).merge(inventoryListInput))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVENTORY_READ,
+			);
 			const { page, limit } = parsePagination(input);
 
 			const result = await InventoryService.list(
@@ -47,21 +53,33 @@ export const inventoryRouter = {
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
 			const item = await InventoryService.getById(db, input.id);
-			await requireEventAccess(context.session.user.id, item.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				item.eventId,
+				PERMISSIONS.INVENTORY_READ,
+			);
 			return item;
 		}),
 
 	getStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVENTORY_READ,
+			);
 			return InventoryService.getStats(db, input.eventId);
 		}),
 
 	create: protectedProcedure
 		.input(createInventoryItemSchema.extend({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVENTORY_CREATE,
+			);
 			return db.$transaction(async (tx) => {
 				const item = await InventoryService.create(
 					tx,
@@ -77,10 +95,16 @@ export const inventoryRouter = {
 	update: protectedProcedure
 		.input(updateInventoryItemSchema.extend({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("inventoryItem", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource(
+				"inventoryItem",
+				input.id,
+			);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.INVENTORY_UPDATE,
+			);
+
 			return db.$transaction(async (tx) => {
 				const item = await InventoryService.update(tx, input.id, input);
 				await syncChecklistForInventoryItem(tx, item.id);
@@ -91,10 +115,16 @@ export const inventoryRouter = {
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("inventoryItem", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource(
+				"inventoryItem",
+				input.id,
+			);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.INVENTORY_DELETE,
+			);
+
 			await InventoryService.delete(db, input.id);
 			return { success: true };
 		}),
@@ -102,13 +132,16 @@ export const inventoryRouter = {
 	addMovement: protectedProcedure
 		.input(addMovementSchema.extend({ inventoryItemId: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource(
+			const eventId = await requireEventIdForResource(
 				"inventoryItem",
 				input.inventoryItemId,
 			);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.INVENTORY_UPDATE,
+			);
+
 			return db.$transaction(async (tx) => {
 				const movement = await InventoryService.addMovement(
 					tx,
@@ -125,13 +158,16 @@ export const inventoryRouter = {
 	getHistory: protectedProcedure
 		.input(z.object({ inventoryItemId: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource(
+			const eventId = await requireEventIdForResource(
 				"inventoryItem",
 				input.inventoryItemId,
 			);
-			if (eventId) {
-				await requireEventAccess(context.session.user.id, eventId);
-			}
+			await requireEventPermission(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.INVENTORY_READ,
+			);
+
 			return InventoryService.getHistory(db, input.inventoryItemId);
 		}),
 };

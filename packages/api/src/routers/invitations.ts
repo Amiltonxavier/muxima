@@ -1,6 +1,6 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
-
 import { protectedProcedure, publicProcedure } from "../index";
 import {
 	invitationCodeSchema,
@@ -23,13 +23,16 @@ import {
 	unpublishInvitation,
 } from "../modules/invitations/service";
 import {
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import {
 	publicInvitationCodeLimiter,
 	publicInvitationRespondLimiter,
 	publicInvitationScheduleLimiter,
+	publishLimiter,
+	rateLimitKey,
 } from "../shared/auth/rate-limit";
 import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
 import { INVITATION_CODES } from "../shared/errors/codes";
@@ -54,7 +57,11 @@ export const invitationsRouter = {
 			.input(z.object({ code: invitationCodeSchema }))
 			.handler(async ({ context, input }) => {
 				publicInvitationCodeLimiter.check(
-					`${input.code}:${context.ip ?? "unknown"}`,
+					rateLimitKey({
+						endpoint: "public.invitations.getByCode",
+						ip: context.ip,
+						userId: context.session?.user?.id,
+					}),
 				);
 				return getPublicInvitation(db, input.code);
 			}),
@@ -68,7 +75,11 @@ export const invitationsRouter = {
 			.input(z.object({ code: invitationCodeSchema }))
 			.handler(async ({ context, input }) => {
 				publicInvitationScheduleLimiter.check(
-					`${input.code}:${context.ip ?? "unknown"}`,
+					rateLimitKey({
+						endpoint: "public.invitations.schedule",
+						ip: context.ip,
+						userId: context.session?.user?.id,
+					}),
 				);
 				return getPublicSchedule(db, input.code);
 			}),
@@ -82,7 +93,11 @@ export const invitationsRouter = {
 			)
 			.handler(async ({ context, input }) => {
 				publicInvitationRespondLimiter.check(
-					`${input.code}:${context.ip ?? "unknown"}`,
+					rateLimitKey({
+						endpoint: "public.invitations.respond",
+						ip: context.ip,
+						userId: context.session?.user?.id,
+					}),
 				);
 				await respondToInvitation(db, input.code, input.response, {
 					publishRequired: true,
@@ -106,7 +121,18 @@ export const invitationsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			publishLimiter.check(
+				rateLimitKey({
+					endpoint: "invitations.publishBatch",
+					ip: context.ip,
+					userId: context.session.user.id,
+				}),
+			);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_PUBLISH,
+			);
 			return createInvitation(db, input);
 		}),
 
@@ -114,7 +140,11 @@ export const invitationsRouter = {
 	generateCode: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_CREATE,
+			);
 			return { code: generateInvitationCode() };
 		}),
 
@@ -129,7 +159,11 @@ export const invitationsRouter = {
 				.merge(paginationInput),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 
 			const { page, limit, skip } = parsePagination(input);
 			const { data, total } = await listInvitations(db, input.eventId, {
@@ -152,21 +186,33 @@ export const invitationsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 			return findInvitationByGuest(db, input);
 		}),
 
 	getById: protectedProcedure
 		.input(z.object({ eventId: z.string(), invitationId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 			return getInvitationById(db, input);
 		}),
 
 	getStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 			return getInvitationStats(db, input.eventId);
 		}),
 
@@ -175,14 +221,29 @@ export const invitationsRouter = {
 	getInvitationStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 			return getInvitationStats(db, input.eventId);
 		}),
 
 	publish: protectedProcedure
 		.input(z.object({ eventId: z.string(), invitationId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			publishLimiter.check(
+				rateLimitKey({
+					endpoint: "invitations.publish",
+					ip: context.ip,
+					userId: context.session.user.id,
+				}),
+			);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_PUBLISH,
+			);
 			return publishInvitation(db, input);
 		}),
 
@@ -202,7 +263,11 @@ export const invitationsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_PUBLISH,
+			);
 
 			if (input.scope === "SELECTED" && input.invitationIds.length === 0) {
 				throw new BadRequestError("Seleciona pelo menos um convite", {
@@ -220,7 +285,11 @@ export const invitationsRouter = {
 	unpublish: protectedProcedure
 		.input(z.object({ eventId: z.string(), invitationId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_PUBLISH,
+			);
 			return unpublishInvitation(db, input);
 		}),
 
@@ -245,7 +314,11 @@ export const invitationsRouter = {
 
 			// The event comes from the invitation, not from the payload, so a
 			// user cannot respond to another event's invitation.
-			await requireEventMutable(context.session.user.id, invitation.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				invitation.eventId,
+				PERMISSIONS.INVITATION_RESPOND,
+			);
 			if (invitation.eventId !== input.eventId) {
 				throw new NotFoundError("Convite não encontrado", {
 					code: INVITATION_CODES.NOT_FOUND,
@@ -263,7 +336,11 @@ export const invitationsRouter = {
 	rsvpEligibility: protectedProcedure
 		.input(z.object({ eventId: z.string(), code: invitationCodeSchema }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVITATION_READ,
+			);
 
 			const invitation = await db.guestInvitation.findUnique({
 				where: { code: input.code },

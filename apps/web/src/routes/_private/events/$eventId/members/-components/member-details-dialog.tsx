@@ -43,6 +43,8 @@ export function MemberDetailsDialog({
 	onRemove,
 	isUpdating,
 	isRemoving,
+	canChangeRole,
+	canRemove,
 }: {
 	member: MemberItem;
 	onClose: () => void;
@@ -50,6 +52,10 @@ export function MemberDetailsDialog({
 	onRemove: (memberId: string) => void;
 	isUpdating: boolean;
 	isRemoving: boolean;
+	/** The caller may change roles in this event (`members.update-role`). */
+	canChangeRole: boolean;
+	/** The caller may remove members from this event (`members.remove`). */
+	canRemove: boolean;
 }) {
 	const { isEventLocked, lockMessage } = useEventLock();
 	const isOwner = isOwnerRole(member.role);
@@ -136,7 +142,7 @@ export function MemberDetailsDialog({
 						)}
 					</div>
 
-					{roleChanged && (
+					{roleChanged && canChangeRole && (
 						<Button
 							className="w-full"
 							disabled={isUpdating || isEventLocked}
@@ -159,7 +165,7 @@ export function MemberDetailsDialog({
 							<Trash2 className="mr-2 h-4 w-4" />
 							Não pode remover o proprietário
 						</Button>
-					) : (
+					) : canRemove ? (
 						<Button
 							variant="outline"
 							className="text-destructive"
@@ -170,7 +176,7 @@ export function MemberDetailsDialog({
 							<Trash2 className="mr-2 h-4 w-4" />
 							{isRemoving ? "A remover..." : "Remover membro"}
 						</Button>
-					)}
+					) : null}
 					<Button variant="outline" onClick={onClose}>
 						Fechar
 					</Button>

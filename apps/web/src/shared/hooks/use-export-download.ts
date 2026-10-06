@@ -11,17 +11,26 @@ import { handleApiError, parseApiError } from "@/shared/errors";
  * The document, its numbers and its name all come from the API.
  */
 
+/**
+ * The event-scoped export modules the server actually implements — see
+ * `EVENT_EXPORT_MODULES` in `packages/api/src/exports/registry/export-registry.ts`.
+ *
+ * These two lists used to differ: the browser offered an `invitations` module
+ * that the server has no route for, so the button 404'd, and it was missing
+ * `tables`, which the server does serve. A union the browser believes in is
+ * worse than a shorter honest list, so it mirrors the server.
+ */
 export const EXPORT_MODULES = [
-	"event",
-	"guests",
 	"budget",
-	"schedule",
-	"inventory",
-	"suppliers",
-	"tasks",
 	"checklist",
+	"event",
 	"food-plan",
-	"invitations",
+	"guests",
+	"inventory",
+	"schedule",
+	"suppliers",
+	"tables",
+	"tasks",
 ] as const;
 
 export type ExportModule = (typeof EXPORT_MODULES)[number];

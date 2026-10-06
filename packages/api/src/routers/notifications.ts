@@ -69,9 +69,9 @@ export const notificationsRouter = {
 
 	markAsRead: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const notification = await db.notification.update({
-				where: { id: input.id },
+				where: { id: input.id, userId: context.session.user.id },
 				data: {
 					readAt: new Date(),
 				},
@@ -96,9 +96,9 @@ export const notificationsRouter = {
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			await db.notification.delete({
-				where: { id: input.id },
+				where: { id: input.id, userId: context.session.user.id },
 			});
 
 			return { success: true };

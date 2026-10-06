@@ -132,6 +132,12 @@ export function createAuth() {
 
 export const auth = createAuth();
 
+/**
+ * The whole permission vocabulary is re-exported so server code has a single
+ * import site, while the browser can import the dependency-free
+ * `@muxima/permissions` package directly (it must never pull in Prisma).
+ */
+export * from "@muxima/permissions";
 export type {
 	AccessRole,
 	AccessRoleId,
@@ -140,12 +146,20 @@ export type {
 } from "./access";
 export {
 	ACCESS_ROLES,
+	ALL_PERMISSIONS,
 	EMPTY_ACCESS,
 	getRolePermissions,
+	getSeedRolePermissions,
 	getUserAccess,
 	hasPermission,
+	isPermission,
 	PERMISSIONS,
+	permissionName,
+	ROLE_DESCRIPTIONS,
 	resolvePermissions,
+	resolvePermissionsFromDatabase,
+	splitPermission,
+	toAccessRoleId,
 	toAccessRoles,
 } from "./access";
 export { BLOCKED_USER_MESSAGE };

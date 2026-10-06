@@ -1,5 +1,6 @@
 import db from "@muxima/db";
 import type { Prisma } from "@muxima/db/prisma";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import {
@@ -7,10 +8,11 @@ import {
 	getTaskAnalytics,
 } from "../modules/tasks/analytics";
 import {
-	getEventIdForResource,
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventIdForResource,
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { NotFoundError } from "../shared/errors/app-error";
 import { TASK_CODES } from "../shared/errors/codes";
 import { scheduleListInput, taskListInput } from "../shared/schemas/filters";
@@ -19,7 +21,15 @@ import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 export const tasksRouter = {
 	list: protectedProcedure
 		.input(z.object({ eventId: z.string() }).merge(taskListInput))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			// F-04: without this guard any authenticated user could read any
+			// event's tasks by supplying its `eventId`. Event access + the
+			// module's read permission, exactly like every other task procedure.
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TASK_READ,
+			);
 			const { page, limit, skip } = parsePagination(input);
 
 			const filterConditions: Prisma.TaskWhereInput[] = [
@@ -77,7 +87,11 @@ export const tasksRouter = {
 				});
 			}
 
-			await requireEventAccess(context.session.user.id, task.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				task.eventId,
+				PERMISSIONS.TASK_READ,
+			);
 
 			return task;
 		}),
@@ -110,7 +124,11 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TASK_CREATE,
+			);
 
 			const task = await db.task.create({
 				data: {
@@ -158,10 +176,12 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("task", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("task", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.TASK_UPDATE,
+			);
 
 			const task = await db.task.update({
 				where: { id: input.id },
@@ -185,10 +205,12 @@ export const tasksRouter = {
 	delete: protectedProcedure
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("task", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("task", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.TASK_DELETE,
+			);
 
 			await db.task.delete({
 				where: { id: input.id },
@@ -199,7 +221,14 @@ export const tasksRouter = {
 
 	getSchedules: protectedProcedure
 		.input(z.object({ eventId: z.string() }).merge(scheduleListInput))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			// F-04: same cross-event read as `list` — the schedule of any event
+			// was visible to any authenticated caller who knew its id.
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SCHEDULE_READ,
+			);
 			const { page, limit, skip } = parsePagination(input);
 
 			const filterConditions: Prisma.ScheduleWhereInput[] = [
@@ -251,7 +280,11 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SCHEDULE_CREATE,
+			);
 
 			const schedule = await db.schedule.create({
 				data: {
@@ -284,10 +317,12 @@ export const tasksRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("schedule", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("schedule", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.SCHEDULE_UPDATE,
+			);
 
 			const schedule = await db.schedule.update({
 				where: { id: input.id },
@@ -308,10 +343,12 @@ export const tasksRouter = {
 	deleteSchedule: protectedProcedure
 		.input(z.object({ id: z.string() }))
 		.handler(async ({ context, input }) => {
-			const eventId = await getEventIdForResource("schedule", input.id);
-			if (eventId) {
-				await requireEventMutable(context.session.user.id, eventId);
-			}
+			const eventId = await requireEventIdForResource("schedule", input.id);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				eventId,
+				PERMISSIONS.SCHEDULE_DELETE,
+			);
 
 			await db.schedule.delete({
 				where: { id: input.id },
@@ -323,14 +360,22 @@ export const tasksRouter = {
 	getStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.TASK_READ,
+			);
 			return getTaskAnalytics(db, input.eventId);
 		}),
 
 	getScheduleStats: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.SCHEDULE_READ,
+			);
 			return getScheduleAnalytics(db, input.eventId);
 		}),
 };

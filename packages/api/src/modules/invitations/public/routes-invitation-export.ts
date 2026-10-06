@@ -4,6 +4,10 @@ import type { ExportActor } from "../../../exports/core/export-context";
 import { buildInvitationPdf } from "../../../exports/invitation";
 import { buildExportContext } from "../../../exports/orchestration/export-context";
 import { contentDisposition } from "../../../exports/orchestration/export-service";
+import {
+	publicInvitationExportLimiter,
+	rateLimitKey,
+} from "../../../shared/auth/rate-limit";
 import { NotFoundError } from "../../../shared/errors/app-error";
 import { INVITATION_CODES } from "../../../shared/errors/codes";
 import { getPublicInvitation, getPublicSchedule } from "../service";
@@ -29,6 +33,17 @@ export async function invitationPublicRoutes(app: FastifyInstance) {
 		"/api/public/invitations/:code/export/pdf",
 		async (request, reply) => {
 			const { code } = request.params as { code: string };
+
+			// F-18: public, unauthenticated PDF render, so the budget is tight
+			// and keyed per endpoint + IP (not per code, which a scanner could
+			// rotate to bypass the limit).
+			publicInvitationExportLimiter.check(
+				rateLimitKey({
+					endpoint: "public.invitations.export.pdf",
+					method: request.method,
+					ip: request.ip,
+				}),
+			);
 
 			const [lookup, scheduleLookup] = await Promise.all([
 				getPublicInvitation(db, code),

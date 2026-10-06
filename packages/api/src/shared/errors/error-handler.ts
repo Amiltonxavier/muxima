@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { errorResponse } from "../http/response";
-import { AppError, NotFoundError } from "./app-error";
+import { AppError, NotFoundError, RateLimitError } from "./app-error";
 import { ERROR_CODES } from "./codes";
 import { mapError } from "./map-error";
 
@@ -33,6 +33,17 @@ export function errorHandler(
 			{ code: appError.code, originalMessage: error.message },
 			"Request failed",
 		);
+	}
+
+	// `Retry-After` on 429 so clients can back off instead of hammering the
+	// window. The memory limiter is the only producer of `retryAfterSeconds`;
+	// the @fastify/rate-limit backstop sets its own header before reaching us.
+	if (
+		appError instanceof RateLimitError &&
+		appError.retryAfterSeconds !== undefined &&
+		!reply.hasHeader("retry-after")
+	) {
+		reply.header("Retry-After", String(appError.retryAfterSeconds));
 	}
 
 	return reply.status(appError.statusCode).send(errorEnvelope(appError));

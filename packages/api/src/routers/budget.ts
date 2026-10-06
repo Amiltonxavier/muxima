@@ -1,6 +1,6 @@
 import db from "@muxima/db";
+import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
-
 import { protectedProcedure } from "../index";
 import { getBudgetAnalytics } from "../modules/budget/analytics";
 import { getExpenseAnalytics } from "../modules/budget/expense-analytics";
@@ -9,9 +9,10 @@ import {
 	getBudgetSnapshot,
 } from "../modules/budget/repository";
 import {
-	requireEventAccess,
-	requireEventMutable,
-} from "../shared/auth/event-access";
+	requireEventPermission,
+	requireEventPermissionMutable,
+} from "../shared/auth/authorization";
+
 import { ValidationError } from "../shared/errors/app-error";
 import { centsToUnits, fromCents } from "../shared/finance/money";
 
@@ -35,7 +36,11 @@ export const budgetRouter = {
 	getByEventId: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
 			const snapshot = await getBudgetSnapshot(input.eventId);
 
 			return {
@@ -57,7 +62,11 @@ export const budgetRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
 			const lines = await getBudgetLines(input.eventId);
 			const filtered = input.source
 				? lines.filter((line) => line.source === input.source)
@@ -78,7 +87,11 @@ export const budgetRouter = {
 	getSummary: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
 			const snapshot = await getBudgetSnapshot(input.eventId);
 			return snapshot;
 		}),
@@ -93,7 +106,11 @@ export const budgetRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			await requireEventMutable(context.session.user.id, input.eventId);
+			await requireEventPermissionMutable(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_UPDATE,
+			);
 
 			// The reserve is held back from the target, so it can never exceed it.
 			const reserve = input.reserveAmount ?? 0;
@@ -132,7 +149,11 @@ export const budgetRouter = {
 	getExpenseAnalytics: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
 			const result = await getExpenseAnalytics(input.eventId);
 
 			return {
@@ -152,7 +173,11 @@ export const budgetRouter = {
 	getStats: protectedProcedure
 		.input(eventInput)
 		.handler(async ({ context, input }) => {
-			await requireEventAccess(context.session.user.id, input.eventId);
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
 			return getBudgetAnalytics(db, input.eventId);
 		}),
 };

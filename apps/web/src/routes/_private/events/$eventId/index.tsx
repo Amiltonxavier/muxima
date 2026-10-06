@@ -1,5 +1,7 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEvent } from "../-queries/event-queries";
 import { EventPreparationAnalytics } from "./-components/analytics/event-preparation-analytics";
 import { DeleteEvent } from "./-components/delete-event";
@@ -26,6 +28,11 @@ function EventDetailPage() {
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 	const [showEditDialog, setShowEditDialog] = useState(false);
 
+	// Editing an event's own fields is not the same capability as editing its
+	// planning data, and deleting it is OWNER-only.
+	const canEditEvent = useEventCan(eventId, PERMISSIONS.EVENT_UPDATE);
+	const canDeleteEvent = useEventCan(eventId, PERMISSIONS.EVENT_DELETE);
+
 	if (eventQuery.isLoading) {
 		return <EventDetailSkeleton />;
 	}
@@ -48,6 +55,8 @@ function EventDetailPage() {
 				status={event.status}
 				onEdit={() => setShowEditDialog(true)}
 				onDelete={() => setShowDeleteDialog(true)}
+				canEdit={canEditEvent}
+				canDelete={canDeleteEvent}
 			/>
 
 			<div className="space-y-4">
@@ -77,7 +86,7 @@ function EventDetailPage() {
 			{/* Equipa */}
 			<EventMembers members={members} />
 
-			{showEditDialog && (
+			{showEditDialog && canEditEvent && (
 				<EditEventDialog
 					open={showEditDialog}
 					onOpenChange={() => setShowEditDialog(false)}
@@ -86,7 +95,7 @@ function EventDetailPage() {
 				/>
 			)}
 
-			{showDeleteDialog && (
+			{showDeleteDialog && canDeleteEvent && (
 				<DeleteEvent
 					open={showDeleteDialog}
 					onOpenChange={() => setShowDeleteDialog(false)}

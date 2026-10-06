@@ -140,6 +140,9 @@ function buildDb() {
 				const guest = guests.find((g) => g.id === args.where.id);
 				if (!guest) return Promise.resolve(null);
 				return Promise.resolve({
+					// `eventId` is read by the authorization layer to resolve which
+					// event owns the guest BEFORE the rule below runs.
+					eventId: guest.eventId,
 					companionsLimit: guest.companionsLimit,
 					_count: { companions: guest.companions.length },
 					invitationGuests: guest.invitationGuests,
@@ -203,11 +206,49 @@ vi.mock("@muxima/auth", () => ({
 	auth: {},
 }));
 
-vi.mock("../../shared/auth/event-access", () => ({
-	requireEventAccess: vi.fn(() => Promise.resolve()),
-	requireEventMutable: vi.fn(() => Promise.resolve()),
+/**
+ * Authorization is stubbed, not exercised: this suite is about the invitation
+ * capacity rule and the DECLINED-invitation companion rule, and it asserts on
+ * THOSE rejections. Authorization has its own coverage, and letting the real
+ * guards run here would only re-test that the caller holds `guests.create`.
+ *
+ * The stub replaces `authorization` — the module the routers actually import —
+ * rather than `event-access` underneath it, so a router that starts calling a
+ * new guard fails loudly instead of silently skipping authorization.
+ */
+vi.mock("../../shared/auth/authorization", () => ({
+	requireEventPermission: vi.fn(() => Promise.resolve()),
+	requireEventPermissionMutable: vi.fn(() => Promise.resolve()),
 	getEventIdForResource: vi.fn((resource: string) =>
 		Promise.resolve(resource === "guest" ? "evt_1" : null),
+	),
+	/**
+	 * The non-nullable resolver. Kept in the stub rather than delegated to the
+	 * real module so this suite keeps testing the rules it is named after, and
+	 * so a router that adopts it does not fail with a missing export — which is
+	 * exactly the failure mode the note above describes.
+	 */
+	requireEventIdForResource: vi.fn((resource: string) =>
+		resource === "guest"
+			? Promise.resolve("evt_1")
+			: Promise.reject(new Error("unexpected resource")),
+	),
+}));
+
+/**
+ * Rate limiting is cross-cutting infra with its own coverage — this suite
+ * asserts the invitation eligibility rule, not the throttle, so the limiter
+ * is stubbed out here (same pattern as the auth/authorization stubs above).
+ */
+vi.mock("../../shared/auth/rate-limit", () => ({
+	publicInvitationCodeLimiter: { check: vi.fn() },
+	publicInvitationScheduleLimiter: { check: vi.fn() },
+	publicInvitationRespondLimiter: { check: vi.fn() },
+	publicInvitationExportLimiter: { check: vi.fn() },
+	exportLimiter: { check: vi.fn() },
+	publishLimiter: { check: vi.fn() },
+	rateLimitKey: vi.fn((parts: Record<string, string>) =>
+		[parts.endpoint, parts.method, parts.ip, parts.userId].join("|"),
 	),
 }));
 

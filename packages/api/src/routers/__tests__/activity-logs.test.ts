@@ -88,6 +88,7 @@ vi.mock("@muxima/db", () => ({
 	},
 	createPrismaClient: () => ({
 		eventMember: { findMany: () => Promise.resolve([]) },
+		rolePermission: { findMany: () => Promise.resolve([]) },
 	}),
 }));
 
@@ -97,16 +98,28 @@ let permissions: string[] = [];
 
 vi.mock("@muxima/auth", () => ({
 	BLOCKED_USER_MESSAGE: "blocked",
-	getUserAccess: () =>
-		Promise.resolve({
-			roles: [{ id: "OWNER", name: "Proprietário", permissions }],
-			permissions,
-		}),
-	hasPermission: (granted: readonly string[], permission: string) =>
-		granted.includes(permission),
-	PERMISSIONS: { ACTIVITY_READ_ALL: "activity.read.all" },
 	auth: {},
 }));
+
+/**
+ * The caller-wide permission set is injected, so this suite can flip
+ * `permissions` per test and assert the *decision* (own history by default,
+ * someone else's only when `activity.read.all` is granted) rather than
+ * re-testing how permissions are resolved from the database.
+ */
+vi.mock("../../shared/auth/authorization", async () => {
+	const { ForbiddenError } = await import("../../shared/errors/app-error");
+
+	return {
+		getUserPermissions: () => Promise.resolve(permissions),
+		requirePermission: (granted: readonly string[], permission: string) => {
+			if (granted.includes(permission)) return;
+			throw new ForbiddenError(
+				"Não tem permissão para consultar a atividade de outro utilizador",
+			);
+		},
+	};
+});
 
 vi.mock("@muxima/db/activity-log", () => ({
 	createActivityLog: vi.fn(),

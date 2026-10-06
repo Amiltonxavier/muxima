@@ -13,7 +13,7 @@ import { EventService } from "./service";
 export async function eventRoutes(app: FastifyInstance) {
 	// List events
 	app.get("/api/v1/events", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -34,7 +34,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Get event by ID
 	app.get("/api/v1/events/:eventId", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		const event = await EventService.findById(eventId, userId);
 		return successResponse(event);
@@ -42,7 +42,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Create event
 	app.post("/api/v1/events", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const data = createEventSchema.parse(request.body);
 		const event = await EventService.create(userId, data);
 		return reply.status(201).send(successResponse(event));
@@ -50,7 +50,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Update event
 	app.patch("/api/v1/events/:eventId", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		const data = updateEventSchema.parse(request.body);
 		const event = await EventService.update(eventId, userId, data);
@@ -59,7 +59,7 @@ export async function eventRoutes(app: FastifyInstance) {
 
 	// Delete event
 	app.delete("/api/v1/events/:eventId", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { eventId } = eventIdSchema.parse(request.params);
 		await EventService.delete(eventId, userId);
 		return reply.status(204).send();

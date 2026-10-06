@@ -34,10 +34,10 @@
 
 	/* Soft champagne */
 	--accent: oklch(0.92 0.045 78);
-	--accent-foreground: oklch(0.30 0.025 35);
+	--accent-foreground: oklch(0.3 0.025 35);
 
 	/* Rose / wine */
-	--destructive: oklch(0.60 0.17 20);
+	--destructive: oklch(0.6 0.17 20);
 	--destructive-foreground: oklch(0.98 0.005 85);
 
 	--border: oklch(0.88 0.018 78);
@@ -49,11 +49,11 @@
 	   Charts
 	   ───────────────────────────────────────── */
 
-	--chart-1: oklch(0.72 0.115 82);  /* Gold */
-	--chart-2: oklch(0.62 0.12 20);   /* Rose */
-	--chart-3: oklch(0.52 0.09 330);  /* Plum */
-	--chart-4: oklch(0.62 0.09 155);  /* Sage */
-	--chart-5: oklch(0.58 0.07 235);  /* Slate blue */
+	--chart-1: oklch(0.72 0.115 82); /* Gold */
+	--chart-2: oklch(0.62 0.12 20); /* Rose */
+	--chart-3: oklch(0.52 0.09 330); /* Plum */
+	--chart-4: oklch(0.62 0.09 155); /* Sage */
+	--chart-5: oklch(0.58 0.07 235); /* Slate blue */
 
 	/* ─────────────────────────────────────────
 	   Sidebar
@@ -66,9 +66,9 @@
 	--sidebar-primary-foreground: oklch(0.22 0.025 35);
 
 	--sidebar-accent: oklch(0.935 0.025 80);
-	--sidebar-accent-foreground: oklch(0.30 0.025 35);
+	--sidebar-accent-foreground: oklch(0.3 0.025 35);
 
-	--sidebar-border: oklch(0.90 0.015 78);
+	--sidebar-border: oklch(0.9 0.015 78);
 	--sidebar-ring: oklch(0.72 0.115 82);
 
 	/* ─────────────────────────────────────────
@@ -96,29 +96,21 @@
 	--shadow-opacity: 0.06;
 	--shadow-color: oklch(0.25 0.02 35);
 
-	--shadow-2xs: 0 1px 2px 0
-		oklch(0.25 0.02 35 / 0.03);
+	--shadow-2xs: 0 1px 2px 0 oklch(0.25 0.02 35 / 0.03);
 
-	--shadow-xs: 0 1px 2px 0
-		oklch(0.25 0.02 35 / 0.04);
+	--shadow-xs: 0 1px 2px 0 oklch(0.25 0.02 35 / 0.04);
 
-	--shadow-sm: 0 1px 3px 0
-		oklch(0.25 0.02 35 / 0.05);
+	--shadow-sm: 0 1px 3px 0 oklch(0.25 0.02 35 / 0.05);
 
-	--shadow: 0 2px 5px 0
-		oklch(0.25 0.02 35 / 0.05);
+	--shadow: 0 2px 5px 0 oklch(0.25 0.02 35 / 0.05);
 
-	--shadow-md: 0 4px 8px -2px
-		oklch(0.25 0.02 35 / 0.06);
+	--shadow-md: 0 4px 8px -2px oklch(0.25 0.02 35 / 0.06);
 
-	--shadow-lg: 0 8px 16px -4px
-		oklch(0.25 0.02 35 / 0.07);
+	--shadow-lg: 0 8px 16px -4px oklch(0.25 0.02 35 / 0.07);
 
-	--shadow-xl: 0 12px 24px -6px
-		oklch(0.25 0.02 35 / 0.08);
+	--shadow-xl: 0 12px 24px -6px oklch(0.25 0.02 35 / 0.08);
 
-	--shadow-2xl: 0 20px 35px -10px
-		oklch(0.25 0.02 35 / 0.10);
+	--shadow-2xl: 0 20px 35px -10px oklch(0.25 0.02 35 / 0.1);
 
 	--tracking-normal: 0em;
 	--spacing: 0.25rem;
@@ -140,10 +132,10 @@
 
 	/* Gold becomes brighter in dark mode */
 	--primary: oklch(0.78 0.125 82);
-	--primary-foreground: oklch(0.20 0.02 30);
+	--primary-foreground: oklch(0.2 0.02 30);
 
 	--secondary: oklch(0.29 0.02 30);
-	--secondary-foreground: oklch(0.90 0.018 82);
+	--secondary-foreground: oklch(0.9 0.018 82);
 
 	--muted: oklch(0.27 0.018 30);
 	--muted-foreground: oklch(0.68 0.018 75);
@@ -162,7 +154,7 @@
 	/* Charts */
 	--chart-1: oklch(0.78 0.125 82);
 	--chart-2: oklch(0.68 0.14 20);
-	--chart-3: oklch(0.65 0.10 330);
+	--chart-3: oklch(0.65 0.1 330);
 	--chart-4: oklch(0.68 0.09 155);
 	--chart-5: oklch(0.68 0.07 235);
 
@@ -171,7 +163,7 @@
 	--sidebar-foreground: oklch(0.92 0.018 82);
 
 	--sidebar-primary: oklch(0.78 0.125 82);
-	--sidebar-primary-foreground: oklch(0.20 0.02 30);
+	--sidebar-primary-foreground: oklch(0.2 0.02 30);
 
 	--sidebar-accent: oklch(0.27 0.025 35);
 	--sidebar-accent-foreground: oklch(0.92 0.018 82);
@@ -198,7 +190,7 @@
 	--shadow-xs: 0 1px 3px 0 oklch(0 0 0 / 0.14);
 	--shadow-sm: 0 2px 5px 0 oklch(0 0 0 / 0.16);
 	--shadow: 0 3px 8px 0 oklch(0 0 0 / 0.18);
-	--shadow-md: 0 5px 12px -2px oklch(0 0 0 / 0.20);
+	--shadow-md: 0 5px 12px -2px oklch(0 0 0 / 0.2);
 	--shadow-lg: 0 8px 18px -4px oklch(0 0 0 / 0.22);
 	--shadow-xl: 0 12px 25px -6px oklch(0 0 0 / 0.24);
 	--shadow-2xl: 0 20px 40px -10px oklch(0 0 0 / 0.28);

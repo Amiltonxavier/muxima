@@ -13,7 +13,7 @@ import { assertEventIsMutable } from "../events/event-lock";
 export async function requireEventAccess(
 	userId: string,
 	eventId: string,
-	allowedRoles?: string[],
+	allowedRoles?: readonly string[],
 ): Promise<void> {
 	const membership = await db.eventMember.findFirst({
 		where: {
@@ -72,10 +72,24 @@ export async function assertEventIsMutableById(eventId: string): Promise<void> {
 export async function requireEventMutable(
 	userId: string,
 	eventId: string,
-	allowedRoles?: string[],
+	allowedRoles?: readonly string[],
 ): Promise<void> {
 	await requireEventAccess(userId, eventId, allowedRoles);
 	await assertEventIsMutableById(eventId);
+}
+
+/**
+ * Membership + role, without the operational lock. The authorization service
+ * (`shared/auth/authorization.ts`) owns the permission variant of this check;
+ * this one exists for the operations whose requirement is a role rather than a
+ * capability — chiefly assigning or transferring `OWNER`.
+ */
+export async function requireEventRole(
+	userId: string,
+	eventId: string,
+	allowedRoles: readonly string[],
+): Promise<void> {
+	await requireEventAccess(userId, eventId, allowedRoles);
 }
 
 /**

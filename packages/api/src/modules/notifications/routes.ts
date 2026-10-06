@@ -10,7 +10,7 @@ import { NotificationService } from "./service";
 
 export async function notificationRoutes(app: FastifyInstance) {
 	app.get("/api/v1/notifications", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const query = request.query as Record<string, string>;
 		const { page, limit } = parsePagination(query);
 		const filters = {
@@ -30,33 +30,33 @@ export async function notificationRoutes(app: FastifyInstance) {
 	});
 
 	app.get("/api/v1/notifications/unread-count", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const count = await NotificationService.getUnreadCount(userId);
 		return successResponse({ count });
 	});
 
 	app.patch("/api/v1/notifications/:id/read", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		const notification = await NotificationService.markAsRead(id, userId);
 		return successResponse(notification);
 	});
 
 	app.patch("/api/v1/notifications/read-all", async (request) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		await NotificationService.markAllAsRead(userId);
 		return successResponse({ success: true });
 	});
 
 	app.delete("/api/v1/notifications/:id", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		const { id } = request.params as { id: string };
 		await NotificationService.delete(id, userId);
 		return reply.status(204).send();
 	});
 
 	app.delete("/api/v1/notifications", async (request, reply) => {
-		const userId = requireSessionUserId(request);
+		const userId = await requireSessionUserId(request);
 		await NotificationService.deleteAll(userId);
 		return reply.status(204).send();
 	});

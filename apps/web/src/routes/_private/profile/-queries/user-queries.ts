@@ -77,6 +77,7 @@ export function useInviteMember() {
 				queryClient.invalidateQueries({
 					queryKey: userKeys.members(data.eventId),
 				});
+				queryClient.invalidateQueries({ queryKey: userKeys.profile() });
 			},
 		}),
 	);
@@ -89,6 +90,7 @@ export function useRemoveMember() {
 		orpc.users.removeMember.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: userKeys.all });
+				queryClient.invalidateQueries({ queryKey: userKeys.profile() });
 			},
 		}),
 	);
@@ -101,6 +103,7 @@ export function useUpdateMemberRole() {
 		orpc.users.updateMemberRole.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: userKeys.all });
+				queryClient.invalidateQueries({ queryKey: userKeys.profile() });
 			},
 		}),
 	);

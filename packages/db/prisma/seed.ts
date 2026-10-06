@@ -28,6 +28,14 @@
 import { scrypt as nodeScrypt, randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	ACCESS_ROLES,
+	ALL_PERMISSIONS,
+	getSeedRolePermissions,
+	permissionName,
+	ROLE_DESCRIPTIONS,
+	splitPermission,
+} from "@muxima/permissions";
 import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
 // Prisma 7 does not re-export the enums through the `Prisma` namespace, so
@@ -1329,6 +1337,75 @@ async function main() {
 	await prisma.account.deleteMany({});
 	await prisma.user.deleteMany({});
 
+	// ── 0b. RBAC: ROLES → PERMISSIONS → ROLE_PERMISSIONS ──────────────
+	// Seeded with `upsert` on the natural key (role name / permission key),
+	// so re-running never duplicates a row and never depends on a hardcoded id.
+	// The role→permission matrix comes from the single shared definition in
+	// `packages/auth/src/access.ts`, which is also what the API reads from the
+	// database afterwards — there is exactly one matrix in the project.
+	//
+	// This runs BEFORE users/events so `EventMember.roleId` can be filled in
+	// from the resolved role ids below.
+	const roleIdsByName = new Map<string, string>();
+	for (const roleName of ACCESS_ROLES) {
+		const role = await prisma.role.upsert({
+			where: { name: roleName },
+			update: {
+				description: ROLE_DESCRIPTIONS[roleName],
+			},
+			create: {
+				name: roleName,
+				description: ROLE_DESCRIPTIONS[roleName],
+			},
+		});
+		roleIdsByName.set(roleName, role.id);
+	}
+
+	const permissionIdsByKey = new Map<string, string>();
+	for (const key of ALL_PERMISSIONS) {
+		const { resource, action } = splitPermission(key);
+		const permission = await prisma.permission.upsert({
+			where: { key },
+			update: {},
+			create: {
+				key,
+				name: permissionName(key),
+				description: permissionName(key),
+				resource,
+				action,
+			},
+		});
+		permissionIdsByKey.set(key, permission.id);
+	}
+
+	const rolePermissionRows: Prisma.RolePermissionCreateManyInput[] = [];
+	// De-duplicated by (role, permission) because the table carries a UNIQUE
+	// constraint: one repeated entry in the matrix would abort the whole seed
+	// with P2002 rather than converging. The matrix already de-duplicates, so
+	// this is a guard on the writer, not a fix — if it ever fires, the matrix
+	// has a repeat and `permission-coverage.test.ts` should be failing too.
+	const seenGrants = new Set<string>();
+	for (const roleName of ACCESS_ROLES) {
+		const roleId = roleIdsByName.get(roleName);
+		if (!roleId) continue;
+		for (const key of getSeedRolePermissions()[roleName]) {
+			const permissionId = permissionIdsByKey.get(key);
+			if (!roleId || !permissionId) continue;
+			const grantKey = `${roleId}:${permissionId}`;
+			if (seenGrants.has(grantKey)) continue;
+			seenGrants.add(grantKey);
+			rolePermissionRows.push({ roleId, permissionId });
+		}
+	}
+	// Roles are upserted, so their grants may already exist; clear this role's
+	// grants before rewriting them to keep the matrix exact after a schema
+	// change (e.g. a permission removed from EDITOR must actually disappear).
+	await prisma.rolePermission.deleteMany({});
+	await prisma.rolePermission.createMany({ data: rolePermissionRows });
+	console.log(
+		`  ✅ RBAC: ${ACCESS_ROLES.length} roles, ${ALL_PERMISSIONS.length} permissions, ${rolePermissionRows.length} grants`,
+	);
+
 	// ── 1. USERS + CREDENTIAL ACCOUNTS ────────────────────────────────
 	// The account row is exactly what Better Auth's sign-in looks up:
 	// providerId "credential", issuer "local:credential", accountId = user id,
@@ -1494,6 +1571,10 @@ async function main() {
 				role: m.role,
 				status: m.status,
 				joinedAt: m.joinedAt,
+				// Resolved to the persisted Role row, so authorization reads
+				// `EventMember → Role → RolePermission → Permission` without
+				// the enum ever being reinterpreted.
+				roleId: roleIdsByName.get(m.role) ?? null,
 			});
 		}
 		activeMemberIdsByEvent.set(plan.id, activeIds);

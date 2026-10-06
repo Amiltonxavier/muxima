@@ -1,6 +1,8 @@
 import db from "@muxima/db";
+import { PERMISSIONS, type Permission } from "@muxima/permissions";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
+	type EventExportModule,
 	type ExportFormat,
 	ExportNotSupportedError,
 	getReportName,
@@ -13,6 +15,8 @@ import {
 	loadEventInfo,
 } from "../../exports/orchestration/export-context";
 import { requireSessionUser } from "../../shared/auth/auth-middleware";
+import { requireEventPermission } from "../../shared/auth/authorization";
+import { exportLimiter, rateLimitKey } from "../../shared/auth/rate-limit";
 import { NotFoundError } from "../../shared/errors/app-error";
 import { EVENT_CODES } from "../../shared/errors/codes";
 import { DedicationService } from "../dedication/service";
@@ -47,19 +51,44 @@ function wantsInline(request: FastifyRequest): boolean {
 }
 
 /**
- * 401 unless the caller has an active membership in the event.
+ * Which capability each export module requires.
  *
- * The failure is a `NotFoundError` on purpose: a caller with no membership must
- * not be able to tell an existing event from a missing one, so the export route
- * answers exactly what the event route would.
+ * An export is a READ of the module's data, so it is gated by the module's own
+ * `*.export` permission rather than by membership alone: a `VIEWER` who may
+ * look at the guest list is not automatically allowed to download the PII of
+ * every guest in it. Modules with no dedicated `*.export` key fall back to the
+ * module's read permission.
  */
-async function assertMember(userId: string, eventId: string): Promise<void> {
-	const membership = await db.eventMember.findFirst({
-		where: { eventId, userId, status: "ACTIVE" },
-		select: { id: true },
-	});
-	if (!membership) {
-		throw new NotFoundError("Evento não encontrado", {
+const EXPORT_PERMISSIONS: Record<EventExportModule, Permission> = {
+	budget: PERMISSIONS.BUDGET_EXPORT,
+	checklist: PERMISSIONS.CHECKLIST_READ,
+	event: PERMISSIONS.EVENT_READ,
+	"food-plan": PERMISSIONS.FOOD_PLAN_READ,
+	guests: PERMISSIONS.GUEST_EXPORT,
+	inventory: PERMISSIONS.INVENTORY_EXPORT,
+	schedule: PERMISSIONS.SCHEDULE_READ,
+	suppliers: PERMISSIONS.SUPPLIER_EXPORT,
+	tables: PERMISSIONS.TABLE_READ,
+	tasks: PERMISSIONS.TASK_READ,
+};
+
+/**
+ * 404 unless the caller holds the module's export permission.
+ *
+ * The failure is a `NotFoundError` on purpose: a caller with no access must not
+ * be able to tell an existing event from a missing one, so the export route
+ * answers exactly what the event route would. Membership-only access is NOT
+ * enough — see `EXPORT_PERMISSIONS`.
+ */
+async function assertCanExport(
+	userId: string,
+	eventId: string,
+	module: EventExportModule,
+): Promise<void> {
+	try {
+		await requireEventPermission(userId, eventId, EXPORT_PERMISSIONS[module]);
+	} catch {
+		throw new NotFoundError("Relatório não disponível", {
 			code: EVENT_CODES.NOT_FOUND,
 		});
 	}
@@ -88,7 +117,17 @@ export async function exportRoutes(app: FastifyInstance) {
 	app.get(
 		"/api/v1/events/:eventId/exports/:module/:format",
 		async (request, reply) => {
-			const user = requireSessionUser(request);
+			const user = await requireSessionUser(request);
+
+			// PDF/XLSX generation is expensive; per user + IP, before any work.
+			exportLimiter.check(
+				rateLimitKey({
+					endpoint: "events.exports",
+					method: request.method,
+					ip: request.ip,
+					userId: user.id,
+				}),
+			);
 
 			const { eventId, module, format } = request.params as {
 				eventId: string;
@@ -100,7 +139,7 @@ export async function exportRoutes(app: FastifyInstance) {
 				throw reportNotFound("Relatório não disponível");
 			}
 
-			await assertMember(user.id, eventId);
+			await assertCanExport(user.id, eventId, module);
 
 			const event = await loadEventInfo(eventId);
 			if (!event) {
@@ -137,7 +176,16 @@ export async function exportRoutes(app: FastifyInstance) {
 	app.get(
 		"/api/v1/events/:eventId/dedications/:dedicationId/export/pdf",
 		async (request, reply) => {
-			const user = requireSessionUser(request);
+			const user = await requireSessionUser(request);
+
+			exportLimiter.check(
+				rateLimitKey({
+					endpoint: "events.dedications.export.pdf",
+					method: request.method,
+					ip: request.ip,
+					userId: user.id,
+				}),
+			);
 
 			const { eventId, dedicationId } = request.params as {
 				eventId: string;

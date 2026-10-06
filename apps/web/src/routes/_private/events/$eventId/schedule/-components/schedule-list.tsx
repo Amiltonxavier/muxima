@@ -1,8 +1,10 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { format } from "date-fns";
 import { Clock, MapPin, Trash2 } from "lucide-react";
 import { QueryState } from "@/shared/components/states";
+import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import {
 	DEFAULT_SCHEDULE_STATUS,
@@ -22,7 +24,13 @@ export function ScheduleList({
 	isError: boolean;
 	onDelete: (schedule: ScheduleItem) => void;
 }) {
-	const { isEventLocked, lockMessage } = useEventLock();
+	const { eventId, isEventLocked, lockMessage } = useEventLock();
+	// Deleting an activity is its own capability (`schedule.delete` — the
+	// create permission does not imply it). Hidden for roles without it.
+	const canDelete = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.SCHEDULE_DELETE,
+	);
 
 	return (
 		<QueryState
@@ -74,16 +82,20 @@ export function ScheduleList({
 								{SCHEDULE_STATUS_LABELS[schedule.status] ||
 									SCHEDULE_STATUS_LABELS.PENDING}
 							</Badge>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								className="text-destructive"
-								disabled={isEventLocked}
-								title={isEventLocked ? (lockMessage ?? undefined) : "Eliminar"}
-								onClick={() => onDelete(schedule)}
-							>
-								<Trash2 className="h-3.5 w-3.5" />
-							</Button>
+							{canDelete && (
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									className="text-destructive"
+									disabled={isEventLocked}
+									title={
+										isEventLocked ? (lockMessage ?? undefined) : "Eliminar"
+									}
+									onClick={() => onDelete(schedule)}
+								>
+									<Trash2 className="h-3.5 w-3.5" />
+								</Button>
+							)}
 						</div>
 					</div>
 				))}

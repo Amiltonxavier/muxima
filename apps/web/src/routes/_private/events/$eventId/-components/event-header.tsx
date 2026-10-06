@@ -23,6 +23,10 @@ interface EventHeaderProps {
 		| "CANCELLED";
 	onEdit: () => void;
 	onDelete: () => void;
+	/** The caller may edit this event's own fields (`events.update`). */
+	canEdit: boolean;
+	/** The caller may delete this event (`events.delete` — OWNER only). */
+	canDelete: boolean;
 }
 
 export function EventHeader({
@@ -33,6 +37,8 @@ export function EventHeader({
 	onEdit,
 	type,
 	onDelete,
+	canEdit,
+	canDelete,
 }: EventHeaderProps) {
 	return (
 		<div className="flex items-start justify-between">
@@ -57,15 +63,22 @@ export function EventHeader({
 				{/* The full aggregate report of this event. */}
 				<ExportMenu eventId={eventId} module="event" />
 
-				<Button variant="outline" size="sm" onClick={onEdit}>
-					<Pencil className="mr-2 h-3.5 w-3.5" />
-					Editar
-				</Button>
+				{/* Deleting an event is OWNER-only, so the button is hidden rather
+				    than disabled: a permanently greyed-out destructive action reads
+				    as a bug rather than as a policy. */}
+				{canEdit && (
+					<Button variant="outline" size="sm" onClick={onEdit}>
+						<Pencil className="mr-2 h-3.5 w-3.5" />
+						Editar
+					</Button>
+				)}
 
-				<Button variant="destructive" size="sm" onClick={onDelete}>
-					<Trash2 className="mr-2 h-3.5 w-3.5" />
-					Eliminar
-				</Button>
+				{canDelete && (
+					<Button variant="destructive" size="sm" onClick={onDelete}>
+						<Trash2 className="mr-2 h-3.5 w-3.5" />
+						Eliminar
+					</Button>
+				)}
 			</div>
 		</div>
 	);
