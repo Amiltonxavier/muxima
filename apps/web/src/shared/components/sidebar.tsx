@@ -6,12 +6,14 @@ import { Link, useMatchRoute, useParams } from "@tanstack/react-router";
 import {
 	ArrowLeft,
 	Bell,
+	Calculator,
 	Calendar,
 	ChevronLeft,
 	ChevronRight,
 	CreditCard,
 	Feather,
 	Gift,
+	Handshake,
 	Home,
 	LayoutGrid,
 	ListChecks,
@@ -46,13 +48,13 @@ const eventNavGroups: NavGroup[] = [
 		items: [
 			{
 				label: "Orçamento",
-				icon: <CreditCard className="h-4 w-4" />,
+				icon: <Calculator className="h-4 w-4" />,
 				to: "/events/$eventId/budget",
 				permission: PERMISSIONS.BUDGET_READ,
 			},
 			{
 				label: "Fornecedores",
-				icon: <ShoppingCart className="h-4 w-4" />,
+				icon: <Handshake className="h-4 w-4" />,
 				to: "/events/$eventId/suppliers",
 				permission: PERMISSIONS.SUPPLIER_READ,
 			},

@@ -31,6 +31,11 @@ export function createAuth() {
 		},
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
+		session: {
+			// Política de expiração: sessão com TTL máximo de 1 dia
+			// (conforme auditoria e requisitos de segurança)
+			expiresIn: 60 * 60 * 24, // 86400 segundos
+		},
 		user: {
 			additionalFields: {
 				phone: {
@@ -98,6 +103,9 @@ export function createAuth() {
 			},
 		},
 		advanced: {
+			// Cookies cross-origin: SPA frontend e API em origens distintas.
+			// SameSite=None requer Secure=true (HTTPS). Mantido por necessidade
+			// arquitetural; backend continua a ser fonte de verdade para validação.
 			defaultCookieAttributes: {
 				sameSite: "none",
 				secure: true,

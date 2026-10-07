@@ -7,13 +7,18 @@ import { LoadingState } from "@/shared/components/states/loading-state";
 import { Topbar } from "@/shared/components/topbar";
 
 export const Route = createFileRoute("/_private")({
-	beforeLoad: async () => {
+	beforeLoad: async ({ location }) => {
 		try {
 			const { data: session, error } = await authClient.getSession();
 			// Only redirect to login when the session is genuinely absent.
 			// A server error (500 / network) must NOT cause a logout.
 			if (!session && !error) {
-				throw redirect({ to: "/login" });
+				throw redirect({
+					to: "/login",
+					search: {
+						returnTo: location.pathname + location.search + location.hash,
+					},
+				});
 			}
 			if (error) {
 				// Server returned an error — treat as "session check failed".

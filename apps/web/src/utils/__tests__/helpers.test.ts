@@ -38,7 +38,7 @@ describe("formatCurrencyCompact", () => {
 	});
 
 	it("formats millions with decimal", () => {
-		expect(formatCurrencyCompact(1500000)).toBe("1.5M Kz");
+		expect(formatCurrencyCompact(1500000)).toBe("1,5M Kz");
 	});
 
 	it("formats thousands", () => {

@@ -10,6 +10,7 @@ import {
 	parseApiError,
 	SESSION_EXPIRED_MESSAGE,
 } from "@/shared/errors";
+import { buildLoginUrl } from "./auth-redirect";
 
 /**
  * Every query and mutation failure is reported through `handleApiError`, the one
@@ -92,17 +93,32 @@ export const link = new RPCLink({
 		}).then(async (response) => {
 			if (response.status === 401) {
 				if (typeof window !== "undefined") {
-					const currentPath = window.location.pathname;
+					const currentPath = window.location.pathname + window.location.search;
 					if (
 						!currentPath.startsWith("/login") &&
 						!currentPath.startsWith("/register") &&
 						!currentPath.startsWith("/invite/")
 					) {
+						// Evitar múltiplos redirects/toasts concorrentes
+						if (typeof (window as any).__isHandling401 === "undefined") {
+							(window as any).__isHandling401 = false;
+						}
+						if ((window as any).__isHandling401) {
+							return response;
+						}
+						(window as any).__isHandling401 = true;
 						// The session guard is a navigation concern, so it stays
 						// here; the wording comes from the shared error module.
 						const info = parseApiError({ status: 401 });
 						toast.error(info.message || SESSION_EXPIRED_MESSAGE);
-						window.location.href = "/login";
+
+						// Sanitizar returnTo: apenas destinos internos
+						const returnTo =
+							window.location.pathname +
+							window.location.search +
+							window.location.hash;
+						const loginUrl = buildLoginUrl(returnTo, window.location.origin);
+						window.location.href = loginUrl;
 					}
 				}
 			}

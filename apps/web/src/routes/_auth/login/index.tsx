@@ -6,15 +6,20 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
 import { handleApiError } from "@/shared/errors";
 import { loginSchema } from "@/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/login/")({
+	validateSearch: z.object({
+		returnTo: z.string().optional(),
+	}),
 	component: LoginPage,
 });
 
 function LoginPage() {
+	const { returnTo } = Route.useSearch();
 	const [isLoading, setIsLoading] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
 
@@ -47,7 +52,21 @@ function LoginPage() {
 				}
 
 				toast.success("Sessão iniciada com sucesso");
-				window.location.href = "/";
+				const origin =
+					typeof window !== "undefined" ? window.location.origin : "";
+				let target = "/";
+				if (returnTo && origin) {
+					try {
+						const decoded = decodeURIComponent(returnTo);
+						const u = new URL(decoded, origin);
+						if (u.origin === origin && u.pathname.startsWith("/")) {
+							target = u.pathname + u.search + u.hash;
+						}
+					} catch {
+						target = "/";
+					}
+				}
+				window.location.href = target;
 			} catch (caught) {
 				handleApiError(caught, { fallbackMessage: "Erro ao iniciar sessão" });
 			} finally {

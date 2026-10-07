@@ -15,10 +15,7 @@ export function SupplierStats({ stats }: { stats?: SupplierStatsDto | null }) {
 
 	return (
 		<StatsGrid columns={4}>
-			<MetricCard
-				title="Montante contratado"
-				value={formatCurrencyCompact(stats.totalPrice ?? 0)}
-			/>
+			<MetricCard title="Total" value={stats.total ?? 0} />
 			<MetricCard
 				title="Pago"
 				value={formatCurrencyCompact(stats.totalPaid ?? 0)}

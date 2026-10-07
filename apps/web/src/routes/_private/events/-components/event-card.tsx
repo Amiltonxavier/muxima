@@ -25,8 +25,9 @@ export function EventCard({
 	onDelete: (eventId: string) => void;
 }) {
 	// Over RPC a Date arrives as a string; `dateHelper` accepts both.
-	const eventDate = event.eventDate ? String(event.eventDate) : null;
-	const daysRemaining = eventDate ? getDaysRemaining(eventDate) : null;
+	const daysRemaining = event.eventDate
+		? getDaysRemaining(event.eventDate)
+		: null;
 	const status = event.status || FALLBACK_STATUS;
 
 	return (
@@ -39,8 +40,8 @@ export function EventCard({
 						<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
 							<Calendar className="h-3.5 w-3.5 shrink-0" />
 							<span>
-								{eventDate
-									? dateHelper.formatShort(eventDate)
+								{event.eventDate
+									? dateHelper.formatShort(event.eventDate)
 									: "Data não definida"}
 							</span>
 						</div>

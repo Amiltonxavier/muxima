@@ -121,7 +121,7 @@ export function ExportMenu({
 				<DropdownMenuSeparator />
 
 				<DropdownMenuItem
-					onSelect={() => run("pdf")}
+					onClick={() => run("pdf")}
 					className="gap-3 px-2.5 py-2.5"
 				>
 					<div className="flex size-8 shrink-0 items-center justify-center border">
@@ -138,7 +138,7 @@ export function ExportMenu({
 
 				{allowSpreadsheet && (
 					<DropdownMenuItem
-						onSelect={() => run("xlsx")}
+						onClick={() => run("xlsx")}
 						className="gap-3 px-2.5 py-2.5"
 					>
 						<div className="flex size-8 shrink-0 items-center justify-center border">
