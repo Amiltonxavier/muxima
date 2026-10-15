@@ -1,8 +1,10 @@
 import db from "@muxima/db";
-import type { Prisma } from "@muxima/db/prisma";
+import { MailService } from "@muxima/mail";
 import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { cancelInvitation, inviteMember } from "../modules/members/invitations";
+import { listEventMembers } from "../modules/members/list";
 import { MemberRepository } from "../modules/members/repository";
 import {
 	requireEventPermission,
@@ -13,7 +15,8 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../shared/errors/app-error";
-import { MEMBER_CODES, USER_CODES } from "../shared/errors/codes";
+import { MEMBER_CODES } from "../shared/errors/codes";
+import { eventPageUrl, roleLabel, rolePermissionLabels } from "../shared/mail";
 import { memberListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -26,47 +29,21 @@ export const membersRouter = {
 				input.eventId,
 				PERMISSIONS.MEMBER_READ,
 			);
-			const { page, limit, skip } = parsePagination(input);
+			const { page, limit } = parsePagination(input);
 
-			const filterConditions: Prisma.EventMemberWhereInput[] = [
-				{ eventId: input.eventId },
-			];
+			// Memberships AND pending/cancelled team invitations in one feed: a
+			// pending invite is shown as a pending member, a revoked one under
+			// "Cancelados", and both would otherwise be invisible.
+			const { data, total, counts } = await listEventMembers({
+				eventId: input.eventId,
+				page,
+				limit,
+				search: input.search,
+				role: input.role,
+				status: input.status,
+			});
 
-			if (input.search) {
-				filterConditions.push({
-					user: {
-						OR: [
-							{ name: { contains: input.search, mode: "insensitive" } },
-							{ email: { contains: input.search, mode: "insensitive" } },
-						],
-					},
-				});
-			}
-
-			if (input.role) {
-				filterConditions.push({ role: input.role });
-			}
-
-			if (input.status) {
-				filterConditions.push({ status: input.status });
-			}
-
-			const where: Prisma.EventMemberWhereInput = {
-				AND: filterConditions,
-			};
-
-			const [members, total] = await Promise.all([
-				db.eventMember.findMany({
-					where,
-					include: { user: true },
-					orderBy: { createdAt: "desc" },
-					skip,
-					take: limit,
-				}),
-				db.eventMember.count({ where }),
-			]);
-
-			return { data: members, meta: getPaginationMeta(total, page, limit) };
+			return { data, meta: getPaginationMeta(total, page, limit), counts };
 		}),
 
 	add: protectedProcedure
@@ -84,37 +61,15 @@ export const membersRouter = {
 				PERMISSIONS.MEMBER_ADD,
 			);
 
-			const user = await db.user.findUnique({
-				where: { email: input.email },
-			});
-			if (!user) {
-				throw new NotFoundError("Utilizador não encontrado com este email", {
-					code: USER_CODES.NOT_FOUND,
-				});
-			}
-
-			const existing = await db.eventMember.findUnique({
-				where: {
-					eventId_userId: {
-						eventId: input.eventId,
-						userId: user.id,
-					},
-				},
-			});
-			if (existing) {
-				throw new ConflictError("Utilizador já é membro deste evento", {
-					code: MEMBER_CODES.ALREADY_EXISTS,
-				});
-			}
-
-			const member = await MemberRepository.create({
+			// Adding a member means inviting one. A PENDING membership that
+			// nobody ever activates made shared events look empty, so the
+			// membership row is now created only when the invitee accepts.
+			return inviteMember({
 				eventId: input.eventId,
-				userId: user.id,
+				email: input.email,
 				role: input.role,
-				status: "PENDING",
+				invitedBy: context.session.user.id,
 			});
-
-			return member;
 		}),
 
 	updateRole: protectedProcedure
@@ -128,10 +83,38 @@ export const membersRouter = {
 			const member = await db.eventMember.findUnique({
 				where: { id: input.memberId },
 			});
-			if (!member)
-				throw new NotFoundError("Membro não encontrado", {
-					code: MEMBER_CODES.NOT_FOUND,
+
+			// The row id may also be a PENDING invitation (the team screen shows
+			// invitations as pending members). Changing its role edits the
+			// invitation, since no membership exists until acceptance.
+			if (!member) {
+				const invitation = await db.eventInvitation.findUnique({
+					where: { id: input.memberId },
 				});
+				if (!invitation) {
+					throw new NotFoundError("Membro não encontrado", {
+						code: MEMBER_CODES.NOT_FOUND,
+					});
+				}
+
+				await requireEventPermissionMutable(
+					context.session.user.id,
+					invitation.eventId,
+					PERMISSIONS.MEMBER_UPDATE_ROLE,
+				);
+
+				if (invitation.status !== "PENDING") {
+					throw new ConflictError("Este convite já não está pendente", {
+						code: MEMBER_CODES.INVITE_NOT_PENDING,
+					});
+				}
+
+				return db.eventInvitation.update({
+					where: { id: input.memberId },
+					data: { role: input.role },
+					select: { id: true, role: true },
+				});
+			}
 
 			await requireEventPermissionMutable(
 				context.session.user.id,
@@ -154,6 +137,31 @@ export const membersRouter = {
 				input.role,
 			);
 
+			// Inform the member about the capabilities their new role grants.
+			// The e-mail is a notification, never a gate: `deliverMail` does not
+			// throw, so an SMTP failure cannot roll back the role change.
+			const [memberMeta, eventMeta] = await Promise.all([
+				db.eventMember.findUnique({
+					where: { id: input.memberId },
+					select: { user: { select: { email: true, name: true } } },
+				}),
+				db.event.findUnique({
+					where: { id: member.eventId },
+					select: { name: true },
+				}),
+			]);
+
+			if (memberMeta?.user?.email) {
+				await MailService.sendPermissionsChanged({
+					to: memberMeta.user.email,
+					name: memberMeta.user.name,
+					eventName: eventMeta?.name ?? "evento",
+					roleLabel: roleLabel(input.role),
+					permissionLabels: rolePermissionLabels(input.role),
+					eventUrl: eventPageUrl(member.eventId),
+				});
+			}
+
 			return updated;
 		}),
 
@@ -163,10 +171,34 @@ export const membersRouter = {
 			const member = await db.eventMember.findUnique({
 				where: { id: input.memberId },
 			});
-			if (!member)
-				throw new NotFoundError("Membro não encontrado", {
-					code: MEMBER_CODES.NOT_FOUND,
+
+			// Removing a pending member means cancelling its invitation: same
+			// permission, same route, one row id from the unified team list.
+			if (!member) {
+				const invitation = await db.eventInvitation.findUnique({
+					where: { id: input.memberId },
 				});
+				if (!invitation) {
+					throw new NotFoundError("Membro não encontrado", {
+						code: MEMBER_CODES.NOT_FOUND,
+					});
+				}
+
+				await requireEventPermissionMutable(
+					context.session.user.id,
+					invitation.eventId,
+					PERMISSIONS.MEMBER_REMOVE,
+				);
+
+				if (invitation.status !== "PENDING") {
+					throw new ConflictError("Este convite já não está pendente", {
+						code: MEMBER_CODES.INVITE_NOT_PENDING,
+					});
+				}
+
+				await cancelInvitation(invitation.id);
+				return { success: true };
+			}
 
 			await requireEventPermissionMutable(
 				context.session.user.id,

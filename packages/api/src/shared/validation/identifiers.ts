@@ -49,16 +49,31 @@ export function validateIban(value: string): string | null {
 /** Mod-97 check, per ISO 7064. Exported so the API can enforce it too. */
 export function hasValidIbanChecksum(value: string): boolean {
 	const iban = normalizeIban(value);
-	if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(iban)) return false;
+
+	if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(iban)) {
+		return false;
+	}
 
 	const rearranged = iban.slice(4) + iban.slice(0, 4);
+
 	let remainder = 0;
+
 	for (const char of rearranged) {
 		const code = char.charCodeAt(0);
-		const value = code >= 65 ? code - 55 : Number(char);
-		if (Number.isNaN(value)) return false;
-		remainder = (remainder * 10 + value) % 97;
+
+		if (code >= 65 && code <= 90) {
+			const numeric = code - 55;
+
+			for (const digit of String(numeric)) {
+				remainder = (remainder * 10 + Number(digit)) % 97;
+			}
+		} else if (code >= 48 && code <= 57) {
+			remainder = (remainder * 10 + Number(char)) % 97;
+		} else {
+			return false;
+		}
 	}
+
 	return remainder === 1;
 }
 

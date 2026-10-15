@@ -9,6 +9,13 @@ export const EVENT_STATUS_LABELS: Record<string, string> = {
 	CANCELLED: "Cancelado",
 };
 
+export const MEMBER_STATUS_LABELS: Record<string, string> = {
+	ACTIVE: "Ativo",
+	PENDING: "Pendente",
+	DECLINED: "Recusado",
+	CANCELLED: "Cancelado",
+};
+
 export const EXPENSE_TYPE_LABELS: Record<string, string> = {
 	EXPENSE: "Despesa",
 	INCOME: "Receita",
@@ -309,6 +316,7 @@ export function getStatusLabel(
 		| "event"
 		| "guest"
 		| "task"
+		| "member"
 		| "supplier"
 		| "supplierPayment"
 		| "installment"
@@ -322,6 +330,7 @@ export function getStatusLabel(
 		event: EVENT_STATUS_LABELS,
 		guest: GUEST_STATUS_LABELS,
 		task: TASK_STATUS_LABELS,
+		member: MEMBER_STATUS_LABELS,
 		supplier: SUPPLIER_STATUS_LABELS,
 		supplierPayment: SUPPLIER_PAYMENT_STATUS_LABELS,
 		installment: INSTALLMENT_STATUS_LABELS,

@@ -12,9 +12,11 @@ import { toast } from "sonner";
 import { BackButton } from "@/shared/components/back-to";
 import { ScheduleDeleteDialog } from "./-components/schedule-delete-dialog";
 import { ScheduleDialog } from "./-components/schedule-dialog";
+import { ScheduleEditDialog } from "./-components/schedule-edit-dialog";
 import { ScheduleGantt } from "./-components/schedule-gantt";
 import { ScheduleHeader } from "./-components/schedule-header";
 import { ScheduleList } from "./-components/schedule-list";
+import { ScheduleStatusDialog } from "./-components/schedule-status-dialog";
 import { useScheduleTab, useScheduleView } from "./-hooks/use-schedule-view";
 import { useCreateSchedule, useSchedules } from "./-queries/schedule-queries";
 import type { ScheduleItem } from "./-types/schedule.types";
@@ -30,6 +32,10 @@ function SchedulePage() {
 	const { activeTab, setActiveTab } = useScheduleTab();
 
 	const [showCreate, setShowCreate] = useState(false);
+	const [editing, setEditing] = useState<ScheduleItem | null>(null);
+	const [changingStatus, setChangingStatus] = useState<ScheduleItem | null>(
+		null,
+	);
 	const [deleting, setDeleting] = useState<ScheduleItem | null>(null);
 
 	const schedulesQuery = useSchedules(eventId, { page, limit });
@@ -74,6 +80,8 @@ function SchedulePage() {
 							schedules={schedules}
 							isLoading={schedulesQuery.isLoading}
 							isError={schedulesQuery.isError}
+							onEdit={setEditing}
+							onChangeStatus={setChangingStatus}
 							onDelete={setDeleting}
 						/>
 
@@ -104,6 +112,21 @@ function SchedulePage() {
 					);
 				}}
 				isLoading={createSchedule.isPending}
+			/>
+
+			<ScheduleEditDialog
+				schedule={editing}
+				open={editing !== null}
+				onOpenChange={(open) => {
+					if (!open) setEditing(null);
+				}}
+			/>
+
+			<ScheduleStatusDialog
+				schedule={changingStatus}
+				onOpenChange={(open) => {
+					if (!open) setChangingStatus(null);
+				}}
 			/>
 
 			<ScheduleDeleteDialog

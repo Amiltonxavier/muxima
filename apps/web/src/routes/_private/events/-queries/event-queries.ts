@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { memberKeys } from "@/routes/_private/events/$eventId/members/-queries/member-queries";
+import { accessKeys } from "@/shared/hooks/use-can";
 import { orpc } from "@/utils/orpc";
 
 export interface PaginationParams {
@@ -79,6 +82,43 @@ export function useDeleteEvent() {
 		orpc.events.delete.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: eventKeys.lists({}) });
+			},
+		}),
+	);
+}
+
+/**
+ * Claim a team invitation from the event list (`memberInvites.acceptById`).
+ *
+ * Accepting turns the pending invite into an ACTIVE membership with RBAC
+ * permissions, so the event-access cache the route guard reads must be
+ * invalidated too — otherwise `/events/$eventId` would still bounce to /403 on
+ * the stale `{ role: null }`.
+ */
+export function useAcceptEventInvite() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.memberInvites.acceptById.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: eventKeys.all });
+				queryClient.invalidateQueries({ queryKey: memberKeys.all });
+				queryClient.invalidateQueries({ queryKey: accessKeys.all });
+				toast.success("Convite aceite com sucesso");
+			},
+		}),
+	);
+}
+
+/** Record a refusal from the event list; the invite can no longer be claimed. */
+export function useDeclineEventInvite() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.memberInvites.declineById.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: eventKeys.all });
+				toast.success("Convite recusado");
 			},
 		}),
 	);

@@ -430,6 +430,272 @@ const personName = (rng: Rng) =>
 const phone = (rng: Rng) =>
 	`+244 ${randInt(rng, 910, 989)} ${pad(randInt(rng, 0, 999))} ${pad(randInt(rng, 0, 999))}`;
 
+const mcxPhone = (rng: Rng) =>
+	`+2449${pad(randInt(rng, 10000000, 99999999), 8)}`;
+
+function ibanCheckDigits(country: string, bban: string): string {
+	const rearranged = `${bban + country}00`;
+	let remainder = 0;
+	for (const ch of rearranged) {
+		const code = ch.charCodeAt(0);
+		if (code >= 65 && code <= 90) {
+			for (const d of String(code - 55)) {
+				remainder = (remainder * 10 + Number(d)) % 97;
+			}
+		} else {
+			remainder = (remainder * 10 + Number(ch)) % 97;
+		}
+	}
+	const check = 98 - remainder;
+	return String(check).padStart(2, "0");
+}
+
+function generateAngolaIban(rng: Rng): string {
+	const banks = ["0040", "0045", "0051", "0056", "0060", "0070"];
+	const bank = banks[Math.floor(rng() * banks.length)];
+	const branch = pad(randInt(rng, 0, 9999), 4);
+	const account = Array.from({ length: 13 }, () => randInt(rng, 0, 9)).join("");
+	const bban = bank + branch + account;
+	return `AO${ibanCheckDigits("AO", bban)}${bban}`;
+}
+
+function hasValidIbanChecksumSeed(value: string): boolean {
+	const iban = value.replace(/[\s-]/g, "").toUpperCase();
+	if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(iban)) return false;
+	const rearranged = iban.slice(4) + iban.slice(0, 4);
+	let remainder = 0;
+	for (const ch of rearranged) {
+		const code = ch.charCodeAt(0);
+		if (code >= 65 && code <= 90) {
+			for (const d of String(code - 55)) {
+				remainder = (remainder * 10 + Number(d)) % 97;
+			}
+		} else if (code >= 48 && code <= 57) {
+			remainder = (remainder * 10 + Number(ch)) % 97;
+		} else {
+			return false;
+		}
+	}
+	return remainder === 1;
+}
+
+function generateNif(rng: Rng): string {
+	const prefix = randInt(rng, 5, 9);
+	return `${prefix}${pad(randInt(rng, 0, 99999999), 8)}`;
+}
+
+function generateCategoryFields(
+	rng: Rng,
+	category: SupplierCategory,
+): Prisma.InputJsonValue {
+	const rngF = rng;
+	const randomBool = () => rngF() > 0.5;
+	const randomInt = (min: number, max: number) =>
+		Math.floor(rngF() * (max - min + 1)) + min;
+	const randomText = () =>
+		pick(rngF, [
+			"Standard",
+			"Premium",
+			"Básico",
+			"Personalizado",
+			"Clássico",
+			"Moderno",
+		]);
+	const textArray = () => [
+		pick(rngF, ["Detalhe 1", "Ouro", "Branco", "Verde", "Azul"]),
+		pick(rngF, ["Detalhe 2", "Prata", "Bege", "Vermelho"]),
+	];
+
+	switch (category) {
+		case "VENUE":
+			return {
+				capacity: randomInt(50, 400),
+				indoor: randomBool(),
+				outdoor: randomBool(),
+				parkingSpaces: randomInt(10, 80),
+				includedServices: ["Serviço de mesa", "Limpeza pós-evento"],
+			} as Prisma.InputJsonValue;
+		case "CATERING":
+			return {
+				menu: randomText(),
+				servings: randomInt(50, 300),
+				serviceStyle: pick(rngF, [
+					"BUFFET",
+					"PLATED",
+					"FAMILY_STYLE",
+					"STATIONS",
+					"OTHER",
+				] as const),
+				dietaryOptions: ["Vegetariano", "Sem glúten"],
+				staffIncluded: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "CAKE":
+			return {
+				tiers: randomInt(1, 3),
+				flavours: ["Chocolate", "Baunilha"],
+				filling: ["Ganache", "Cremoso"],
+				design: randomText(),
+				allergens: ["Ovos", "Lactose"],
+			} as Prisma.InputJsonValue;
+		case "SWEETS_AND_SAVOURIES":
+			return {
+				products: [
+					{ name: "Empadas", quantity: randomInt(20, 100), unit: "unidade" },
+					{ name: "Folhados", quantity: randomInt(20, 100), unit: "unidade" },
+				],
+				presentationStyle: "Mesa decorada",
+				allergens: ["Farinha de trigo", "Ovos"],
+			} as Prisma.InputJsonValue;
+		case "DECORATION":
+			return {
+				decorStyle: randomText(),
+				colourScheme: textArray(),
+				items: ["Arranjos", "Iluminação"],
+				setupIncluded: randomBool(),
+				dismantlingIncluded: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "FLORIST":
+			return {
+				flowerTypes: ["Rosas", "Lisianthus"],
+				arrangements: ["Bouquets", "Centros de mesa"],
+				deliveryDate: daysAhead(randomInt(5, 30)),
+			} as Prisma.InputJsonValue;
+		case "PHOTOGRAPHER":
+			return {
+				coverageHours: randomInt(4, 8),
+				photoCount: randomInt(200, 800),
+				albumIncluded: randomBool(),
+				deliveryTime: "30 dias",
+				additionalSessions: randomInt(0, 2),
+			} as Prisma.InputJsonValue;
+		case "VIDEOGRAPHER":
+			return {
+				coverageHours: randomInt(4, 8),
+				resolution: pick(rngF, ["HD", "FULL_HD", "UHD", "CINEMATIC"] as const),
+				droneIncluded: randomBool(),
+				liveStream: randomBool(),
+				sameDayEdit: randomBool(),
+				deliverables: ["Vídeo completo", "Highlights"],
+			} as Prisma.InputJsonValue;
+		case "DJ":
+			return {
+				equipment: ["Colunas", "Mesas de mistura"],
+				musicStyle: ["Semba", "Kizomba", "Pop"],
+				durationHours: randomInt(4, 8),
+				soundSystemProvided: randomBool(),
+				mc: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "BAND":
+			return {
+				bandSize: randomInt(3, 6),
+				instruments: ["Guitarra", "Percussão"],
+				repertoire: ["Semba", "Kizomba"],
+				durationHours: randomInt(2, 5),
+				rehearsalIncluded: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "MUSIC":
+			return {
+				format: pick(rngF, ["DJ", "BAND", "DUO", "SOLO", "OTHER"] as const),
+				genres: ["Semba", "Kizomba"],
+				durationHours: randomInt(2, 6),
+			} as Prisma.InputJsonValue;
+		case "ENTERTAINMENT":
+			return {
+				acts: ["Animação", "Performance"],
+				durationHours: randomInt(1, 3),
+				audienceInteraction: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "TRANSPORT":
+			return {
+				vehicleType: pick(rngF, ["Limousine", "Autocarro", "Carrinha"]),
+				capacity: randomInt(4, 40),
+				route: "Trajeto do evento",
+				distanceKm: randomInt(10, 50),
+				driverIncluded: randomBool(),
+				decorated: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "BEAUTY":
+			return {
+				serviceType: ["Maquilhagem", "Penteado"],
+				artist: personName(rngF),
+				durationHours: randomInt(2, 4),
+				trialSession: randomBool(),
+				worksOnSite: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "BRIDE_ATTIRE":
+			return {
+				dressMaker: "Atelier",
+				dressType: "Casamento",
+				size: String(randomInt(36, 44)),
+				alterationsIncluded: randomBool(),
+				fittingDate: daysAhead(randomInt(15, 60)),
+			} as Prisma.InputJsonValue;
+		case "GROOM_ATTIRE":
+			return {
+				tailor: "Alfaiate",
+				suitType: "Smoking",
+				size: pick(rngF, ["S", "M", "L", "XL"]),
+				alterationsIncluded: randomBool(),
+				fittingDate: daysAhead(randomInt(15, 60)),
+			} as Prisma.InputJsonValue;
+		case "RINGS":
+			return {
+				metal: pick(rngF, ["Ouro 18k", "Ouro branco"]),
+				stoneType: pick(rngF, ["Diamante", "Zirconia"]),
+				ringSize: String(randomInt(15, 21)),
+				engraving: randomBool(),
+				engravingText: pick(rngF, [
+					"Amor Eterno",
+					"Para Sempre",
+					"Sempre Juntos",
+				]),
+			} as Prisma.InputJsonValue;
+		case "WEDDING_PLANNER":
+			return {
+				planningHours: randomInt(20, 80),
+				servicesIncluded: ["Planeamento completo", "Coordenação no dia"],
+				onSiteDayOf: randomBool(),
+				coordination: "Completa",
+			} as Prisma.InputJsonValue;
+		case "OFFICIANT":
+			return {
+				ceremonyType: ["Civil", "Religiosa"],
+				languages: ["Português", "Kimbundu"],
+				yearsExperience: randomInt(5, 20),
+				religiousAffiliation: pick(rngF, ["Católica", "Protestante"]),
+			} as Prisma.InputJsonValue;
+		case "FAVOURS":
+			return {
+				quantity: randomInt(50, 200),
+				packaging: "Caixa personalizada",
+				personalised: randomBool(),
+				contentDescription: ["Lembrança do evento"],
+			} as Prisma.InputJsonValue;
+		case "ACCOMMODATION":
+			return {
+				rooms: randomInt(5, 20),
+				nights: randomInt(1, 3),
+				guests: randomInt(10, 50),
+				breakfastIncluded: randomBool(),
+				transportIncluded: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "SECURITY":
+			return {
+				guards: randomInt(2, 8),
+				hours: randomInt(4, 10),
+				equipment: ["Radiocomunicação", "Detecção"],
+				uniformed: randomBool(),
+				armed: randomBool(),
+			} as Prisma.InputJsonValue;
+		case "OTHER":
+			return {
+				extras: ["Serviço complementar"],
+			} as Prisma.InputJsonValue;
+		default:
+			return { extras: ["Detalhes adicionais"] } as Prisma.InputJsonValue;
+	}
+}
+
 // ── Venues ──────────────────────────────────────────────────────────
 const VENUES = [
 	{
@@ -1418,6 +1684,10 @@ async function main() {
 			emailVerified: true,
 			image: null,
 			phone: `+244 923 ${pad(100 + i)} ${pad(i + 1, 3)}`,
+			// The account-level default role, exactly as sign-up assigns it:
+			// no seeded user may exist without a role (`USER`, never an admin
+			// role — administrative roles are only ever granted per-event).
+			roleId: roleIdsByName.get("USER") ?? null,
 		})),
 	});
 	const accountRecords = await Promise.all(
@@ -1713,6 +1983,14 @@ async function main() {
 				cateringSupplierByEvent.set(plan.id, supplierId);
 			}
 
+			// Identity/fiscal details use their own PRNG stream so the payment
+			// randomness below stays exactly as it was before they were added.
+			const rngI = mulberry32(9103 + plan.index * 131 + j * 37);
+			const hasMcxExpress = rngI() < 0.45;
+			// One venue per supplier so neighbourhood/province stay coherent.
+			const venue = pick(rngI, VENUES);
+			const address = `${venue.neighborhood}, ${venue.municipality}, ${venue.province}`;
+
 			supplierRecords.push({
 				id: supplierId,
 				eventId: plan.id,
@@ -1723,7 +2001,14 @@ async function main() {
 					.toLowerCase()
 					.replace(/[^a-z0-9]+/g, "")
 					.slice(0, 20)}@muxima.ao`,
-				address: `${pick(rngV, VENUES).neighborhood}, ${pick(rngV, VENUES).province}`,
+				address: address,
+				// NIF and IBAN are optional by product decision; only the more
+				// established (committed) suppliers carry them, matching how the
+				// API treats them as "filled when known".
+				nif: rngI() < 0.8 ? generateNif(rngI) : null,
+				iban: isCommitted && rngI() < 0.85 ? generateAngolaIban(rngI) : null,
+				hasMcxExpress,
+				mcxPhone: hasMcxExpress ? mcxPhone(rngI) : null,
 				status,
 				description: `Serviço de ${(CATEGORY_LABEL[cat] ?? "apoio").toLowerCase()} para o evento.`,
 				notes:
@@ -1738,6 +2023,21 @@ async function main() {
 				paymentModel: useInstallments
 					? SupplierPaymentModel.INSTALLMENTS
 					: SupplierPaymentModel.FULL,
+				// Category-specific form data, shaped exactly like the API's
+				// per-category schema so a future edit round-trips cleanly.
+				categoryFields: generateCategoryFields(rngI, cat),
+				...(rngI() < 0.25
+					? {
+							customFields: {
+								origem: pick(rngI, [
+									"Indicação",
+									"Website",
+									"Instagram",
+									"Feira de noivas",
+								]),
+							},
+						}
+					: {}),
 				// Filled in below, once payments are known.
 				paymentStatus: "PENDING",
 				nextDueDate: null,
@@ -1847,6 +2147,22 @@ async function main() {
 			}
 		}
 		supplierSpendByEvent.set(plan.id, spent);
+	}
+
+	// Every seeded IBAN must satisfy exactly what the API's `validateIban` and
+	// `hasValidIbanChecksum` enforce: a supported country (AO), the ISO 13616
+	// length and layout, and a valid mod-97 checksum. Failing loudly here keeps
+	// the seed from ever writing bank details the API would reject on edit.
+	for (const supplier of supplierRecords) {
+		if (supplier.iban == null) continue;
+		const iban = supplier.iban;
+		const structurallyValid =
+			/^AO\d{2}[A-Z0-9]{21}$/.test(iban) && iban.length === 25;
+		if (!structurallyValid || !hasValidIbanChecksumSeed(iban)) {
+			throw new Error(
+				`Seed gerou um IBAN inválido para ${supplier.name}: ${iban}`,
+			);
+		}
 	}
 
 	await prisma.supplier.createMany({ data: supplierRecords });
@@ -2567,6 +2883,169 @@ async function main() {
 		`  ✅ Notifications (${notificationRecords.length}) / Audit Logs (${auditRecords.length})`,
 	);
 
+	// ── 11b. ACTIVITY LOGS (Profile > History) ────────────────────────
+	// `activity_log` is the account-wide trail behind the Profile > History
+	// tab. Unlike AuditLog it is not event-scoped, so account actions
+	// (LOGIN, PROFILE_UPDATED, PASSWORD_CHANGED) carry no `eventId` at all —
+	// exactly the shape `createActivityLog` writes. Event-scoped entries
+	// (EVENT_*, GUEST_*) reference the owning event and, where meaningful,
+	// the entity id, plus a `metadata.changes` diff the dialog renders.
+	const activityLogRecords: Prisma.ActivityLogCreateManyInput[] = [];
+	const eventById = new Map(eventRecords.map((event) => [event.id, event]));
+	const ACTIVITY_USER_AGENT =
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+
+	for (const [userIndex] of SEED_USERS.entries()) {
+		const userId = userIdAt(userIndex);
+		const rng = mulberry32(1601 + userIndex * 211);
+		const slug = pad(userIndex + 1, 2);
+		const ipAddress = `197.229.${randInt(rng, 1, 254)}.${randInt(rng, 1, 254)}`;
+		let entry = 0;
+		const addAccountActivity = (
+			action: string,
+			resource: string,
+			description: string,
+			createdAt: Date,
+			metadata?: Prisma.InputJsonValue,
+		) => {
+			entry += 1;
+			activityLogRecords.push({
+				id: `act_seed_${slug}_${pad(entry)}`,
+				userId,
+				action,
+				resource,
+				description,
+				...(metadata === undefined ? {} : { metadata }),
+				ipAddress,
+				userAgent: ACTIVITY_USER_AGENT,
+				createdAt,
+			});
+		};
+
+		// Account-level trail: sign-ins, a profile edit and, for some users,
+		// a password change — never a credential value, only the fact.
+		addAccountActivity(
+			"LOGIN",
+			"SESSION",
+			"Início de sessão com email e palavra-passe.",
+			daysAgo(randInt(rng, 1, 2)),
+		);
+		addAccountActivity(
+			"PROFILE_UPDATED",
+			"PROFILE",
+			"Perfil atualizado: telefone.",
+			daysAgo(randInt(rng, 3, 25)),
+			{
+				changes: [{ field: "phone", before: null, after: phone(rng) }],
+			},
+		);
+		if (userIndex % 2 === 0) {
+			addAccountActivity(
+				"PASSWORD_CHANGED",
+				"PROFILE",
+				"Palavra-passe da conta alterada.",
+				daysAgo(randInt(rng, 20, 60)),
+			);
+		}
+		addAccountActivity(
+			"LOGOUT",
+			"SESSION",
+			"Sessão terminada.",
+			daysAgo(randInt(rng, 1, 10)),
+		);
+
+		// Event-scoped trail for every event this user owns.
+		for (const plan of plans.filter((p) => p.ownerId === userId)) {
+			const eRng = mulberry32(1701 + plan.index * 97);
+			const name = eventById.get(plan.id)?.name ?? plan.id;
+			let eventEntry = 0;
+			const addEventActivity = (
+				action: string,
+				resource: string,
+				description: string,
+				resourceId: string | null,
+				createdAt: Date,
+				metadata?: Prisma.InputJsonValue,
+			) => {
+				eventEntry += 1;
+				entry += 1;
+				activityLogRecords.push({
+					id: `act_seed_${slug}_${pad(entry)}_${eventEntry}`,
+					userId,
+					eventId: plan.id,
+					action,
+					resource,
+					resourceId,
+					description,
+					...(metadata === undefined ? {} : { metadata }),
+					ipAddress,
+					userAgent: ACTIVITY_USER_AGENT,
+					createdAt,
+				});
+			};
+
+			addEventActivity(
+				"EVENT_CREATED",
+				"EVENT",
+				`Evento "${name}" criado.`,
+				plan.id,
+				daysAgo(randInt(eRng, 60, 200)),
+			);
+			addEventActivity(
+				"EVENT_UPDATED",
+				"EVENT",
+				`Evento "${name}" atualizado.`,
+				plan.id,
+				daysAgo(randInt(eRng, 30, 90)),
+				{
+					changes: [{ field: "status", before: "DRAFT", after: plan.status }],
+				},
+			);
+
+			// Guest trail: a few creations, one update and an occasional
+			// deletion, always against real guest ids.
+			const sample = guestRecords
+				.filter((guest) => guest.eventId === plan.id)
+				.slice(0, 3);
+			for (const [guestIndex, guest] of sample.entries()) {
+				addEventActivity(
+					"GUEST_CREATED",
+					"GUEST",
+					`Convidado "${guest.name}" adicionado à lista.`,
+					guest.id ?? null,
+					daysAgo(randInt(eRng, 10, 60) + guestIndex),
+				);
+				if (guestIndex === 1) {
+					addEventActivity(
+						"GUEST_UPDATED",
+						"GUEST",
+						`Convidado "${guest.name}" atualizado (estado de confirmação).`,
+						guest.id ?? null,
+						daysAgo(randInt(eRng, 5, 30)),
+						{
+							changes: [
+								{ field: "status", before: "PENDING", after: guest.status },
+							],
+						},
+					);
+				}
+			}
+			const last = sample[sample.length - 1];
+			if (last && eRng() > 0.6) {
+				addEventActivity(
+					"GUEST_DELETED",
+					"GUEST",
+					`Convidado "${last.name}" removido da lista.`,
+					null,
+					daysAgo(randInt(eRng, 1, 20)),
+				);
+			}
+		}
+	}
+
+	await prisma.activityLog.createMany({ data: activityLogRecords });
+	console.log(`  ✅ Activity Logs (${activityLogRecords.length})`);
+
 	// ── 12. DEDICATIONS ───────────────────────────────────────────────
 	// Three examples exercising every visible state of the module:
 	//   1. locked + NOT_STARTED → owner only, nothing written yet
@@ -2786,6 +3265,7 @@ async function main() {
 	console.log(
 		`   Audit Logs:     ${auditRecords.length + sharedHistory.length}`,
 	);
+	console.log(`   Activity Logs:  ${activityLogRecords.length}`);
 	console.log(`   Dedications:    ${dedicationRecords.length}`);
 	console.log("\n🔐 Credenciais de acesso (email / senha):");
 	for (const user of SEED_USERS) {

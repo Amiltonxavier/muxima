@@ -2,6 +2,7 @@ import type {
 	useBudget,
 	useBudgetLines,
 	useBudgetSummary,
+	usePaidExpenses,
 } from "@/shared/queries/budget-queries";
 
 export {
@@ -9,6 +10,7 @@ export {
 	useBudget,
 	useBudgetLines,
 	useBudgetSummary,
+	usePaidExpenses,
 	useUpdateBudgetTarget,
 } from "@/shared/queries/budget-queries";
 
@@ -26,3 +28,8 @@ export type BudgetTotals = BudgetSummary["totals"];
 export type BudgetLine = NonNullable<
 	ReturnType<typeof useBudgetLines>["data"]
 >["data"][number];
+
+/** One bar of the paid-expenses chart, already aggregated by the API. */
+export type PaidExpense = NonNullable<
+	ReturnType<typeof usePaidExpenses>["data"]
+>[number];

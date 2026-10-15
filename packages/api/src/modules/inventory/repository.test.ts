@@ -73,7 +73,7 @@ describe("InventoryRepository.findMany", () => {
 });
 
 describe("InventoryRepository.findMetricsRows", () => {
-	it("selects only the columns needed by the stats calculation", async () => {
+	it("selects only the columns needed by the inventory analytics", async () => {
 		const findMany = vi.fn(async () => []);
 		const db = {
 			inventoryItem: { findMany },
@@ -84,6 +84,7 @@ describe("InventoryRepository.findMetricsRows", () => {
 		expect(findMany).toHaveBeenCalledWith({
 			where: { eventId: "evt_1" },
 			select: {
+				name: true,
 				status: true,
 				plannedQuantity: true,
 				currentQuantity: true,

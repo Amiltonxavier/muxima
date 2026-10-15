@@ -1,4 +1,4 @@
-import { BLOCKED_USER_MESSAGE } from "@muxima/auth";
+import { BLOCKED_USER_MESSAGE, UNVERIFIED_USER_MESSAGE } from "@muxima/auth";
 
 import db from "@muxima/db";
 import { ORPCError, os } from "@orpc/server";
@@ -9,7 +9,7 @@ import {
 	RateLimitError,
 	UnauthorizedError,
 } from "./shared/errors/app-error";
-import { ERROR_CODES } from "./shared/errors/codes";
+import { AUTH_CODES, ERROR_CODES } from "./shared/errors/codes";
 import { mapError } from "./shared/errors/map-error";
 
 export const o = os.$context<Context>();
@@ -71,10 +71,11 @@ const requireAuth = o.middleware(async ({ context, next }) => {
 });
 
 /**
- * Blocks every procedure call for a BLOCKED account, even when the session
- * token is still technically valid. Session revocation on block is the first
- * line of defence; this is the second, and it is always checked server-side —
- * never only in a frontend route guard.
+ * Blocks every procedure call for a BLOCKED account or one whose e-mail is
+ * still unconfirmed, even when the session token is still technically valid.
+ * Session revocation/refusal on block is the first line of defence; this is
+ * the second, and it is always checked server-side — never only in a frontend
+ * route guard.
  */
 const requireActiveUser = o.middleware(async ({ context, next }) => {
 	const userId = context.session?.user?.id;
@@ -84,7 +85,7 @@ const requireActiveUser = o.middleware(async ({ context, next }) => {
 
 	const user = await db.user.findUnique({
 		where: { id: userId },
-		select: { status: true },
+		select: { status: true, emailVerified: true },
 	});
 
 	if (!user) {
@@ -94,6 +95,12 @@ const requireActiveUser = o.middleware(async ({ context, next }) => {
 	if (user.status === "BLOCKED") {
 		throw new ForbiddenError(BLOCKED_USER_MESSAGE, {
 			code: ACCOUNT_BLOCKED_CODE,
+		});
+	}
+
+	if (user.emailVerified === false) {
+		throw new ForbiddenError(UNVERIFIED_USER_MESSAGE, {
+			code: AUTH_CODES.EMAIL_NOT_VERIFIED,
 		});
 	}
 

@@ -11,6 +11,7 @@ import { foodPlanRouter } from "./food-plan";
 import { guestsRouter } from "./guests";
 import { inventoryRouter } from "./inventory";
 import { invitationsRouter } from "./invitations";
+import { memberInvitesRouter } from "./member-invites";
 import { membersRouter } from "./members";
 import { notificationsRouter } from "./notifications";
 import { suppliersRouter } from "./suppliers";
@@ -29,6 +30,7 @@ export const appRouter = {
 	checklist: checklistRouter,
 	guests: guestsRouter,
 	invitations: invitationsRouter,
+	memberInvites: memberInvitesRouter,
 	tasks: tasksRouter,
 	inventory: inventoryRouter,
 	members: membersRouter,

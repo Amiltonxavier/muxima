@@ -1,0 +1,46 @@
+/* ============================================================
+   Spinner — barra de carregamento (design system)
+   Classes pré-fixadas (`mui-spinner`) para não colidir com a
+   classe global `.loader`, que é demasiado genérica.
+   ============================================================ */
+
+.mui-spinner {
+	/* Cor herdada do texto do contexto: funciona em tema claro e escuro. */
+	--mui-spinner-track: color-mix(in srgb, currentColor 20%, transparent);
+	--mui-spinner-bar: currentColor;
+	/* Unidade base de escala; o consumidor pode ajustá-la no elemento. */
+	--mui-spinner-size: 1px;
+
+	display: block;
+	position: relative;
+	overflow: hidden;
+	box-sizing: border-box;
+	width: calc(160 * var(--mui-spinner-size));
+	height: calc(8 * var(--mui-spinner-size));
+	margin: calc(20 * var(--mui-spinner-size)) auto;
+	border-radius: calc(4 * var(--mui-spinner-size));
+	background: var(--mui-spinner-track);
+}
+
+.mui-spinner::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	height: 100%;
+	width: calc(70 * var(--mui-spinner-size));
+	border-radius: inherit;
+	background: var(--mui-spinner-bar);
+	animation: mui-spinner-slide 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes mui-spinner-slide {
+	0% {
+		transform: translateX(calc(-70 * var(--mui-spinner-size)));
+	}
+
+	100% {
+		transform: translateX(calc(160 * var(--mui-spinner-size)));
+	}
+}

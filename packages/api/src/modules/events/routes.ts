@@ -1,5 +1,10 @@
+import { PERMISSIONS } from "@muxima/permissions";
 import type { FastifyInstance } from "fastify";
 import { requireSessionUserId } from "../../shared/auth/auth-middleware";
+import {
+	getUserPermissions,
+	requirePermission,
+} from "../../shared/auth/authorization";
 import { listResponse, successResponse } from "../../shared/http/response";
 import { getPaginationMeta, parsePagination } from "../../shared/utils/helpers";
 import {
@@ -43,6 +48,13 @@ export async function eventRoutes(app: FastifyInstance) {
 	// Create event
 	app.post("/api/v1/events", async (request, reply) => {
 		const userId = await requireSessionUserId(request);
+		// Same account-level check as the oRPC `events.create`: the base `USER`
+		// role from sign-up grants it, and the shared guards keep event-scoped
+		// rights on the OWNER membership this write creates.
+		requirePermission(
+			await getUserPermissions(userId),
+			PERMISSIONS.EVENT_CREATE,
+		);
 		const data = createEventSchema.parse(request.body);
 		const event = await EventService.create(userId, data);
 		return reply.status(201).send(successResponse(event));

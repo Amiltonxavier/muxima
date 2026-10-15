@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { orpc } from "@/utils/orpc";
 import { activityKeys } from "./activity-queries";
 
@@ -73,9 +72,9 @@ export function useInviteMember() {
 
 	return useMutation(
 		orpc.users.inviteMember.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: (data: any) => {
 				queryClient.invalidateQueries({
-					queryKey: userKeys.members(data.eventId),
+					queryKey: userKeys.members(data?.eventId),
 				});
 				queryClient.invalidateQueries({ queryKey: userKeys.profile() });
 			},

@@ -9,6 +9,8 @@ import type {
 
 export type ScheduleItem = Schedule;
 
+export type ScheduleStatusValue = Schedule["status"];
+
 export type ScheduleTabId = "gantt" | "lista";
 
 export type ScheduleStatusFilter = "ALL" | Schedule["status"];

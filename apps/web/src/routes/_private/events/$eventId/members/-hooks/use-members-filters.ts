@@ -8,7 +8,9 @@ import type {
 export function useMembersFilters() {
 	const [search, setSearchRaw] = useState("");
 	const [role, setRoleRaw] = useState<MemberRoleFilter>("ALL");
-	const [status, setStatusRaw] = useState<MemberStatusFilter>("ALL");
+	// The status is now driven by the Ativos/Pendentes/Cancelados tabs, which
+	// start on Ativos.
+	const [status, setStatusRaw] = useState<MemberStatusFilter>("ACTIVE");
 	const [page, setPage] = useState(1);
 	const [limit, setLimit] = useState(20);
 
@@ -34,10 +36,10 @@ export function useMembersFilters() {
 		setPage(1);
 	}, []);
 
+	// "Clear" wipes the search/role inputs but leaves the open tab alone.
 	const reset = useCallback(() => {
 		setSearchRaw("");
 		setRoleRaw("ALL");
-		setStatusRaw("ALL");
 		setPage(1);
 	}, []);
 
@@ -53,6 +55,6 @@ export function useMembersFilters() {
 		setPage,
 		setLimit: setLimitAndResetPage,
 		reset,
-		hasActiveFilters: search !== "" || role !== "ALL" || status !== "ALL",
+		hasActiveFilters: search !== "" || role !== "ALL",
 	};
 }

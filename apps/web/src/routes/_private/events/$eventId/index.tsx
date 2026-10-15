@@ -11,10 +11,8 @@ import { EventDetailSkeleton } from "./-components/event-detail-skeleton";
 import { EventHeader } from "./-components/event-header";
 import { EventInfoGrid } from "./-components/event-info/event-info-grid";
 import { EventLocation } from "./-components/event-location";
-import { EventMembers } from "./-components/event-members";
 import { EventNotFound } from "./-components/event-not-found";
 import { EventStats } from "./-components/event-stats";
-import { ExpenseAnalytics } from "./-components/expense-analytics";
 
 export const Route = createFileRoute("/_private/events/$eventId/")({
 	component: EventDetailPage,
@@ -42,7 +40,6 @@ function EventDetailPage() {
 	}
 
 	const event = eventQuery.data;
-	const members = event.members ?? [];
 
 	return (
 		<div className="space-y-8">
@@ -60,7 +57,7 @@ function EventDetailPage() {
 			/>
 
 			<div className="space-y-4">
-				<EventInfoGrid event={event} />
+				<EventInfoGrid eventId={eventId} event={event} />
 
 				<EventLocation
 					address={event.address}
@@ -76,15 +73,10 @@ function EventDetailPage() {
 
 			{/* Análises: financeiro, preparação e capacidade */}
 			<div className="space-y-4">
-				<ExpenseAnalytics eventId={eventId} />
-
 				<EventPreparationAnalytics eventId={eventId} />
 
 				<EventCharts eventId={eventId} />
 			</div>
-
-			{/* Equipa */}
-			<EventMembers members={members} />
 
 			{showEditDialog && canEditEvent && (
 				<EditEventDialog

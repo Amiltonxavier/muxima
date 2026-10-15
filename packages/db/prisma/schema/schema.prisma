@@ -277,6 +277,7 @@ enum NotificationType {
   GUESTS
   INVENTORY
   EVENT
+  MEMBERS
 }
 
 enum NotificationPriority {
@@ -407,6 +408,10 @@ model Role {
 
   permissions RolePermission[]
   members     EventMember[]
+  /// Users holding this role as their ACCOUNT-level default (assigned at
+  /// sign-up — see `user.roleId`). Distinct from `members`: that relation is
+  /// per-event, this one is per-account.
+  users       User[]
 
   @@map("role")
 }
@@ -456,8 +461,18 @@ model EventInvitation {
   role       MemberRole
   token      String
   status     InvitationStatus @default(PENDING)
+  /// Collision-proof key that is set ONLY while the invitation is PENDING
+  /// (`eventId:email`), so the database itself rejects a second pending invite
+  /// for the same person+event. It is cleared the moment the invite is
+  /// accepted, rejected or revoked, which is what allows a legitimate
+  /// re-invitation later. Postgres allows any number of NULLs in a unique
+  /// column, so settled invitations never collide.
+  pendingKey String?          @unique
   expiresAt  DateTime
   acceptedAt DateTime?
+  /// The account that actually answered the invitation (accept/decline). Null
+  /// until a response; kept for auditability and to answer "who claimed it".
+  respondedBy String?
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 
@@ -467,6 +482,7 @@ model EventInvitation {
   @@index([eventId])
   @@index([invitedBy])
   @@index([token])
+  @@index([email, status])
   @@map("event_invitation")
 }
 
@@ -848,6 +864,11 @@ model Notification {
   title     String
   message   String
   priority  NotificationPriority @default(INFO)
+  /// Structured payload for actionable notifications (e.g. a member invite
+  /// carrying `{ kind: "MEMBER_INVITE", invitationId, eventId, token }`), so
+  /// the notification center can render the right actions without parsing the
+  /// human-readable `message`.
+  data      Json?
   readAt    DateTime?
   createdAt DateTime             @default(now())
 

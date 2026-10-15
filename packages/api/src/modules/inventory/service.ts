@@ -27,7 +27,7 @@ export function toNumber(value: Numeric | null | undefined): number {
 	return typeof value === "number" ? value : value.toNumber();
 }
 
-function roundMoney(value: number): number {
+export function roundMoney(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 

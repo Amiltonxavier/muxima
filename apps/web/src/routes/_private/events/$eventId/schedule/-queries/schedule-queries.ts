@@ -3,4 +3,5 @@ export {
 	useCreateSchedule,
 	useDeleteSchedule,
 	useSchedules,
+	useUpdateSchedule,
 } from "@/shared/queries/schedule-queries";

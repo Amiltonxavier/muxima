@@ -23,6 +23,8 @@ export const inventoryKeys = {
 	list: (eventId: string, params: Record<string, unknown>) =>
 		[...inventoryRootKey, "list", eventId, params] as const,
 	stats: (eventId: string) => [...inventoryRootKey, "stats", eventId] as const,
+	costliest: (eventId: string) =>
+		[...inventoryRootKey, "costliest", eventId] as const,
 	detail: (id: string) => [...inventoryRootKey, "detail", id] as const,
 	history: (id: string) => [...inventoryRootKey, "history", id] as const,
 };
@@ -58,6 +60,18 @@ export function useInventoryStats(eventId: string) {
 	return useQuery({
 		...orpc.inventory.getStats.queryOptions({ input: { eventId } }),
 		queryKey: inventoryKeys.stats(eventId),
+		enabled: !!eventId,
+	});
+}
+
+/**
+ * Itens mais caros do evento. A série já vem ordenada e limitada pelo backend
+ * (`inventory.getCostliest`); o cliente só a apresenta.
+ */
+export function useInventoryCostliestItems(eventId: string) {
+	return useQuery({
+		...orpc.inventory.getCostliest.queryOptions({ input: { eventId } }),
+		queryKey: inventoryKeys.costliest(eventId),
 		enabled: !!eventId,
 	});
 }

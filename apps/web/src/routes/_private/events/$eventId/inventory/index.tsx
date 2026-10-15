@@ -117,7 +117,7 @@ function InventoryPage() {
 				</TabsContent>
 
 				<TabsContent value="analytics">
-					<InventoryAnalytics stats={stats} />
+					<InventoryAnalytics eventId={eventId} stats={stats} />
 				</TabsContent>
 			</Tabs>
 

@@ -3,10 +3,11 @@ import { Input } from "@muxima/ui/components/input";
 import { Label } from "@muxima/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { ResendVerification } from "@/shared/components/resend-verification";
 import { handleApiError } from "@/shared/errors";
 import { registerSchema } from "@/utils/auth-schemas";
 
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/_auth/register/")({
 function RegisterPage() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
+	const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
 
 	const form = useForm({
 		defaultValues: {
@@ -44,13 +46,11 @@ function RegisterPage() {
 					return;
 				}
 
-				// O registo não redirecciona: a sessão criada é terminada para o
-				// utilizador entrar com a conta acabada de criar, e o sucesso é
-				// comunicado sem sair da página.
-				await authClient.signOut();
+				// O registo não abre sessão: a conta fica inativa até o e-mail ser
+				// confirmado. Mantemos o utilizador na página a comunicar o passo
+				// seguinte, em vez de o encaminhar para o login.
+				setRegisteredEmail(value.email.trim());
 				form.reset();
-
-				toast.success("Conta criada com sucesso.");
 			} catch (caught) {
 				handleApiError(caught, { fallbackMessage: "Erro ao criar conta" });
 			} finally {
@@ -58,6 +58,48 @@ function RegisterPage() {
 			}
 		},
 	});
+
+	if (registeredEmail) {
+		return (
+			<div className="text-center">
+				<div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+					<MailCheck className="h-7 w-7" />
+				</div>
+
+				<div className="mb-2 space-y-1.5">
+					<h2 className="font-semibold text-2xl tracking-tight">
+						Verifica o teu e-mail
+					</h2>
+					<p className="text-muted-foreground text-sm">
+						A tua conta está quase pronta!
+					</p>
+				</div>
+
+				<p className="text-muted-foreground text-sm">
+					Enviámos um link de confirmação para{" "}
+					<span className="font-medium text-foreground">{registeredEmail}</span>
+					. Confirma o endereço para ativar a conta e iniciar sessão
+					automaticamente.
+				</p>
+				<p className="mt-3 text-muted-foreground text-xs">
+					O link é válido durante 60 minutos e só pode ser utilizado uma vez. Se
+					não o encontrares, verifica a pasta de spam.
+				</p>
+
+				<ResendVerification email={registeredEmail} className="mt-6" />
+
+				<p className="mt-6 text-center text-muted-foreground text-sm">
+					Já confirmaste?{" "}
+					<Link
+						to="/login"
+						className="font-medium text-primary hover:underline"
+					>
+						Entrar
+					</Link>
+				</p>
+			</div>
+		);
+	}
 
 	return (
 		<div>

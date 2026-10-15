@@ -65,7 +65,7 @@ export function ChangePasswordForm() {
 	const isPending = changePassword.isPending;
 
 	return (
-		<Card className="max-w-lg">
+		<Card>
 			<CardHeader>
 				<CardTitle>Alterar palavra-passe</CardTitle>
 				<CardDescription>

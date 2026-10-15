@@ -1,3 +1,4 @@
+import { Spinner } from "@muxima/ui/components/spinner";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { accessKeys } from "@/shared/hooks/use-can";
 import { useEvent } from "./-queries/event-queries";
@@ -46,9 +47,7 @@ function EventLayout() {
 	if (eventQuery.isLoading) {
 		return (
 			<div className="flex items-center justify-center py-20">
-				<div className="text-muted-foreground text-sm">
-					A carregar evento...
-				</div>
+				<Spinner />
 			</div>
 		);
 	}

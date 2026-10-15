@@ -22,6 +22,10 @@ export const eventFiltersSchema = z.object({
 		])
 		.optional(),
 	type: z.enum(["ENGAGEMENT", "WEDDING"]).optional(),
+	scope: z
+		.enum(["all", "owned", "shared", "invited"])
+		.optional()
+		.default("all"),
 });
 
 export type EventFilters = z.infer<typeof eventFiltersSchema>;
@@ -162,7 +166,9 @@ export type ScheduleListInput = z.infer<typeof scheduleListInput>;
 // ── Notifications ────────────────────────────────────────────────
 export const notificationFiltersSchema = z.object({
 	search: z.string().trim().optional(),
-	type: z.enum(["FINANCE", "TASKS", "GUESTS", "INVENTORY", "EVENT"]).optional(),
+	type: z
+		.enum(["FINANCE", "TASKS", "GUESTS", "INVENTORY", "EVENT", "MEMBERS"])
+		.optional(),
 	read: z.boolean().optional(),
 });
 
@@ -177,7 +183,7 @@ export type NotificationListInput = z.infer<typeof notificationListInput>;
 export const memberFiltersSchema = z.object({
 	search: z.string().trim().optional(),
 	role: z.enum(["OWNER", "PARTNER", "ADMIN", "EDITOR", "VIEWER"]).optional(),
-	status: z.enum(["PENDING", "ACTIVE", "DECLINED"]).optional(),
+	status: z.enum(["PENDING", "ACTIVE", "DECLINED", "CANCELLED"]).optional(),
 });
 
 export type MemberFilters = z.infer<typeof memberFiltersSchema>;

@@ -30,7 +30,7 @@ export function ProfileDangerZone({
 	const hasActivity = ownedEvents > 0 || memberships > 1;
 
 	return (
-		<Card className="max-w-lg border-destructive/40">
+		<Card className="border-destructive/40">
 			<CardHeader>
 				<CardTitle className="text-destructive">Zona de risco</CardTitle>
 			</CardHeader>

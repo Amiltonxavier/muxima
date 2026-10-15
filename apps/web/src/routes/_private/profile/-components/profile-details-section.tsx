@@ -38,7 +38,7 @@ export function ProfileDetailsSection({ profile }: { profile: ProfileItem }) {
 	];
 
 	return (
-		<Card className="max-w-lg">
+		<Card>
 			<CardHeader>
 				<CardTitle>Detalhes da conta</CardTitle>
 			</CardHeader>

@@ -2,6 +2,7 @@ import db from "@muxima/db";
 import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { getCostliestInventoryItems } from "../modules/inventory/analytics";
 import {
 	addMovementSchema,
 	createInventoryItemSchema,
@@ -70,6 +71,21 @@ export const inventoryRouter = {
 				PERMISSIONS.INVENTORY_READ,
 			);
 			return InventoryService.getStats(db, input.eventId);
+		}),
+
+	/**
+	 * Itens mais caros do evento, já ordenados e limitados pelo backend. A série
+	 * vem pronta a grafar; o cliente não soma nem ordena nada.
+	 */
+	getCostliest: protectedProcedure
+		.input(z.object({ eventId: z.string() }))
+		.handler(async ({ context, input }) => {
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.INVENTORY_READ,
+			);
+			return getCostliestInventoryItems(db, input.eventId);
 		}),
 
 	create: protectedProcedure

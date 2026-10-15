@@ -29,3 +29,16 @@ export function formatCurrencyCompact(value: number): string {
 
 	return formatCurrency(value);
 }
+
+
+/**
+ * Formata uma IBAN separando os caracteres em grupos de 4,
+ * utilizando pontos como separadores.
+ */
+export function formatIban(iban: string): string {
+	return iban
+		.replace(/[^a-zA-Z0-9]/g, "")
+		.toUpperCase()
+		.replace(/(.{4})(?=.)/g, "$1.");
+}
+

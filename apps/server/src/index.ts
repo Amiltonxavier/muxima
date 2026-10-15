@@ -1,6 +1,7 @@
 import { buildApp } from "@muxima/api/app";
 import { createContext } from "@muxima/api/context";
 import { startEventLifecycleWorker } from "@muxima/api/jobs/event-lifecycle";
+import { attachRealtime } from "@muxima/api/realtime/server";
 import { appRouter } from "@muxima/api/routers/index";
 import { NotFoundError } from "@muxima/api/shared/errors/app-error";
 import { ERROR_CODES } from "@muxima/api/shared/errors/codes";
@@ -67,6 +68,10 @@ async function main() {
 	// Coarse background worker for the event lifecycle + proximity
 	// notifications (15 min interval, unref'd — never per-second work).
 	startEventLifecycleWorker();
+
+	// Socket.IO rides on the SAME HTTP server Fastify is about to listen on.
+	// Attached before `listen` so no handshake is ever missed.
+	attachRealtime(fastify.server);
 
 	await fastify.listen({ port: 3000, host: "0.0.0.0" });
 	console.log("Server running on port 3000");

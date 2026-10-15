@@ -38,7 +38,7 @@ function NotificationsPage() {
 	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [filterType, setFilterType] = useState<
-		"ALL" | "FINANCE" | "TASKS" | "GUESTS" | "INVENTORY" | "EVENT"
+		"ALL" | "FINANCE" | "TASKS" | "GUESTS" | "INVENTORY" | "EVENT" | "MEMBERS"
 	>("ALL");
 	const [filterRead, setFilterRead] = useState<string>("ALL");
 	const resetPage = useCallback(() => setPage(1), []);
@@ -111,6 +111,7 @@ function NotificationsPage() {
 						<SelectItem value="GUESTS">Convidados</SelectItem>
 						<SelectItem value="INVENTORY">Inventário</SelectItem>
 						<SelectItem value="EVENT">Evento</SelectItem>
+						<SelectItem value="MEMBERS">Membros</SelectItem>
 					</SelectContent>
 				</Select>
 				<Select

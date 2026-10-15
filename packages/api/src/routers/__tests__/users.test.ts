@@ -96,9 +96,34 @@ vi.mock("../../modules/users/service", () => ({
 	UserService: {
 		updateProfile: (userId: string, data: Record<string, unknown>) =>
 			Promise.resolve({ ...userRow, id: userId, ...data }),
+		blockAccount: vi.fn((userId: string, reason?: string) =>
+			Promise.resolve({
+				user: { ...userRow, id: userId, status: "BLOCKED" },
+				revokedSessions: 3,
+				reason,
+			}),
+		),
+		unblockAccount: (userId: string) =>
+			Promise.resolve({ ...userRow, id: userId, status: "ACTIVE" }),
 	},
 	profileSelect: {},
 }));
+
+/**
+ * The mail layer is a dependency of these handlers, but the tests assert the
+ * *wiring* (which mail, with which data) — never real SMTP. The doubles also
+ * keep the suite from dialling Ethereal on every password change.
+ */
+vi.mock("@muxima/mail", () => {
+	const stub = () => vi.fn(() => Promise.resolve({ ok: true as const }));
+	return {
+		MailService: {
+			sendPasswordChanged: stub(),
+			sendAccountBlocked: stub(),
+			sendAccountUnblocked: stub(),
+		},
+	};
+});
 
 vi.mock("../../shared/auth/event-access", () => ({
 	requireEventAccess: vi.fn(),
@@ -107,6 +132,11 @@ vi.mock("../../shared/auth/event-access", () => ({
 
 const { call } = await import("@orpc/server");
 const { usersRouter } = await import("../users");
+const { MailService } = await import("@muxima/mail");
+
+const sendPasswordChanged = vi.mocked(MailService.sendPasswordChanged);
+const sendAccountBlocked = vi.mocked(MailService.sendAccountBlocked);
+const sendAccountUnblocked = vi.mocked(MailService.sendAccountUnblocked);
 
 // ── World ─────────────────────────────────────────────────────────
 
@@ -114,7 +144,11 @@ const CALLER = "usr_1";
 
 function contextFor(userId: string | null) {
 	return {
-		session: userId ? { user: { id: userId } } : null,
+		// The session user carries the same fields Better Auth puts there —
+		// the security e-mails address the account by them.
+		session: userId
+			? { user: { id: userId, email: "ana@x.com", name: "Ana" } }
+			: null,
 		requestHeaders: new Headers({ cookie: "session=abc" }),
 		userAgent: "vitest",
 		ip: "10.0.0.1",
@@ -144,6 +178,9 @@ beforeEach(() => {
 	counts = { activeSessions: 2, ownedEvents: 1, memberships: 3 };
 	activityLogs = [];
 	recordActivity.mockClear();
+	sendPasswordChanged.mockClear();
+	sendAccountBlocked.mockClear();
+	sendAccountUnblocked.mockClear();
 	changePasswordRef.current = vi.fn<ProcedureFn>(() =>
 		Promise.resolve({ success: true }),
 	);
@@ -323,5 +360,101 @@ describe("changePassword", () => {
 				resource: "PROFILE",
 			}),
 		);
+	});
+
+	it("sends the security alert to the account's own e-mail", async () => {
+		await changePasswordOf(VALID_PASSWORD);
+
+		expect(sendPasswordChanged).toHaveBeenCalledWith({
+			to: "ana@x.com",
+			name: "Ana",
+			at: expect.any(Date),
+			ip: "10.0.0.1",
+		});
+	});
+
+	it("completes the change even when the e-mail cannot be delivered", async () => {
+		// Mail is never critical to the operation: a delivery failure is a
+		// result, not an exception, and must not roll the change back.
+		sendPasswordChanged.mockResolvedValueOnce({
+			ok: false,
+			code: "SMTP_FAILED",
+		});
+
+		await expect(changePasswordOf(VALID_PASSWORD)).resolves.toEqual({
+			success: true,
+		});
+	});
+});
+
+describe("blockAccount / unblockAccount", () => {
+	type BlockInput = { confirm: true; reason?: string };
+
+	const block = (input: BlockInput) =>
+		call(usersRouter.blockAccount, input, { context: contextFor(CALLER) });
+	const unblock = () =>
+		call(usersRouter.unblockAccount, {}, { context: contextFor(CALLER) });
+
+	it("notifies the user that the account was blocked", async () => {
+		const result = await block({
+			confirm: true,
+			reason: "Pedido do titular",
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.revokedSessions).toBe(3);
+		expect(sendAccountBlocked).toHaveBeenCalledWith({
+			to: "ana@x.com",
+			reason: "Pedido do titular",
+		});
+	});
+
+	it("sends the notification after the block is already persisted", async () => {
+		// Ordering matters: delivery may fail, but the account must be locked
+		// regardless — so the block happens before the mail is awaited.
+		const order: string[] = [];
+		sendAccountBlocked.mockImplementationOnce(async () => {
+			order.push("mail");
+			return { ok: false, code: "SMTP_FAILED" };
+		});
+		const { UserService } = await import("../../modules/users/service");
+		vi.mocked(UserService.blockAccount).mockImplementationOnce(async () => {
+			order.push("block");
+			return {
+				user: { ...userRow, status: "BLOCKED" },
+				revokedSessions: 3,
+			} as never;
+		});
+
+		await expect(block({ confirm: true })).resolves.toMatchObject({
+			success: true,
+		});
+		expect(order).toEqual(["block", "mail"]);
+	});
+
+	it("requires an explicit confirmation", async () => {
+		await expect(
+			call(usersRouter.blockAccount, {} as BlockInput, {
+				context: contextFor(CALLER),
+			}),
+		).rejects.toThrow();
+		expect(sendAccountBlocked).not.toHaveBeenCalled();
+	});
+
+	it("notifies the user that the account was unblocked", async () => {
+		await expect(unblock()).resolves.toMatchObject({ success: true });
+		expect(sendAccountUnblocked).toHaveBeenCalledWith({
+			to: "ana@x.com",
+			name: "Ana",
+		});
+	});
+
+	it("keeps the account usable when the unblock e-mail fails", async () => {
+		sendAccountUnblocked.mockResolvedValueOnce({
+			ok: false,
+			code: "SMTP_NOT_CONFIGURED",
+		});
+
+		await expect(unblock()).resolves.toMatchObject({ success: true });
 	});
 });

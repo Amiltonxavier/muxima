@@ -7,30 +7,61 @@ import {
 } from "@muxima/ui/components/card";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ShoppingCart } from "lucide-react";
-import { formatCurrency } from "@/utils/format-currency";
-import { StatRow } from "./stat-row";
+import { Ring } from "@/components/charts/ring";
+import { RingCenter } from "@/components/charts/ring-center";
+import { RingChart } from "@/components/charts/ring-chart";
+import { ChartLegend } from "@/shared/components/charts";
+import { SUPPLIER_STATUS_LABELS } from "@/utils/status-helpers";
 
 interface SuppliersStatsCardProps {
 	eventId: string;
 	stats?: {
 		total: number;
-		totalPrice: number;
-		totalPaid: number;
-		totalPending: number;
+		/** Counts per lifecycle status, computed by `suppliers.getStats`. */
+		byStatus: Record<string, number>;
 	};
 }
 
+const STATUS_ORDER = [
+	"PROSPECT",
+	"CONTACTED",
+	"NEGOTIATING",
+	"CONFIRMED",
+	"COMPLETED",
+	"CANCELLED",
+] as const;
+
+const STATUS_COLORS: Record<string, string> = {
+	PROSPECT: "var(--chart-4)",
+	CONTACTED: "var(--chart-5)",
+	NEGOTIATING: "var(--chart-1)",
+	CONFIRMED: "var(--chart-2)",
+	COMPLETED: "var(--chart-3)",
+	CANCELLED: "var(--destructive)",
+};
+
+const RING_SIZE = 180;
+const RING_STROKE_WIDTH = 11;
+
 /**
- * Compact supplier summary. Every figure comes from `suppliers.getStats`
- * (computed by the API); this card only renders it.
+ * Compact supplier summary by lifecycle status. Every count comes from
+ * `suppliers.getStats` (computed by the API); this card only renders it as a
+ * ring chart — one status per ring, sharing the total as the max.
  */
 export function SuppliersStatsCard({
 	eventId,
 	stats,
 }: SuppliersStatsCardProps) {
+	const byStatus = stats?.byStatus ?? {};
 	const total = stats?.total ?? 0;
-	const totalPrice = stats?.totalPrice ?? 0;
-	const totalPaid = stats?.totalPaid ?? 0;
+	const statuses = STATUS_ORDER.filter((status) => (byStatus[status] ?? 0) > 0);
+
+	const ringData = statuses.map((status) => ({
+		label: SUPPLIER_STATUS_LABELS[status] ?? status,
+		value: byStatus[status],
+		maxValue: total,
+		color: STATUS_COLORS[status],
+	}));
 
 	return (
 		<Card>
@@ -47,25 +78,41 @@ export function SuppliersStatsCard({
 				</CardTitle>
 			</CardHeader>
 
-			<CardContent className="space-y-3">
+			<CardContent className="space-y-4">
 				{total === 0 ? (
-					<p className="text-muted-foreground text-sm">
+					<p className="text-center text-muted-foreground text-sm">
 						Nenhum fornecedor registado
 					</p>
 				) : (
-					<>
-						<StatRow
-							label="Montante contratado"
-							value={formatCurrency(totalPrice)}
-						/>
-						<StatRow label="Pago" value={formatCurrency(totalPaid)} />
-					</>
+					<div className="flex flex-col items-center gap-4">
+						<RingChart
+							data={ringData}
+							size={RING_SIZE}
+							strokeWidth={RING_STROKE_WIDTH}
+						>
+							{ringData.map((data, index) => (
+								<Ring key={data.label} index={index} />
+							))}
+
+							<RingCenter defaultLabel="fornecedores" />
+						</RingChart>
+
+						<div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+							<ChartLegend
+								items={ringData.map((data) => ({
+									label: data.label,
+									color: data.color,
+									value: data.value,
+								}))}
+							/>
+						</div>
+					</div>
 				)}
 
 				<Button
 					variant="ghost"
 					size="sm"
-					className="mt-1 h-auto p-0"
+					className="mx-auto mt-1 h-auto p-0"
 					render={<Link to="/events/$eventId/suppliers" params={{ eventId }} />}
 				>
 					Ver fornecedores <ArrowRight size={4} />

@@ -1,6 +1,7 @@
 import db from "@muxima/db";
 import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
 import type { Prisma } from "@muxima/db/prisma";
+import { MailService } from "@muxima/mail";
 import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
@@ -19,10 +20,17 @@ import {
 import {
 	getEventPermissions,
 	getEventRole,
+	getUserPermissions,
 	requireEventPermission,
+	requirePermission,
 } from "../shared/auth/authorization";
-import { NotFoundError, ValidationError } from "../shared/errors/app-error";
-import { EVENT_CODES } from "../shared/errors/codes";
+import {
+	ForbiddenError,
+	NotFoundError,
+	ValidationError,
+} from "../shared/errors/app-error";
+import { EVENT_CODES, MEMBER_CODES } from "../shared/errors/codes";
+import { eventPageUrl } from "../shared/mail";
 import { eventListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 import { validateTimeString } from "../shared/validation/angola";
@@ -46,15 +54,58 @@ export const eventsRouter = {
 	list: protectedProcedure
 		.input(eventListInput)
 		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
 			const { page, limit, skip } = parsePagination(input);
-			const membershipWhere: Prisma.EventWhereInput = {
-				members: {
-					some: {
-						userId: context.session.user.id,
-						status: "ACTIVE",
+
+			const scope = input.scope ?? "all";
+			const membershipConditions: Prisma.EventWhereInput[] = [];
+
+			if (scope === "all") {
+				membershipConditions.push({
+					OR: [
+						{ ownerId: userId },
+						{ members: { some: { userId, status: "ACTIVE" } } },
+						{
+							invitations: {
+								some: {
+									email: {
+										equals: context.session.user.email,
+										mode: "insensitive",
+									},
+									status: "PENDING",
+									expiresAt: { gt: new Date() },
+								},
+							},
+						},
+					],
+				});
+			} else if (scope === "owned") {
+				membershipConditions.push({ ownerId: userId });
+			} else if (scope === "shared") {
+				membershipConditions.push({
+					AND: [
+						{ ownerId: { not: userId } },
+						{ members: { some: { userId, status: "ACTIVE" } } },
+					],
+				});
+			} else if (scope === "invited") {
+				membershipConditions.push({
+					invitations: {
+						some: {
+							email: {
+								equals: context.session.user.email,
+								mode: "insensitive",
+							},
+							status: "PENDING",
+							expiresAt: { gt: new Date() },
+						},
 					},
-				},
-			};
+					members: {
+						none: { userId, status: "ACTIVE" },
+					},
+					ownerId: { not: userId },
+				});
+			}
 
 			const filterConditions: Prisma.EventWhereInput[] = [];
 
@@ -77,10 +128,10 @@ export const eventsRouter = {
 			}
 
 			const where: Prisma.EventWhereInput = {
-				AND: [membershipWhere, ...filterConditions],
+				AND: [...membershipConditions, ...filterConditions],
 			};
 
-			const [events, total] = await Promise.all([
+			const [events, total, invitedCount] = await Promise.all([
 				db.event.findMany({
 					where,
 					include: {
@@ -92,19 +143,63 @@ export const eventsRouter = {
 					take: limit,
 				}),
 				db.event.count({ where }),
+				db.event.count({
+					where: {
+						invitations: {
+							some: {
+								email: {
+									equals: context.session.user.email,
+									mode: "insensitive",
+								},
+								status: "PENDING",
+								expiresAt: { gt: new Date() },
+							},
+						},
+						members: { none: { userId, status: "ACTIVE" } },
+						ownerId: { not: userId },
+					},
+				}),
 			]);
+
+			// The pending invite behind each event on this page, so the card can
+			// distinguish "yours" from "you were invited, accept to enter". The
+			// list already includes invited events; without this the card links to
+			// a guarded route and the visitor only meets the 403.
+			const viewerInvites = await db.eventInvitation.findMany({
+				where: {
+					eventId: { in: events.map((event) => event.id) },
+					email: {
+						equals: context.session.user.email,
+						mode: "insensitive",
+					},
+					status: "PENDING",
+					expiresAt: { gt: new Date() },
+				},
+				select: { id: true, eventId: true, role: true },
+			});
+			const inviteByEventId = new Map(
+				viewerInvites.map((invite) => [invite.eventId, invite]),
+			);
 
 			// Lazy lifecycle sync for the page of events being returned.
 			const syncedEvents = await Promise.all(
 				events.map(async (event) => {
 					const status = await syncEventLifecycle(event);
-					return status === event.status ? event : { ...event, status };
+					const base = status === event.status ? event : { ...event, status };
+					const invite = inviteByEventId.get(event.id) ?? null;
+					return {
+						...base,
+						invitation: invite ? { id: invite.id, role: invite.role } : null,
+					};
 				}),
 			);
 
 			return {
 				data: syncedEvents,
 				meta: getPaginationMeta(total, page, limit),
+				counts: {
+					invited: invitedCount,
+				},
 			};
 		}),
 
@@ -212,6 +307,17 @@ export const eventsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
+			// Account-level capability (the base `USER` role every sign-up
+			// receives): creating an event is the one action that must work
+			// BEFORE any membership exists. Everything the creator may do with
+			// the event afterwards comes from the OWNER membership written
+			// below — never from this permission — so ownership of other
+			// people's events stays unreachable.
+			requirePermission(
+				await getUserPermissions(context.session.user.id),
+				PERMISSIONS.EVENT_CREATE,
+			);
+
 			// Horário coerente: ambos são obrigatórios e o fim tem de ser
 			// estritamente posterior ao início ("HH:mm" compara-se como string).
 			if (input.endTime <= input.startTime) {
@@ -471,6 +577,155 @@ export const eventsRouter = {
 					metadata: { name: event.name, status: event.status },
 				}),
 			);
+
+			return { success: true };
+		}),
+
+	/**
+	 * Hands ownership of an event to another ACTIVE member.
+	 *
+	 * Ownership is exclusive: the current owner loses it (kept as a team
+	 * member with the ADMIN role) and the target becomes the new owner. Only
+	 * the current OWNER can do this, and the change is atomic — event,
+	 * memberships and roleId FKs move together or not at all.
+	 */
+	transferOwnership: protectedProcedure
+		.input(z.object({ eventId: z.string(), toUserId: z.string() }))
+		.handler(async ({ context, input }) => {
+			const event = await db.event.findUnique({
+				where: { id: input.eventId },
+				select: { name: true, ownerId: true },
+			});
+			if (!event) {
+				throw new NotFoundError("Evento não encontrado", {
+					code: EVENT_CODES.NOT_FOUND,
+				});
+			}
+
+			const callerRole = await getEventRole(
+				context.session.user.id,
+				input.eventId,
+			);
+			if (callerRole !== "OWNER") {
+				throw new ForbiddenError(
+					"Só o proprietário atual pode transferir a propriedade",
+					{ code: EVENT_CODES.NOT_OWNER },
+				);
+			}
+
+			if (input.toUserId === event.ownerId) {
+				throw new ValidationError("O novo proprietário é o proprietário atual");
+			}
+
+			// The target must already be an ACTIVE member: ownership is not an
+			// invitation state, and a PENDING member cannot guard the event.
+			const targetMember = await db.eventMember.findFirst({
+				where: {
+					eventId: input.eventId,
+					userId: input.toUserId,
+					status: "ACTIVE",
+				},
+				select: { id: true },
+			});
+			if (!targetMember) {
+				throw new NotFoundError(
+					"Este utilizador não é membro ativo deste evento",
+					{ code: MEMBER_CODES.NOT_IN_EVENT },
+				);
+			}
+
+			const oldOwnerMember = await db.eventMember.findUnique({
+				where: {
+					eventId_userId: {
+						eventId: input.eventId,
+						userId: event.ownerId,
+					},
+				},
+				select: { id: true },
+			});
+
+			if (!oldOwnerMember) {
+				// The owner row missing would corrupt the whole event; guard
+				// defensively since it is not a normal caller-visible state.
+				throw new NotFoundError("Proprietário não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
+			}
+
+			const [newOwnerRoleId, adminRoleId, targetUser, oldOwnerUser] =
+				await Promise.all([
+					db.role.findUnique({
+						where: { name: "OWNER" },
+						select: { id: true },
+					}),
+					db.role.findUnique({
+						where: { name: "ADMIN" },
+						select: { id: true },
+					}),
+					db.user.findUnique({
+						where: { id: input.toUserId },
+						select: { name: true, email: true },
+					}),
+					db.user.findUnique({
+						where: { id: event.ownerId },
+						select: { name: true, email: true },
+					}),
+				]);
+
+			await db.$transaction([
+				db.event.update({
+					where: { id: input.eventId },
+					data: { ownerId: input.toUserId },
+				}),
+				db.eventMember.update({
+					where: { id: oldOwnerMember.id },
+					data: { role: "ADMIN", roleId: adminRoleId?.id ?? null },
+				}),
+				db.eventMember.update({
+					where: { id: targetMember.id },
+					data: { role: "OWNER", roleId: newOwnerRoleId?.id ?? null },
+				}),
+			]);
+
+			await createActivityLog(
+				buildActivityLog(context, {
+					userId: context.session.user.id,
+					action: "EVENT_OWNERSHIP_TRANSFERRED",
+					resource: "EVENT",
+					resourceId: input.eventId,
+					eventId: input.eventId,
+					description: `Propriedade do evento "${event.name}" transferida`,
+					metadata: {
+						previousOwnerId: event.ownerId,
+						newOwnerId: input.toUserId,
+					},
+				}),
+			);
+
+			const eventUrl = eventPageUrl(input.eventId);
+			// Both parties hear about the change; delivery never throws.
+			await Promise.all([
+				targetUser?.email
+					? MailService.sendOwnershipChanged({
+							to: targetUser.email,
+							name: targetUser.name,
+							eventName: event.name,
+							previousOwnerName: oldOwnerUser?.name,
+							isNewOwner: true,
+							eventUrl,
+						})
+					: Promise.resolve(),
+				oldOwnerUser?.email
+					? MailService.sendOwnershipChanged({
+							to: oldOwnerUser.email,
+							name: oldOwnerUser.name,
+							eventName: event.name,
+							newOwnerName: targetUser?.name,
+							isNewOwner: false,
+							eventUrl,
+						})
+					: Promise.resolve(),
+			]);
 
 			return { success: true };
 		}),

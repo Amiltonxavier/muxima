@@ -1,10 +1,19 @@
 import db from "@muxima/db";
 import type { MemberRole, MemberStatus, Prisma } from "@muxima/db/prisma";
 
+/**
+ * The status a unified team row can carry.
+ *
+ * Memberships only ever hold a `MemberStatus`; the extra `CANCELLED` belongs to
+ * invites the owner revoked. Filters accept it so a caller can narrow the whole
+ * feed to that tab — no membership can ever match it.
+ */
+export type EventMemberStatus = MemberStatus | "CANCELLED";
+
 export type MemberFilterParams = {
 	search?: string;
 	role?: MemberRole;
-	status?: MemberStatus;
+	status?: EventMemberStatus;
 };
 
 function buildMemberWhere(
@@ -26,7 +35,11 @@ function buildMemberWhere(
 	if (filters?.role) {
 		conditions.push({ role: filters.role });
 	}
-	if (filters?.status) {
+	if (filters?.status === "CANCELLED") {
+		// CANCELLED is an invitation state: no `EventMember` can hold it, so the
+		// member side of this filter is empty by definition.
+		conditions.push({ status: { in: [] } });
+	} else if (filters?.status) {
 		conditions.push({ status: filters.status });
 	}
 
@@ -75,22 +88,20 @@ export const MemberRepository = {
 		});
 	},
 
-	findByEvent(
-		eventId: string,
-		pagination: { page: number; limit: number },
-		filters?: MemberFilterParams,
-	) {
-		const skip = (pagination.page - 1) * pagination.limit;
+	/**
+	 * Every filtered membership of an event, unpaginated.
+	 *
+	 * The team list merges memberships with pending invitations in memory (to
+	 * interleave them in one ordered feed), so it cannot ask the database for a
+	 * page: it needs the candidate set first. Bounded in practice by the number
+	 * of people on one event's team.
+	 */
+	findAllByEvent(eventId: string, filters?: MemberFilterParams) {
 		return db.eventMember.findMany({
 			where: buildMemberWhere(eventId, filters),
 			include: { user: true },
-			skip,
-			take: pagination.limit,
+			orderBy: { createdAt: "desc" },
 		});
-	},
-
-	countByEvent(eventId: string, filters?: MemberFilterParams) {
-		return db.eventMember.count({ where: buildMemberWhere(eventId, filters) });
 	},
 
 	async updateRole(id: string, role: MemberRole) {

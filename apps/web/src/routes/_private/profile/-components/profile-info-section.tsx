@@ -10,6 +10,7 @@ import { Label } from "@muxima/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { useUpdateProfile } from "../-queries/user-queries";
 import type { ProfileItem } from "../-types/profile.types";
 
 /**
@@ -18,15 +19,8 @@ import type { ProfileItem } from "../-types/profile.types";
  * The form resets itself from the query result, so it always reflects the
  * server state and re-hydrates after a refetch.
  */
-export function ProfileInfoSection({
-	profile,
-	onSubmit,
-	isSaving,
-}: {
-	profile: ProfileItem;
-	onSubmit: (values: { name: string; email: string }) => void;
-	isSaving: boolean;
-}) {
+export function ProfileInfoSection({ profile }: { profile: ProfileItem }) {
+	const updateProfile = useUpdateProfile();
 	const initialValues = useMemo(
 		() => ({
 			name: profile.name || "",
@@ -38,7 +32,7 @@ export function ProfileInfoSection({
 	const form = useForm({
 		defaultValues: initialValues,
 		onSubmit: async ({ value }) => {
-			onSubmit({
+			updateProfile.mutate({
 				name: value.name.trim(),
 				email: value.email.trim(),
 			});
@@ -53,7 +47,7 @@ export function ProfileInfoSection({
 	const isDirty = form.state.isDirty;
 
 	return (
-		<Card className="max-w-lg">
+		<Card>
 			<CardHeader>
 				<CardTitle>Informações pessoais</CardTitle>
 			</CardHeader>
@@ -75,7 +69,7 @@ export function ProfileInfoSection({
 									autoComplete="name"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
-									disabled={isSaving}
+									disabled={updateProfile.isPending}
 								/>
 							</div>
 						)}
@@ -91,7 +85,7 @@ export function ProfileInfoSection({
 									autoComplete="email"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
-									disabled={isSaving}
+									disabled={updateProfile.isPending}
 								/>
 								<p className="text-muted-foreground text-xs">
 									Também é o email com que inicias sessão.
@@ -100,8 +94,10 @@ export function ProfileInfoSection({
 						)}
 					</form.Field>
 
-					<Button type="submit" disabled={isSaving || !isDirty}>
-						{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+					<Button type="submit" disabled={updateProfile.isPending || !isDirty}>
+						{updateProfile.isPending && (
+							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+						)}
 						Guardar alterações
 					</Button>
 				</form>

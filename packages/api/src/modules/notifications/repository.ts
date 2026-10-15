@@ -1,10 +1,25 @@
 import db from "@muxima/db";
-import type { NotificationType, Prisma } from "@muxima/db/prisma";
+import type {
+	NotificationPriority,
+	NotificationType,
+	Prisma,
+} from "@muxima/db/prisma";
 
 export type NotificationFilterParams = {
 	search?: string;
 	type?: NotificationType;
 	read?: boolean;
+};
+
+/** Everything needed to persist one notification. */
+export type CreateNotificationInput = {
+	userId: string;
+	eventId?: string | null;
+	type: NotificationType;
+	title: string;
+	message: string;
+	priority?: NotificationPriority;
+	data?: Prisma.InputJsonValue;
 };
 
 function buildNotificationWhere(
@@ -36,6 +51,20 @@ function buildNotificationWhere(
 }
 
 export const NotificationRepository = {
+	create(data: CreateNotificationInput) {
+		return db.notification.create({
+			data: {
+				userId: data.userId,
+				eventId: data.eventId ?? null,
+				type: data.type,
+				title: data.title,
+				message: data.message,
+				priority: data.priority ?? "INFO",
+				data: data.data,
+			},
+		});
+	},
+
 	findById(id: string) {
 		return db.notification.findUnique({ where: { id } });
 	},

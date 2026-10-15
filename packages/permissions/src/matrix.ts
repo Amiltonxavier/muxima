@@ -27,10 +27,21 @@ export {
 } from "./catalogue";
 
 /**
- * The roles the application knows about. These mirror the `MemberRole` Prisma
- * enum one-for-one — the tuple is duplicated deliberately (rather than
- * imported from the generated client) so this module stays free of
- * generated-code coupling; the tests guard the two against drift.
+ * The roles the application knows about.
+ *
+ * The first five mirror the `MemberRole` Prisma enum one-for-one — the tuple
+ * is duplicated deliberately (rather than imported from the generated client)
+ * so this module stays free of generated-code coupling; the tests guard the
+ * two against drift. Those five are EVENT-MEMBER roles: they are what an
+ * `EventMember` row may hold and therefore what decides access *inside* an
+ * event.
+ *
+ * `USER` is different in kind: it is the ACCOUNT-level default granted to
+ * every user at sign-up (persisted as `user.roleId`, never as
+ * `EventMember.role`). It carries only self-service capabilities and
+ * `events.create` — the right to START your own event. Everything inside an
+ * event still comes from the membership the event's owner grants, so the base
+ * role can never reach another author's event.
  */
 export const ACCESS_ROLES = [
 	"OWNER",
@@ -38,9 +49,20 @@ export const ACCESS_ROLES = [
 	"ADMIN",
 	"EDITOR",
 	"VIEWER",
+	"USER",
 ] as const;
 
 export type AccessRoleId = (typeof ACCESS_ROLES)[number];
+
+/**
+ * The account-level role every user holds from sign-up onward — persisted as
+ * `user.roleId` (never as an `EventMember.role`) and assigned by
+ * `createUserCreateHook` in `@muxima/auth`.
+ *
+ * Resolution falls back to it when the column is null, so a user can never
+ * end up with no roles at all.
+ */
+export const DEFAULT_ACCOUNT_ROLE = "USER";
 
 /** A role as delivered to clients: stable id, display name, its permissions. */
 export type AccessRole = {
@@ -245,6 +267,27 @@ const ROLE_PERMISSIONS: Record<AccessRoleId, readonly Permission[]> = {
 		PERMISSIONS.INVITATION_UPDATE,
 	],
 	VIEWER: [...READ_PERMISSIONS, ...SELF_SERVICE_PERMISSIONS],
+	/**
+	 * The account-level default, assigned to every user at sign-up.
+	 *
+	 * Deliberately narrow: it holds the self-scoped capabilities plus the
+	 * ability to create an event (and read it back — the coverage invariant
+	 * "a write never comes without its read"). It grants NO administrative
+	 * capability (`activity.read.all`, `members.*`, `events.delete` are all
+	 * absent) and no event-scoped reads/writes beyond `events.*` themselves:
+	 * managing the resources of an event — guests, budget, team — requires
+	 * being a MEMBER of that event, which is how ownership stays enforced
+	 * server-side. The author of a new event becomes its `OWNER` membership,
+	 * and that membership, not this role, grants full control of that event.
+	 */
+	USER: [
+		PERMISSIONS.EVENT_CREATE,
+		PERMISSIONS.EVENT_READ,
+		PERMISSIONS.ACTIVITY_READ,
+		...SELF_SERVICE_PERMISSIONS,
+		PERMISSIONS.PROFILE_READ,
+		PERMISSIONS.NOTIFICATION_READ,
+	],
 };
 
 /** De-duplicate while keeping declaration order. */
@@ -275,6 +318,7 @@ export function getSeedRolePermissions(): Record<
 		ADMIN: dedupe(ROLE_PERMISSIONS.ADMIN),
 		EDITOR: dedupe(ROLE_PERMISSIONS.EDITOR),
 		VIEWER: dedupe(ROLE_PERMISSIONS.VIEWER),
+		USER: dedupe(ROLE_PERMISSIONS.USER),
 	};
 }
 
@@ -284,6 +328,7 @@ export const ROLE_NAMES: Record<AccessRoleId, string> = {
 	ADMIN: "Administrador",
 	EDITOR: "Editor",
 	VIEWER: "Visualizador",
+	USER: "Utilizador",
 };
 
 export const ROLE_DESCRIPTIONS: Record<AccessRoleId, string> = {
@@ -293,6 +338,7 @@ export const ROLE_DESCRIPTIONS: Record<AccessRoleId, string> = {
 	ADMIN: "Gestão operacional e da equipa, sem alterar a propriedade.",
 	EDITOR: "Criação e edição operacional; sem gestão de equipa.",
 	VIEWER: "Apenas leitura.",
+	USER: "Acesso base da conta: criar os próprios eventos e gerir o perfil. Dentro de um evento, os direitos vêm da membria.",
 };
 
 export function isAccessRoleId(value: string): value is AccessRoleId {

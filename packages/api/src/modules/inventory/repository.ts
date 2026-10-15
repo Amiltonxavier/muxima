@@ -73,6 +73,7 @@ export const InventoryRepository = {
 		return db.inventoryItem.findMany({
 			where: { eventId },
 			select: {
+				name: true,
 				status: true,
 				plannedQuantity: true,
 				currentQuantity: true,

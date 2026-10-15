@@ -65,7 +65,6 @@ function SuppliersPage() {
 
 			<SupplierHeader
 				eventId={eventId}
-				total={stats?.total ?? 0}
 				onAddSupplier={() => setShowCreate(true)}
 			/>
 

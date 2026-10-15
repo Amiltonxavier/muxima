@@ -1,6 +1,7 @@
 import {
 	ACCESS_ROLES,
 	ALL_PERMISSIONS,
+	DEFAULT_ACCOUNT_ROLE,
 	getSeedRolePermissions,
 	PERMISSIONS,
 	resolvePermissions,
@@ -134,6 +135,56 @@ describe("the role matrix", () => {
 					`${resource}.read`,
 				);
 			}
+		}
+	});
+});
+
+describe("the default account role (USER)", () => {
+	const user = getSeedRolePermissions()[DEFAULT_ACCOUNT_ROLE];
+
+	it("grants the ability to start an event and to read it back", () => {
+		expect(user).toContain(PERMISSIONS.EVENT_CREATE);
+		expect(user).toContain(PERMISSIONS.EVENT_READ);
+	});
+
+	it("is pinned to self-service plus events.create/read — nothing else", () => {
+		// The account default is assigned to EVERY user at sign-up, so the
+		// blast radius of anything added here is the whole user base. Event-
+		// scoped management (guests, budget, team, updating/deleting an event)
+		// comes from the `EventMember` row, never from this role — that is
+		// what keeps ownership enforced per event.
+		const EXPECTED = [
+			PERMISSIONS.EVENT_CREATE,
+			PERMISSIONS.EVENT_READ,
+			PERMISSIONS.ACTIVITY_READ,
+			PERMISSIONS.PROFILE_READ,
+			PERMISSIONS.PROFILE_UPDATE,
+			PERMISSIONS.PROFILE_PASSWORD_CHANGE,
+			PERMISSIONS.NOTIFICATION_READ,
+			PERMISSIONS.NOTIFICATION_UPDATE,
+			PERMISSIONS.NOTIFICATION_DELETE,
+		].sort();
+
+		expect([...user].sort()).toEqual(EXPECTED);
+	});
+
+	it("holds no administrative capability", () => {
+		// "Administrative" means: seeing beyond your own rows, changing who
+		// holds a role, or destroying an event. The base role must have none
+		// of it — `ACCESS_ROLES` membership makes the existing OWNER-only /
+		// elevated-only invariants above apply to USER automatically too.
+		const ADMINISTRATIVE = [
+			PERMISSIONS.ACTIVITY_READ_ALL,
+			PERMISSIONS.MEMBER_INVITE,
+			PERMISSIONS.MEMBER_ADD,
+			PERMISSIONS.MEMBER_UPDATE_ROLE,
+			PERMISSIONS.MEMBER_REMOVE,
+			PERMISSIONS.EVENT_UPDATE,
+			PERMISSIONS.EVENT_DELETE,
+		];
+
+		for (const key of ADMINISTRATIVE) {
+			expect(user, `USER must not hold ${key}`).not.toContain(key);
 		}
 	});
 });

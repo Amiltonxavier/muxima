@@ -16,6 +16,7 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
 	EVENT_CREATED: "Evento criado",
 	EVENT_UPDATED: "Evento atualizado",
 	EVENT_DELETED: "Evento eliminado",
+	EVENT_OWNERSHIP_TRANSFERRED: "Propriedade transferida",
 	GUEST_CREATED: "Convitado adicionado",
 	GUEST_UPDATED: "Convitado atualizado",
 	GUEST_DELETED: "Convitado eliminado",

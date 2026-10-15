@@ -1,5 +1,6 @@
 import { PERMISSIONS } from "@muxima/permissions";
 import { Pagination } from "@muxima/ui/components/pagination";
+import { Tabs, TabsList, TabsTrigger } from "@muxima/ui/components/tabs";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { BackButton } from "@/shared/components/back-to";
@@ -17,7 +18,11 @@ import {
 	useRemoveMember,
 	useUpdateMemberRole,
 } from "./-queries/member-queries";
-import type { AssignableMemberRole, MemberItem } from "./-types/member.types";
+import type {
+	AssignableMemberRole,
+	MemberItem,
+	MemberStatusFilter,
+} from "./-types/member.types";
 
 export const Route = createFileRoute("/_private/events/$eventId/members/")({
 	component: MembersPage,
@@ -32,7 +37,7 @@ function MembersPage() {
 		limit: filters.limit,
 		search: filters.search || undefined,
 		role: filters.role !== "ALL" ? filters.role : undefined,
-		status: filters.status !== "ALL" ? filters.status : undefined,
+		status: filters.status,
 	});
 
 	const addMember = useAddMember();
@@ -53,6 +58,8 @@ function MembersPage() {
 
 	const members = membersQuery.data?.data ?? [];
 	const meta = membersQuery.data?.meta;
+	// Counters describe the whole team, so they stay put as the tabs change.
+	const counts = membersQuery.data?.counts;
 
 	const handleRoleChange = (memberId: string, role: AssignableMemberRole) => {
 		updateRole.mutate(
@@ -66,7 +73,6 @@ function MembersPage() {
 			<BackButton to={`/events/${eventId}`} label="Voltar ao evento" />
 
 			<MembersHeader
-				memberCount={members.length}
 				canAdd={canAddMembers && !addMember.isPending}
 				onAdd={() => setShowAddDialog(true)}
 			/>
@@ -74,20 +80,40 @@ function MembersPage() {
 			<MembersFilters
 				search={filters.search}
 				role={filters.role}
-				status={filters.status}
 				hasActiveFilters={filters.hasActiveFilters}
 				onSearchChange={filters.setSearch}
 				onRoleChange={filters.setRole}
-				onStatusChange={filters.setStatus}
 				onReset={filters.reset}
 			/>
+
+			{/* The tabs ARE the status filter: each one issues a server-filtered,
+			    separately paginated query, while the counters (whole team) stay
+			    global. */}
+			<Tabs
+				value={filters.status}
+				onValueChange={(value) =>
+					filters.setStatus(value as MemberStatusFilter)
+				}
+				className="space-y-4"
+			>
+				<TabsList>
+					<TabsTrigger value="ACTIVE">
+						Ativos ({counts?.active ?? 0})
+					</TabsTrigger>
+					<TabsTrigger value="PENDING">
+						Pendentes ({counts?.pending ?? 0})
+					</TabsTrigger>
+					<TabsTrigger value="CANCELLED">
+						Cancelados ({counts?.cancelled ?? 0})
+					</TabsTrigger>
+				</TabsList>
+			</Tabs>
 
 			<MembersTable
 				members={members}
 				isLoading={membersQuery.isLoading}
 				isError={membersQuery.isError}
 				disabledMemberId={updateRole.isPending ? detailsMember?.id : undefined}
-				onRoleChange={handleRoleChange}
 				onViewDetails={setDetailsMember}
 				onRemove={(memberId) =>
 					setRemovingMember(

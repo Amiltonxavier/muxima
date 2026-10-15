@@ -1,11 +1,12 @@
-import { randomBytes } from "node:crypto";
 import { auth, getUserAccess } from "@muxima/auth";
 import db from "@muxima/db";
 import { buildChanges, createActivityLog } from "@muxima/db/activity-log";
+import { MailService } from "@muxima/mail";
 import { PERMISSIONS } from "@muxima/permissions";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { inviteMember } from "../modules/members/invitations";
 import { MemberRepository } from "../modules/members/repository";
 import { profileSelect, UserService } from "../modules/users/service";
 import { buildActivityLog } from "../shared/activity/activity-context";
@@ -15,11 +16,11 @@ import {
 } from "../shared/auth/authorization";
 import {
 	BadRequestError,
-	ConflictError,
 	ForbiddenError,
 	NotFoundError,
 } from "../shared/errors/app-error";
 import { AUTH_CODES, MEMBER_CODES, USER_CODES } from "../shared/errors/codes";
+import { eventPageUrl, roleLabel, rolePermissionLabels } from "../shared/mail";
 import {
 	PASSWORD_MISMATCH_MESSAGE,
 	passwordConfirmationSchema,
@@ -196,6 +197,16 @@ export const usersRouter = {
 				}),
 			);
 
+			// Security alert. SMTP is fire-and-forget (never blocks the change,
+			// never throws), but the request awaits it so the e-mail is enqueued
+			// before the response is sent.
+			await MailService.sendPasswordChanged({
+				to: context.session.user.email,
+				name: context.session.user.name,
+				at: new Date(),
+				ip: context.ip,
+			});
+
 			return { success: true };
 		}),
 
@@ -216,8 +227,32 @@ export const usersRouter = {
 				context.session.user.id,
 				input.reason,
 			);
+
+			// Informational e-mail sent after the block is persisted, so the
+			// account is already locked regardless of delivery.
+			await MailService.sendAccountBlocked({
+				to: user.email,
+				reason: input.reason,
+			});
+
 			return { user, revokedSessions, success: true };
 		}),
+
+	/**
+	 * Re-activates the caller's own account. Only reachable while another
+	 * session still exists (see `UserService.unblockAccount`); a fully locked
+	 * account needs support.
+	 */
+	unblockAccount: protectedProcedure.handler(async ({ context }) => {
+		const user = await UserService.unblockAccount(context.session.user.id);
+
+		await MailService.sendAccountUnblocked({
+			to: user.email,
+			name: context.session.user.name,
+		});
+
+		return { user, success: true };
+	}),
 
 	getMembers: protectedProcedure
 		.input(z.object({ eventId: z.string() }))
@@ -245,34 +280,15 @@ export const usersRouter = {
 				PERMISSIONS.MEMBER_INVITE,
 			);
 
-			const existingMember = await db.eventMember.findFirst({
-				where: {
-					eventId: input.eventId,
-					user: { email: input.email },
-				},
+			// One invitation lifecycle for the whole API: duplicate checks,
+			// secure token, e-mail, in-app + realtime notification all live in
+			// the service, so token and in-app invites can never drift.
+			return inviteMember({
+				eventId: input.eventId,
+				email: input.email,
+				role: input.role,
+				invitedBy: context.session.user.id,
 			});
-
-			if (existingMember) {
-				throw new ConflictError("Este utilizador já é membro do evento", {
-					code: MEMBER_CODES.ALREADY_EXISTS,
-				});
-			}
-
-			const invitation = await db.eventInvitation.create({
-				data: {
-					eventId: input.eventId,
-					invitedBy: context.session.user.id,
-					email: input.email,
-					role: input.role,
-					// F-11: cryptographically secure token. `Math.random()` was
-					// predictable enough to matter once this token becomes a
-					// credential — generating it securely now costs nothing.
-					token: randomBytes(32).toString("base64url"),
-					expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-				},
-			});
-
-			return invitation;
 		}),
 
 	removeMember: protectedProcedure
@@ -335,6 +351,31 @@ export const usersRouter = {
 				input.id,
 				input.role,
 			);
+
+			// Same permissions-notice as `members.updateRole` — the profile and
+			// the event team page both change roles, so both surfaces must be
+			// consistent. SMTP cannot fail the change (`deliverMail` never throws).
+			const [memberMeta, eventMeta] = await Promise.all([
+				db.eventMember.findUnique({
+					where: { id: input.id },
+					select: { user: { select: { email: true, name: true } } },
+				}),
+				db.event.findUnique({
+					where: { id: member.eventId },
+					select: { name: true },
+				}),
+			]);
+
+			if (memberMeta?.user?.email) {
+				await MailService.sendPermissionsChanged({
+					to: memberMeta.user.email,
+					name: memberMeta.user.name,
+					eventName: eventMeta?.name ?? "evento",
+					roleLabel: roleLabel(input.role),
+					permissionLabels: rolePermissionLabels(input.role),
+					eventUrl: eventPageUrl(member.eventId),
+				});
+			}
 
 			return updatedMember;
 		}),

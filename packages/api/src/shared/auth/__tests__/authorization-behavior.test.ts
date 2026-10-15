@@ -39,6 +39,8 @@ type NotificationRow = {
 
 let memberships: Membership[] = [];
 let notifications: NotificationRow[] = [];
+/** Toggled by the unverified-account test; every other caller is verified. */
+let callerEmailVerified = true;
 let eventRows: {
 	id: string;
 	status: string;
@@ -94,7 +96,11 @@ function matches(
 
 const db = {
 	user: {
-		findUnique: () => Promise.resolve({ status: "ACTIVE" }),
+		findUnique: () =>
+			Promise.resolve({
+				status: "ACTIVE",
+				emailVerified: callerEmailVerified,
+			}),
 	},
 	eventMember: {
 		findFirst: (args: { where: Record<string, unknown> }) =>
@@ -188,6 +194,7 @@ vi.mock("@muxima/db/activity-log", () => ({
 
 vi.mock("@muxima/auth", () => ({
 	BLOCKED_USER_MESSAGE: "Conta bloqueada",
+	UNVERIFIED_USER_MESSAGE: "Confirma o teu email",
 }));
 
 const { call } = await import("@orpc/server");
@@ -274,6 +281,7 @@ beforeEach(() => {
 		},
 	];
 	memberWrites = [];
+	callerEmailVerified = true;
 	tasks = [
 		{ id: "tsk_1", eventId: "evt_1", title: "Reservar", createdAt: FUTURE },
 		{ id: "tsk_2", eventId: "evt_2", title: "Alheia", createdAt: FUTURE },
@@ -498,5 +506,28 @@ describe("event access — tasks.list and tasks.getSchedules", () => {
 		);
 
 		expect(result.data).toHaveLength(1);
+	});
+});
+
+// ── e-mail confirmation gate ────────────────────────────────────
+
+describe("unverified account — protected procedures", () => {
+	it("refuses an account whose e-mail is not confirmed", async () => {
+		callerEmailVerified = false;
+
+		await expectRejection(
+			call(tasksRouter.list, { eventId: "evt_1" }, ctx("usr_editor")),
+			{ code: "AUTH_EMAIL_NOT_VERIFIED", status: 403 },
+		);
+	});
+
+	it("lets the same caller through once the e-mail is confirmed", async () => {
+		const result = await call(
+			tasksRouter.list,
+			{ eventId: "evt_1" },
+			ctx("usr_editor"),
+		);
+
+		expect(result.meta.total).toBe(1);
 	});
 });

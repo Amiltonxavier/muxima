@@ -134,6 +134,7 @@ export const VALID_NOTIFICATION_TYPES = [
 	"GUESTS",
 	"INVENTORY",
 	"EVENT",
+	"MEMBERS",
 ] as const;
 export const VALID_SCHEDULE_STATUSES = [
 	"PENDING",
@@ -148,4 +149,9 @@ export const VALID_MEMBER_ROLES = [
 	"EDITOR",
 	"VIEWER",
 ] as const;
-export const VALID_MEMBER_STATUSES = ["PENDING", "ACTIVE", "DECLINED"] as const;
+export const VALID_MEMBER_STATUSES = [
+	"PENDING",
+	"ACTIVE",
+	"DECLINED",
+	"CANCELLED",
+] as const;

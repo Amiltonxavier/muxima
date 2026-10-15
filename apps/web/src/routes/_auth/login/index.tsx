@@ -8,7 +8,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
-import { handleApiError } from "@/shared/errors";
+import { ResendVerification } from "@/shared/components/resend-verification";
+import { AUTH_CODES, handleApiError, parseApiError } from "@/shared/errors";
 import { loginSchema } from "@/utils/auth-schemas";
 
 export const Route = createFileRoute("/_auth/login/")({
@@ -22,6 +23,7 @@ function LoginPage() {
 	const { returnTo } = Route.useSearch();
 	const [isLoading, setIsLoading] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
+	const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
 	const form = useForm({
 		defaultValues: {
@@ -36,6 +38,7 @@ function LoginPage() {
 			}
 
 			setIsLoading(true);
+			setUnverifiedEmail(null);
 			try {
 				const { error } = await authClient.signIn.email({
 					email: value.email,
@@ -43,6 +46,14 @@ function LoginPage() {
 				});
 
 				if (error) {
+					// A conta existe mas o e-mail ainda não foi confirmado: em vez
+					// de um erro genérico, explicamos o passo em falta e damos um
+					// caminho para reenviar o link.
+					if (parseApiError(error).code === AUTH_CODES.EMAIL_NOT_VERIFIED) {
+						setUnverifiedEmail(value.email.trim());
+						return;
+					}
+
 					// The API boundary already answers in PT-PT; the fallback only
 					// covers a shape with nothing usable.
 					handleApiError(error, {
@@ -85,6 +96,19 @@ function LoginPage() {
 					Entre na sua conta para continuar.
 				</p>
 			</div>
+
+			{unverifiedEmail && (
+				<div className="mb-6 rounded-md border border-border bg-muted/40 p-4">
+					<p className="text-sm">
+						A tua conta ainda não está confirmada. Verifica o e-mail{" "}
+						<span className="font-medium text-foreground">
+							{unverifiedEmail}
+						</span>{" "}
+						— enviámos-te um link de confirmação.
+					</p>
+					<ResendVerification email={unverifiedEmail} className="mt-3" />
+				</div>
+			)}
 
 			<form
 				onSubmit={(e) => {
@@ -169,6 +193,24 @@ function LoginPage() {
 					className="font-medium text-foreground underline-offset-4 hover:underline"
 				>
 					Criar conta
+				</Link>
+			</p>
+
+			<div className="mt-4 flex items-center justify-center gap-3 text-muted-foreground text-xs">
+				<span className="h-px w-12 bg-border" aria-hidden="true" />
+				ou
+				<span className="h-px w-12 bg-border" aria-hidden="true" />
+			</div>
+
+			<p className="mt-4 text-center text-sm">
+				<Link
+					to="/login-otp"
+					search={{
+						returnTo: returnTo ? String(returnTo).slice(0, 2000) : undefined,
+					}}
+					className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+				>
+					Entrar com código por email
 				</Link>
 			</p>
 		</div>

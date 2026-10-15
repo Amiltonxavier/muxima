@@ -29,6 +29,8 @@ export type SupplierAnalytics = {
 		pending: number;
 	}[];
 	byPaymentStatus: Record<string, number>;
+	/** Count of suppliers per lifecycle status (PROSPECT, CONFIRMED, ...). */
+	byStatus: Record<string, number>;
 };
 
 type Db = PrismaClient;
@@ -76,11 +78,11 @@ export async function getSupplierAnalytics(
 		where: { eventId },
 		select: { status: true },
 	});
-	const byStatus = new Map<string, number>();
+	const byStatus: Record<string, number> = {};
 	for (const row of statusRows) {
-		byStatus.set(row.status, (byStatus.get(row.status) ?? 0) + 1);
+		byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
 	}
-	const statusOf = (key: string) => byStatus.get(key) ?? 0;
+	const statusOf = (key: string) => byStatus[key] ?? 0;
 
 	return {
 		total: statusRows.length,
@@ -101,6 +103,7 @@ export async function getSupplierAnalytics(
 			}))
 			.sort((a, b) => b.planned - a.planned),
 		byPaymentStatus,
+		byStatus,
 	};
 }
 

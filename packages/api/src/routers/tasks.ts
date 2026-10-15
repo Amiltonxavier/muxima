@@ -13,10 +13,18 @@ import {
 	requireEventPermissionMutable,
 } from "../shared/auth/authorization";
 
-import { NotFoundError } from "../shared/errors/app-error";
-import { TASK_CODES } from "../shared/errors/codes";
+import { NotFoundError, ValidationError } from "../shared/errors/app-error";
+import { SCHEDULE_CODES, TASK_CODES } from "../shared/errors/codes";
 import { scheduleListInput, taskListInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+	return (
+		a.getFullYear() === b.getFullYear() &&
+		a.getMonth() === b.getMonth() &&
+		a.getDate() === b.getDate()
+	);
+}
 
 export const tasksRouter = {
 	list: protectedProcedure
@@ -323,6 +331,25 @@ export const tasksRouter = {
 				eventId,
 				PERMISSIONS.SCHEDULE_UPDATE,
 			);
+
+			// The schedule mirrors what happens on the wedding day, so an
+			// activity's status can only be moved on that day — not before
+			// (nothing has started) and not after (the day is done). Editing the
+			// fields stays possible on any day; only the status is gated.
+			if (input.status) {
+				const event = await db.event.findUnique({
+					where: { id: eventId },
+					select: { eventDate: true },
+				});
+				const isEventDay =
+					!!event?.eventDate && isSameCalendarDay(event.eventDate, new Date());
+				if (!isEventDay) {
+					throw new ValidationError(
+						"O estado de uma atividade só pode ser alterado no dia do evento.",
+						{ code: SCHEDULE_CODES.STATUS_NOT_ALLOWED_TODAY },
+					);
+				}
+			}
 
 			const schedule = await db.schedule.update({
 				where: { id: input.id },

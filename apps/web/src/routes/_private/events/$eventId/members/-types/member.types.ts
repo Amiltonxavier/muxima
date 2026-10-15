@@ -6,7 +6,11 @@ export type MemberItem = NonNullable<
 
 /** Mirrors `memberFiltersSchema` on the API. */
 export type MemberRole = "OWNER" | "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER";
-export type MemberStatus = "PENDING" | "ACTIVE" | "DECLINED";
+/**
+ * Membership statuses plus `CANCELLED`, which only ever applies to a revoked
+ * invitation — the "Cancelados" tab of the team screen.
+ */
+export type MemberStatus = "PENDING" | "ACTIVE" | "DECLINED" | "CANCELLED";
 
 /** "ALL" is a UI-only value; the query maps it to `undefined`. */
 export type MemberRoleFilter = "ALL" | MemberRole;

@@ -169,8 +169,10 @@ describe("InventoryTable", () => {
 		);
 
 		expect(screen.getByText("Cadeiras")).toBeDefined();
-		expect(screen.getByText("300")).toBeDefined();
-		expect(screen.getByText("20")).toBeDefined();
+		// "280 / 300 Unidade" é texto direto do span interno — o número nunca
+		// aparece isolado, por isso o matcher tem de incluir os vizinhos.
+		expect(screen.getByText(/\/ 300 Unidade/)).toBeDefined();
+		expect(screen.getByText(/Em falta: 20/)).toBeDefined();
 		expect(screen.getByText("93%")).toBeDefined();
 	});
 

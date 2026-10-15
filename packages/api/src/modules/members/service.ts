@@ -9,7 +9,9 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../../shared/errors/app-error";
-import { MEMBER_CODES, USER_CODES } from "../../shared/errors/codes";
+import { MEMBER_CODES } from "../../shared/errors/codes";
+import { cancelInvitation, inviteMember } from "./invitations";
+import { listEventMembers } from "./list";
 import { type MemberFilterParams, MemberRepository } from "./repository";
 
 export const MemberService = {
@@ -25,24 +27,9 @@ export const MemberService = {
 			PERMISSIONS.MEMBER_ADD,
 		);
 
-		// The email identifies the account to invite; the membership row needs
-		// the user id (passing the email here used to fail the foreign key).
-		const user = await db.user.findUnique({ where: { email } });
-		if (!user)
-			throw new NotFoundError("Utilizador não encontrado com este email", {
-				code: USER_CODES.NOT_FOUND,
-			});
-
-		const existing = await MemberRepository.findByEventAndUser(
-			eventId,
-			user.id,
-		);
-		if (existing)
-			throw new ConflictError("Utilizador já é membro deste evento", {
-				code: MEMBER_CODES.ALREADY_EXISTS,
-			});
-
-		return MemberRepository.create({ eventId, userId: user.id, role });
+		// REST and oRPC share one invitation lifecycle. The membership row is
+		// created on acceptance, never here.
+		return inviteMember({ eventId, email, role, invitedBy: userId });
 	},
 
 	async getMembers(
@@ -53,11 +40,17 @@ export const MemberService = {
 	) {
 		await requireEventPermission(userId, eventId, PERMISSIONS.MEMBER_READ);
 
-		const [data, total] = await Promise.all([
-			MemberRepository.findByEvent(eventId, pagination, filters),
-			MemberRepository.countByEvent(eventId, filters),
-		]);
-		return { data, total };
+		// Same unified feed as the oRPC path: memberships + pending/cancelled
+		// invites.
+		const { data, total, counts } = await listEventMembers({
+			eventId,
+			page: pagination.page,
+			limit: pagination.limit,
+			search: filters?.search,
+			role: filters?.role,
+			status: filters?.status,
+		});
+		return { data, total, counts };
 	},
 
 	async updateRole(
@@ -66,10 +59,36 @@ export const MemberService = {
 		newRole: "PARTNER" | "ADMIN" | "EDITOR" | "VIEWER",
 	) {
 		const member = await MemberRepository.findById(memberId);
-		if (!member)
-			throw new NotFoundError("Membro não encontrado", {
-				code: MEMBER_CODES.NOT_FOUND,
+
+		// REST reaches the same unified list, so the same row id may be an
+		// invitation; editing its role edits the invitation.
+		if (!member) {
+			const invitation = await db.eventInvitation.findUnique({
+				where: { id: memberId },
 			});
+			if (!invitation)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
+
+			await requireEventPermissionMutable(
+				userId,
+				invitation.eventId,
+				PERMISSIONS.MEMBER_UPDATE_ROLE,
+			);
+
+			if (invitation.status !== "PENDING") {
+				throw new ConflictError("Este convite já não está pendente", {
+					code: MEMBER_CODES.INVITE_NOT_PENDING,
+				});
+			}
+
+			return db.eventInvitation.update({
+				where: { id: memberId },
+				data: { role: newRole },
+				select: { id: true, role: true },
+			});
+		}
 
 		await requireEventPermissionMutable(
 			userId,
@@ -91,10 +110,30 @@ export const MemberService = {
 
 	async removeMember(memberId: string, userId: string) {
 		const member = await MemberRepository.findById(memberId);
-		if (!member)
-			throw new NotFoundError("Membro não encontrado", {
-				code: MEMBER_CODES.NOT_FOUND,
+
+		if (!member) {
+			const invitation = await db.eventInvitation.findUnique({
+				where: { id: memberId },
 			});
+			if (!invitation)
+				throw new NotFoundError("Membro não encontrado", {
+					code: MEMBER_CODES.NOT_FOUND,
+				});
+
+			await requireEventPermissionMutable(
+				userId,
+				invitation.eventId,
+				PERMISSIONS.MEMBER_REMOVE,
+			);
+
+			if (invitation.status !== "PENDING") {
+				throw new ConflictError("Este convite já não está pendente", {
+					code: MEMBER_CODES.INVITE_NOT_PENDING,
+				});
+			}
+
+			return cancelInvitation(invitation.id);
+		}
 
 		await requireEventPermissionMutable(
 			userId,

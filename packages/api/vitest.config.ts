@@ -35,6 +35,14 @@ export default defineConfig({
 			BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
 			BETTER_AUTH_URL: "http://localhost:3000",
 			CORS_ORIGIN: "http://localhost:3001",
+			// `@muxima/mail` validates MAIL_* at import time; these placeholders
+			// satisfy the schema. Unit tests never open a real SMTP connection.
+			MAIL_HOST: "smtp.ethereal.email",
+			MAIL_PORT: "587",
+			MAIL_USER: "test@example.com",
+			MAIL_PASSWORD: "test",
+			MAIL_FROM: '"Muxima" <no-reply@muxima.test>',
+			MAIL_SECURE: "false",
 		},
 	},
 });

@@ -57,11 +57,14 @@ describe("InventoryDetailsDialog", () => {
 	it("shows the quantities as a pie with the API percentage in the hole", () => {
 		renderDialog();
 
-		// Slice values come straight from the API, never recomputed here.
-		expect(screen.getByText("Concluído")).toBeInTheDocument();
-		expect(screen.getByText("Em falta")).toBeInTheDocument();
+		// A legenda do pie e as InfoRows repetem "Concluído"/"Em falta".
+		expect(screen.getAllByText("Concluído").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("Em falta").length).toBeGreaterThan(0);
 		expect(screen.getByText("67%")).toBeInTheDocument();
-		expect(screen.getByText(/Planeado: 240/)).toBeInTheDocument();
+		expect(screen.getByText("Planeado")).toBeInTheDocument();
+		expect(
+			screen.getByText(`${item.plannedQuantity} Unidade`),
+		).toBeInTheDocument();
 	});
 
 	it("spells out the operands behind each derived money figure", () => {

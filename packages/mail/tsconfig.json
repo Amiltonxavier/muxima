@@ -1,0 +1,6 @@
+{
+	"extends": "@muxima/config/tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "dist"
+	}
+}

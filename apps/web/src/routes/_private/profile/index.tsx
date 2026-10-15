@@ -37,7 +37,6 @@ type TabValue = (typeof TABS)[number]["value"];
 function ProfilePage() {
 	const navigate = useNavigate();
 	const profileQuery = useProfile();
-	const updateProfile = useUpdateProfile();
 	const blockAccount = useBlockAccount();
 
 	const [tab, setTab] = useState<TabValue>("profile");
@@ -92,28 +91,21 @@ function ProfilePage() {
 						onRetry={() => void profileQuery.refetch()}
 					>
 						{profile && (
-							<div className="space-y-6">
-								<ProfileInfoSection
-									profile={profile}
-									isSaving={updateProfile.isPending}
-									onSubmit={(values) =>
-										updateProfile.mutate(values, {
-											onSuccess: () =>
-												toast.success("Perfil atualizado com sucesso"),
-										})
-									}
-								/>
+							<>
+								<div className="grid gap-6 lg:grid-cols-2">
+									<ProfileDetailsSection profile={profile} />
 
-								<ProfileDetailsSection profile={profile} />
+									<ProfileInfoSection profile={profile} />
+								</div>
 
 								<ProfileRolesSection profile={profile} />
-							</div>
+							</>
 						)}
 					</QueryState>
 				</TabsContent>
 
 				<TabsContent value="security">
-					<div className="space-y-6">
+					<div className="grid gap-6 lg:grid-cols-2">
 						<ChangePasswordForm />
 
 						{profile && (

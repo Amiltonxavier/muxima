@@ -7,36 +7,47 @@ type Membership = { role: string; status: string };
  * the module body's declarations: a plain `let` at the top level would still be
  * in its temporal dead zone when the mocked module is first imported.
  */
-const { seeded, grants, findMany, findGrants } = vi.hoisted(() => {
-	const state = { rows: [] as { role: string; status: string }[] };
-	const grantState = { rows: [] as { role: string; key: string }[] };
-	return {
-		seeded: state,
-		grants: grantState,
-		findMany: vi.fn((args: { where?: { status?: string } }) =>
-			Promise.resolve(
-				state.rows
-					.filter((row) =>
-						args.where?.status ? row.status === args.where.status : true,
-					)
-					.map(({ role }) => ({ role })),
+const { seeded, grants, account, findMany, findGrants, findUser } = vi.hoisted(
+	() => {
+		const state = { rows: [] as { role: string; status: string }[] };
+		const grantState = { rows: [] as { role: string; key: string }[] };
+		// The account-level row (`user.roleId → Role.name`): `null` models a
+		// missing FK, an unrecognised name models a hand-edited row.
+		const accountState = { role: "USER" as string | null };
+		return {
+			seeded: state,
+			grants: grantState,
+			account: accountState,
+			findMany: vi.fn((args: { where?: { status?: string } }) =>
+				Promise.resolve(
+					state.rows
+						.filter((row) =>
+							args.where?.status ? row.status === args.where.status : true,
+						)
+						.map(({ role }) => ({ role })),
+				),
 			),
-		),
-		// The database is the authority: `RolePermission` rows are what the
-		// session advertises. An empty result exercises the unseeded fallback;
-		// a populated one exercises the real read path.
-		findGrants: vi.fn(
-			(args: { where?: { role?: { name?: { in?: string[] } } } }) => {
-				const names = args.where?.role?.name?.in ?? [];
-				return Promise.resolve(
-					grantState.rows
-						.filter((row) => names.includes(row.role))
-						.map(({ key }) => ({ permission: { key } })),
-				);
-			},
-		),
-	};
-});
+			// The database is the authority: `RolePermission` rows are what the
+			// session advertises. An empty result exercises the unseeded fallback;
+			// a populated one exercises the real read path.
+			findGrants: vi.fn(
+				(args: { where?: { role?: { name?: { in?: string[] } } } }) => {
+					const names = args.where?.role?.name?.in ?? [];
+					return Promise.resolve(
+						grantState.rows
+							.filter((row) => names.includes(row.role))
+							.map(({ key }) => ({ permission: { key } })),
+					);
+				},
+			),
+			findUser: vi.fn(() =>
+				Promise.resolve({
+					role: accountState.role === null ? null : { name: accountState.role },
+				}),
+			),
+		};
+	},
+);
 
 /**
  * `getUserAccess` reads the role table through `createPrismaClient`, so the
@@ -52,6 +63,7 @@ vi.mock("@muxima/db", () => ({
 	createPrismaClient: () => ({
 		eventMember: { findMany },
 		rolePermission: { findMany: findGrants },
+		user: { findUnique: findUser },
 	}),
 }));
 
@@ -77,7 +89,9 @@ function seedGrants(rows: { role: string; key: string }[]): void {
 beforeEach(() => {
 	findMany.mockClear();
 	findGrants.mockClear();
+	findUser.mockClear();
 	grants.rows = [];
+	account.role = "USER";
 });
 
 describe("ACCESS_ROLES", () => {
@@ -166,20 +180,28 @@ describe("getUserAccess", () => {
 
 		const access = await getUserAccess("usr_1");
 
-		expect(access.roles.map((role) => role.id)).toEqual(["OWNER", "VIEWER"]);
+		expect(access.roles.map((role) => role.id)).toEqual([
+			"OWNER",
+			"VIEWER",
+			// The account default rides along with the memberships — it is
+			// what a user holds even before their first event exists.
+			"USER",
+		]);
 		expect(access.permissions).toContain(PERMISSIONS.ACTIVITY_READ_ALL);
 	});
 
 	it("ignores memberships that are not ACTIVE", async () => {
 		// Regression: a PENDING row is an unaccepted invitation. `requireEventAccess`
 		// refuses it, so counting it here would hand the session permissions the
-		// rest of the app would then reject.
+		// rest of the app would then reject. Only the account default remains.
 		seedMemberships([{ role: "OWNER", status: "PENDING" }]);
 
 		const access = await getUserAccess("usr_1");
 
-		expect(access.roles).toEqual([]);
-		expect(access.permissions).toEqual([]);
+		expect(access.roles.map((role) => role.id)).toEqual(["USER"]);
+		expect(access.permissions).toEqual(resolvePermissions(["USER"]));
+		expect(access.permissions).not.toContain(PERMISSIONS.ACTIVITY_READ_ALL);
+		expect(access.permissions).not.toContain(PERMISSIONS.EVENT_DELETE);
 	});
 
 	it("filters on ACTIVE membership status when querying", async () => {
@@ -192,14 +214,19 @@ describe("getUserAccess", () => {
 		);
 	});
 
-	it("resolves no access for a user with no memberships", async () => {
-		// Account creation must not depend on event membership.
+	it("always resolves the default role for a user with no memberships", async () => {
+		// Account creation must not depend on event membership: the base `USER`
+		// role is what a brand-new sign-up holds, and it is deliberately
+		// non-administrative.
 		seedMemberships([]);
 
-		expect(await getUserAccess("usr_nobody")).toEqual({
-			roles: [],
-			permissions: [],
-		});
+		const access = await getUserAccess("usr_nobody");
+
+		expect(access.roles.map((role) => role.id)).toEqual(["USER"]);
+		expect(access.permissions).toContain(PERMISSIONS.EVENT_CREATE);
+		expect(access.permissions).not.toContain(PERMISSIONS.ACTIVITY_READ_ALL);
+		expect(access.permissions).not.toContain(PERMISSIONS.MEMBER_UPDATE_ROLE);
+		expect(access.permissions).not.toContain(PERMISSIONS.EVENT_DELETE);
 	});
 
 	it("reads permissions from RolePermission, not from the seed matrix", async () => {
@@ -225,7 +252,7 @@ describe("getUserAccess", () => {
 
 		const access = await getUserAccess("usr_1");
 
-		expect(access.permissions).toEqual(resolvePermissions(["VIEWER"]));
+		expect(access.permissions).toEqual(resolvePermissions(["USER", "VIEWER"]));
 	});
 
 	it("ignores grants that are not known permission keys", async () => {
@@ -250,6 +277,44 @@ describe("getUserAccess", () => {
 
 		const access = await getUserAccess("usr_1");
 
-		expect(access.roles.map((role) => role.id)).toEqual(["OWNER"]);
+		expect(access.roles.map((role) => role.id)).toEqual(["OWNER", "USER"]);
+	});
+
+	describe("the account-level role", () => {
+		it("reads it from user.roleId and unions it with the memberships", async () => {
+			account.role = "ADMIN";
+			seedMemberships([{ role: "VIEWER", status: "ACTIVE" }]);
+
+			const access = await getUserAccess("usr_1");
+
+			expect(findUser).toHaveBeenCalledWith(
+				expect.objectContaining({ where: { id: "usr_1" } }),
+			);
+			expect(access.roles.map((role) => role.id)).toEqual(["ADMIN", "VIEWER"]);
+			expect(access.permissions).toContain(PERMISSIONS.ACTIVITY_READ_ALL);
+		});
+
+		it("falls back to the default role when the FK is null", async () => {
+			// A row written without the hook (or by hand) still resolves to a
+			// role — never to "no roles at all".
+			account.role = null;
+			seedMemberships([]);
+
+			const access = await getUserAccess("usr_1");
+
+			expect(access.roles.map((role) => role.id)).toEqual(["USER"]);
+		});
+
+		it("falls back to the default role when the role name is unknown", async () => {
+			// An unknown account role degrades to baseline access, never to
+			// whatever an unrecognised name might imply.
+			account.role = "SUPERUSER";
+			seedMemberships([]);
+
+			const access = await getUserAccess("usr_1");
+
+			expect(access.roles.map((role) => role.id)).toEqual(["USER"]);
+			expect(access.permissions).not.toContain(PERMISSIONS.ACTIVITY_READ_ALL);
+		});
 	});
 });

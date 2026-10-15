@@ -8,7 +8,7 @@ export interface PaginationParams {
 
 export interface NotificationFilters {
 	search?: string;
-	type?: "FINANCE" | "TASKS" | "GUESTS" | "INVENTORY" | "EVENT";
+	type?: "FINANCE" | "TASKS" | "GUESTS" | "INVENTORY" | "EVENT" | "MEMBERS";
 	read?: boolean;
 }
 

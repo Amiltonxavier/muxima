@@ -9,7 +9,6 @@ import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { formatCurrency } from "@/utils/format-currency";
 import {
-	getStatusColor,
 	getStatusLabel,
 	getStatusTone,
 	INVENTORY_CATEGORY_LABELS,

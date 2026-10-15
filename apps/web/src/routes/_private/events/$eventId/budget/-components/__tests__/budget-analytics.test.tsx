@@ -1,10 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-// O ExpenseAnalytics traz a sua própria query; o que se testa aqui é a
-// composição do BudgetAnalytics, por isso o substituímos por um stub.
+// O ExpenseAnalytics e o PaidExpensesChart trazem a sua própria query; o que se
+// testa aqui é a composição do BudgetAnalytics, por isso substituímo-los por
+// stubs.
 vi.mock("../../../-components/expense-analytics", () => ({
 	ExpenseAnalytics: () => null,
+}));
+
+vi.mock("../analytics/paid-expenses-chart", () => ({
+	PaidExpensesChart: () => null,
 }));
 
 import type { BudgetSummary } from "../../-queries/budget-queries";

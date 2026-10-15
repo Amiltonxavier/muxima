@@ -1,3 +1,4 @@
+import { DEFAULT_ACCOUNT_ROLE } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import {
 	Card,
@@ -14,16 +15,19 @@ import type { ProfileItem, ProfileRole } from "../-types/profile.types";
  *
  * Everything rendered here comes straight from the API response: `role.name` is
  * the backend's label and `permissions` is the list the server derived from the
- * user's `EventMember` rows. Nothing is hardcoded or recomputed on the client —
- * the tab is a view, and authorization is enforced in the API regardless of
- * what is shown.
+ * account's default role plus the user's `EventMember` rows. Nothing is
+ * hardcoded or recomputed on the client — the tab is a view, and authorization
+ * is enforced in the API regardless of what is shown.
  */
 export function ProfileRolesSection({ profile }: { profile: ProfileItem }) {
 	const roles = profile.roles ?? [];
 	const permissions = profile.permissions ?? [];
+	// Every account holds the base `USER` role from sign-up; a role beyond it
+	// means the user actually belongs to at least one event.
+	const hasEventRole = roles.some((role) => role.id !== DEFAULT_ACCOUNT_ROLE);
 
 	return (
-		<Card className="max-w-lg">
+		<Card>
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
 					<ShieldCheck className="h-4 w-4" />
@@ -38,15 +42,23 @@ export function ProfileRolesSection({ profile }: { profile: ProfileItem }) {
 					<p className="font-medium text-sm">Roles</p>
 					{roles.length === 0 ? (
 						<p className="text-muted-foreground text-sm">
-							Ainda não pertences a nenhum evento, por isso não tens roles
-							atribuídas.
+							Sem roles atribuídas.
 						</p>
 					) : (
-						<ul className="flex flex-wrap gap-2">
-							{roles.map((role) => (
-								<RoleBadges key={role.id} role={role} />
-							))}
-						</ul>
+						<div className="space-y-2">
+							<ul className="flex flex-wrap gap-2">
+								{roles.map((role) => (
+									<RoleBadges key={role.id} role={role} />
+								))}
+							</ul>
+							{!hasEventRole && (
+								<p className="text-muted-foreground text-sm">
+									Ainda não pertences a nenhum evento. Ao criar o teu primeiro
+									evento, passas a ser o seu proprietário — com acesso total a
+									ele.
+								</p>
+							)}
+						</div>
 					)}
 				</div>
 

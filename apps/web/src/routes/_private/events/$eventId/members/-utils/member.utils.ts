@@ -39,12 +39,14 @@ export const MEMBER_STATUS_LABELS: Record<MemberStatus, string> = {
 	ACTIVE: "Ativo",
 	PENDING: "Pendente",
 	DECLINED: "Recusou",
+	CANCELLED: "Cancelado",
 };
 
 export const MEMBER_STATUS_BADGE_CLASSES: Record<MemberStatus, string> = {
 	ACTIVE: "bg-green-50 text-green-700",
 	PENDING: "bg-amber-50 text-amber-700",
 	DECLINED: "bg-muted text-muted-foreground",
+	CANCELLED: "bg-red-50 text-red-700",
 };
 
 export const MEMBER_ROLE_DESCRIPTIONS: Record<MemberRole, string> = {
@@ -57,7 +59,36 @@ export const MEMBER_ROLE_DESCRIPTIONS: Record<MemberRole, string> = {
 
 export function getMemberName(member: Pick<MemberItem, "user">): string {
 	const name = member.user?.name;
-	return name ? String(name) : "Utilizador";
+	if (name) return String(name);
+	// A pending invitation has no account yet: fall back to the invited e-mail
+	// rather than labelling a real address as "Utilizador".
+	const email = member.user?.email;
+	return email ? String(email) : "Utilizador";
+}
+
+/**
+ * Whether the row is a still-pending invitation rather than an accepted
+ * membership. The API merges both into one list, discriminated by `kind`.
+ */
+export function isInvitation(member: Pick<MemberItem, "kind">): boolean {
+	return member.kind === "INVITATION";
+}
+
+/**
+ * A revoked invite: already settled, so the UI must not offer to change its
+ * role or cancel it again (the API rejects that with a 409).
+ */
+export function isSettledInvitation(
+	member: Pick<MemberItem, "kind" | "status">,
+): boolean {
+	return member.kind === "INVITATION" && member.status !== "PENDING";
+}
+
+/** An invite still awaiting an answer: it can be edited or cancelled. */
+export function isPendingInvitation(
+	member: Pick<MemberItem, "kind" | "status">,
+): boolean {
+	return member.kind === "INVITATION" && member.status === "PENDING";
 }
 
 export function getMemberEmail(member: Pick<MemberItem, "user">): string {

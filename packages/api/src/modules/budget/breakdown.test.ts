@@ -4,6 +4,7 @@ import {
 	buildCategoryBreakdown,
 	buildLines,
 	buildMonthlySpend,
+	buildPaidExpenses,
 	buildPaymentStatusBreakdown,
 	buildSourceBreakdown,
 	buildTopPendingSuppliers,
@@ -459,5 +460,57 @@ describe("buildMonthlySpend", () => {
 
 	it("returns nothing when no payment was recorded", () => {
 		expect(buildMonthlySpend([])).toEqual([]);
+	});
+});
+
+describe("buildPaidExpenses", () => {
+	it("includes inventory spend alongside services", () => {
+		const result = buildPaidExpenses([
+			{ label: "Vinho (inventário)", paid: 60_000 },
+			{ label: "Fotografia", paid: 50_000 },
+		]);
+
+		expect(result).toEqual([
+			{ label: "Vinho (inventário)", value: 60_000 },
+			{ label: "Fotografia", value: 50_000 },
+		]);
+	});
+
+	it("keeps only the lines that were actually paid", () => {
+		const result = buildPaidExpenses([
+			{ label: "Fotografia", paid: 50_000 },
+			{ label: "Catering", paid: 0 },
+			{ label: "Decoração", paid: 85_000 },
+		]);
+
+		expect(result).toEqual([
+			{ label: "Decoração", value: 85_000 },
+			{ label: "Fotografia", value: 50_000 },
+		]);
+	});
+
+	it("ranks the expenses heaviest first without mutating the input", () => {
+		const input = [
+			{ label: "Vídeo", paid: 150_000 },
+			{ label: "Fotografia", paid: 50_000 },
+			{ label: "Decoração", paid: 85_000 },
+		];
+
+		expect(buildPaidExpenses(input)).toEqual([
+			{ label: "Vídeo", value: 150_000 },
+			{ label: "Decoração", value: 85_000 },
+			{ label: "Fotografia", value: 50_000 },
+		]);
+		expect(input[0]?.label).toBe("Vídeo");
+	});
+
+	it("returns an empty series when nothing was paid", () => {
+		expect(buildPaidExpenses([])).toEqual([]);
+		expect(
+			buildPaidExpenses([
+				{ label: "Espaço", paid: 0 },
+				{ label: "Bolo", paid: 0 },
+			]),
+		).toEqual([]);
 	});
 });

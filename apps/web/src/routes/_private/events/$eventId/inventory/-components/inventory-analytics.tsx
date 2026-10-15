@@ -7,14 +7,18 @@ import {
 } from "@muxima/ui/components/card";
 import { AlertTriangle, PackagePlus, TrendingUp } from "lucide-react";
 import { ChartLegend, DonutChart } from "@/shared/components/charts";
+import { InventoryCostliestChart } from "./inventory-costliest-chart";
 
 /**
  * KPI values come pre-calculated from the backend stats endpoint — this
- * component only renders them.
+ * component only renders them. The costliest-items chart fetches its own
+ * backend-computed series, so nothing is aggregated here either.
  */
 export function InventoryAnalytics({
+	eventId,
 	stats,
 }: {
+	eventId: string;
 	stats?: InventoryStatsDto | null;
 }) {
 	if (!stats) {
@@ -120,6 +124,10 @@ export function InventoryAnalytics({
 					</div>
 				</CardContent>
 			</Card>
+
+			<div className="lg:col-span-3">
+				<InventoryCostliestChart eventId={eventId} />
+			</div>
 		</div>
 	);
 }

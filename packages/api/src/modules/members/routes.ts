@@ -40,13 +40,13 @@ export async function memberRoutes(app: FastifyInstance) {
 		const body = request.body as { email?: string; role?: string };
 		const params = request.params as { eventId: string };
 		const data = addMemberSchema.parse({ ...body, eventId: params.eventId });
-		const member = await MemberService.addMember(
+		const invitation = await MemberService.addMember(
 			data.eventId,
 			userId,
 			data.email,
 			data.role,
 		);
-		return reply.status(201).send(successResponse(member));
+		return reply.status(201).send(successResponse(invitation));
 	});
 
 	app.patch("/api/v1/members/:memberId/role", async (request) => {

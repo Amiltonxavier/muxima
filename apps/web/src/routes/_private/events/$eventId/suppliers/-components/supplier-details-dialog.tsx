@@ -17,7 +17,7 @@ import { StatusDot } from "@/shared/components/status-dot";
 import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
 import { dateHelper } from "@/shared/utils/date-helper";
-import { formatCurrency } from "@/utils/format-currency";
+import { formatCurrency, formatIban } from "@/utils/format-currency";
 import {
 	getStatusLabel,
 	getStatusTone,
@@ -134,7 +134,7 @@ export function SupplierDetailsDialog({
 									<div className="mt-3 space-y-3">
 										<DetailRow
 											label="IBAN"
-											value={supplier.iban ?? undefined}
+											value={supplier.iban ? formatIban(supplier.iban) : undefined}
 											mono
 										/>
 

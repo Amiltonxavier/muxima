@@ -15,6 +15,8 @@ export const budgetKeys = {
 		[...budgetKeys.all, "lines", eventId, source ?? "all"] as const,
 	expenseAnalytics: (eventId: string) =>
 		[...budgetKeys.all, "expense-analytics", eventId] as const,
+	paidExpenses: (eventId: string) =>
+		[...budgetKeys.all, "paid-expenses", eventId] as const,
 };
 
 /**
@@ -56,6 +58,18 @@ export function useExpenseAnalytics(eventId: string) {
 	return useQuery({
 		...orpc.budget.getExpenseAnalytics.queryOptions({ input: { eventId } }),
 		queryKey: budgetKeys.expenseAnalytics(eventId),
+		enabled: !!eventId,
+	});
+}
+
+/**
+ * Despesas efectivamente pagas, agrupadas por serviço. A série já vem agregada
+ * do backend (`budget.getPaidExpenses`); o cliente só a apresenta.
+ */
+export function usePaidExpenses(eventId: string) {
+	return useQuery({
+		...orpc.budget.getPaidExpenses.queryOptions({ input: { eventId } }),
+		queryKey: budgetKeys.paidExpenses(eventId),
 		enabled: !!eventId,
 	});
 }

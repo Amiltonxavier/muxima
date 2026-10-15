@@ -1,8 +1,9 @@
 import { PERMISSIONS } from "@muxima/permissions";
 import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
-import { format } from "date-fns";
-import { Clock, MapPin, Trash2 } from "lucide-react";
+import { format, isSameDay } from "date-fns";
+import { Clock, History, MapPin, Pencil, Trash2 } from "lucide-react";
+import { useEvent } from "@/routes/_private/events/-queries/event-queries";
 import { QueryState } from "@/shared/components/states";
 import { useEventCan } from "@/shared/hooks/use-can";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
@@ -17,16 +18,30 @@ export function ScheduleList({
 	schedules,
 	isLoading,
 	isError,
+	onEdit,
+	onChangeStatus,
 	onDelete,
 }: {
 	schedules: ScheduleItem[];
 	isLoading: boolean;
 	isError: boolean;
+	onEdit: (schedule: ScheduleItem) => void;
+	onChangeStatus: (schedule: ScheduleItem) => void;
 	onDelete: (schedule: ScheduleItem) => void;
 }) {
 	const { eventId, isEventLocked, lockMessage } = useEventLock();
-	// Deleting an activity is its own capability (`schedule.delete` — the
-	// create permission does not imply it). Hidden for roles without it.
+	// Status changes are only meaningful while the event is happening: this
+	// only happens on the event day (the API enforces the same rule).
+	const eventQuery = useEvent(eventId ?? "");
+	const isEventDay =
+		!!eventQuery.data?.eventDate &&
+		isSameDay(new Date(eventQuery.data.eventDate), new Date());
+	// Editing an activity and changing its status are update capabilities;
+	// deleting is its own capability (`schedule.delete`). Hidden without them.
+	const canUpdate = useEventCan(
+		eventId ?? undefined,
+		PERMISSIONS.SCHEDULE_UPDATE,
+	);
 	const canDelete = useEventCan(
 		eventId ?? undefined,
 		PERMISSIONS.SCHEDULE_DELETE,
@@ -82,6 +97,34 @@ export function ScheduleList({
 								{SCHEDULE_STATUS_LABELS[schedule.status] ||
 									SCHEDULE_STATUS_LABELS.PENDING}
 							</Badge>
+							{canUpdate && (
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									disabled={isEventLocked}
+									title={isEventLocked ? (lockMessage ?? undefined) : "Editar"}
+									onClick={() => onEdit(schedule)}
+								>
+									<Pencil className="h-3.5 w-3.5" />
+								</Button>
+							)}
+							{canUpdate && (
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									disabled={isEventLocked || !isEventDay}
+									title={
+										isEventLocked
+											? (lockMessage ?? undefined)
+											: !isEventDay
+												? "Só podes alterar o estado de atividades no dia do evento"
+												: "Mudar estado"
+									}
+									onClick={() => onChangeStatus(schedule)}
+								>
+									<History className="h-3.5 w-3.5" />
+								</Button>
+							)}
 							{canDelete && (
 								<Button
 									variant="ghost"

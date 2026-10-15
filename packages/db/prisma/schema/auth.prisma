@@ -11,6 +11,13 @@ model User {
   /// Why/when the account was blocked. Kept for audit purposes.
   blockedAt     DateTime?
   blockedReason String?
+  /// ACCOUNT-level default role, assigned automatically at sign-up (the base
+  /// `USER` role — see `packages/auth`). Nullable only so Better Auth can
+  /// insert the row first: `getUserAccess` falls back to the default role
+  /// when it is null, so no user is ever left without one, and the RBAC
+  /// migration back-fills existing rows.
+  roleId        String?
+  role          Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   sessions      Session[]

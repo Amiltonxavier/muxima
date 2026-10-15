@@ -1,7 +1,9 @@
 import db from "@muxima/db";
+import { MailService } from "@muxima/mail";
 import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../index";
+import { buildInvitationUrl } from "../modules/invitations/qr-code";
 import {
 	invitationCodeSchema,
 	invitationResponseFilterSchema,
@@ -36,6 +38,7 @@ import {
 } from "../shared/auth/rate-limit";
 import { BadRequestError, NotFoundError } from "../shared/errors/app-error";
 import { INVITATION_CODES } from "../shared/errors/codes";
+import { formatEventDate } from "../shared/mail";
 import { paginationInput } from "../shared/schemas/filters";
 import { getPaginationMeta, parsePagination } from "../shared/utils/helpers";
 
@@ -244,7 +247,21 @@ export const invitationsRouter = {
 				input.eventId,
 				PERMISSIONS.INVITATION_PUBLISH,
 			);
-			return publishInvitation(db, input);
+
+			const before = await db.guestInvitation.findUnique({
+				where: { id: input.invitationId },
+				select: { publishedAt: true },
+			});
+
+			const published = await publishInvitation(db, input);
+
+			// Only a *transition* to published mails the guests — re-publishing
+			// an already-public invitation is a no-op and must not spam them.
+			if (before?.publishedAt === null && published) {
+				await sendPublishedInvitationEmails([input.invitationId]);
+			}
+
+			return published;
 		}),
 
 	/**
@@ -275,11 +292,18 @@ export const invitationsRouter = {
 				});
 			}
 
-			return publishInvitationsBatch(db, {
+			const result = await publishInvitationsBatch(db, {
 				eventId: input.eventId,
 				invitationIds: input.invitationIds,
 				scope: input.scope,
 			});
+
+			const publishedIds = result.results
+				.filter((outcome) => outcome.status === "PUBLISHED")
+				.map((outcome) => outcome.invitationId);
+			await sendPublishedInvitationEmails(publishedIds);
+
+			return result;
 		}),
 
 	unpublish: protectedProcedure
@@ -368,6 +392,44 @@ export const invitationsRouter = {
 			return canRespondToInvitation(invitation, invitation.event);
 		}),
 };
+
+/**
+ * Sends the guest-invitation e-mail to every guest (with a stored e-mail) of
+ * the given invitations. Runs after publishing only, so the e-mail always
+ * links to a public page. Delivery is fire-and-forget: `deliverMail` never
+ * throws, so a failed SMTP cannot turn a successful publish into an error.
+ */
+async function sendPublishedInvitationEmails(invitationIds: string[]) {
+	if (invitationIds.length === 0) return;
+
+	const invitations = await db.guestInvitation.findMany({
+		where: { id: { in: invitationIds } },
+		select: {
+			id: true,
+			code: true,
+			url: true,
+			event: { select: { name: true, eventDate: true } },
+			guests: { select: { guest: { select: { name: true, email: true } } } },
+		},
+	});
+
+	await Promise.all(
+		invitations.flatMap((invitation) =>
+			invitation.guests
+				.map(({ guest }) => guest)
+				.filter((guest) => guest.email !== null)
+				.map((guest) =>
+					MailService.sendEventInvitation({
+						to: guest.email as string,
+						guestName: guest.name,
+						eventName: invitation.event.name,
+						eventDate: formatEventDate(invitation.event.eventDate),
+						inviteUrl: invitation.url ?? buildInvitationUrl(invitation.code),
+					}),
+				),
+		),
+	);
+}
 
 /**
  * Guests can be attached to more than one invitation, but the guests module

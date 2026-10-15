@@ -37,12 +37,18 @@ describe("validateIban", () => {
 });
 
 describe("hasValidIbanChecksum", () => {
+	// ISO 7064 mod-97: letters are expanded to two digits (A → 10), so the
+	// check digits for this BBAN are 20 — `AO45…` only ever passed the old,
+	// mathematically wrong implementation.
+	const CHECKSUM_VALID_AO = "AO20006000012345678901234";
+
 	it("accepts a checksum-valid IBAN", () => {
-		expect(hasValidIbanChecksum("AO45006000012345678901234")).toBe(true);
+		expect(hasValidIbanChecksum(CHECKSUM_VALID_AO)).toBe(true);
 	});
 
 	it("rejects a wrong checksum", () => {
-		expect(hasValidIbanChecksum("AO46006000012345678901234")).toBe(false);
+		expect(hasValidIbanChecksum("AO45006000012345678901234")).toBe(false);
+		expect(hasValidIbanChecksum("AO21006000012345678901234")).toBe(false);
 	});
 });
 

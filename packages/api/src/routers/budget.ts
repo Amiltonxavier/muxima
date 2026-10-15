@@ -1,9 +1,11 @@
 import db from "@muxima/db";
+import { MailService } from "@muxima/mail";
 import { PERMISSIONS } from "@muxima/permissions";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { getBudgetAnalytics } from "../modules/budget/analytics";
 import { getExpenseAnalytics } from "../modules/budget/expense-analytics";
+import { getPaidExpenses } from "../modules/budget/paid-expenses";
 import {
 	getBudgetLines,
 	getBudgetSnapshot,
@@ -14,7 +16,8 @@ import {
 } from "../shared/auth/authorization";
 
 import { ValidationError } from "../shared/errors/app-error";
-import { centsToUnits, fromCents } from "../shared/finance/money";
+import { centsToUnits, fromCents, toCents } from "../shared/finance/money";
+import { eventBudgetPageUrl } from "../shared/mail";
 
 /**
  * The budget is a read model. There is no expense CRUD any more: the API only
@@ -120,6 +123,16 @@ export const budgetRouter = {
 				);
 			}
 
+			const existing = await db.budget.findUnique({
+				where: { eventId: input.eventId },
+				select: { plannedAmount: true, reserveAmount: true },
+			});
+
+			const plannedChanged =
+				!existing || toCents(existing.plannedAmount) !== input.plannedAmount;
+			const reserveChanged =
+				!existing || toCents(existing.reserveAmount) !== reserve;
+
 			const budget = await db.budget.upsert({
 				where: { eventId: input.eventId },
 				create: {
@@ -134,6 +147,40 @@ export const budgetRouter = {
 					notes: input.notes,
 				},
 			});
+
+			// Notify every active team member (never the actor) only when the
+			// numbers actually changed — updating notes alone is not an action.
+			if (plannedChanged || reserveChanged) {
+				const [eventMeta, members] = await Promise.all([
+					db.event.findUnique({
+						where: { id: input.eventId },
+						select: { name: true },
+					}),
+					db.eventMember.findMany({
+						where: {
+							eventId: input.eventId,
+							status: "ACTIVE",
+							userId: { not: context.session.user.id },
+						},
+						select: { user: { select: { email: true, name: true } } },
+					}),
+				]);
+
+				await Promise.all(
+					members
+						.filter((member) => member.user.email)
+						.map((member) =>
+							MailService.sendBudgetChanged({
+								to: member.user.email,
+								eventName: eventMeta?.name ?? "evento",
+								actorName: context.session.user.name,
+								plannedCents: input.plannedAmount,
+								reserveCents: reserve,
+								budgetUrl: eventBudgetPageUrl(input.eventId),
+							}),
+						),
+				);
+			}
 
 			return {
 				plannedAmount: Number(budget.plannedAmount),
@@ -167,6 +214,26 @@ export const budgetRouter = {
 					amount: centsToUnits(point.amount),
 				})),
 			};
+		}),
+
+	/**
+	 * Saídas financeiras do evento: só os valores efectivamente pagos, agrupados
+	 * por serviço/despesa. A série já vem agregada do backend, pronta a grafar.
+	 */
+	getPaidExpenses: protectedProcedure
+		.input(eventInput)
+		.handler(async ({ context, input }) => {
+			await requireEventPermission(
+				context.session.user.id,
+				input.eventId,
+				PERMISSIONS.BUDGET_READ,
+			);
+			const expenses = await getPaidExpenses(input.eventId);
+
+			return expenses.map((expense) => ({
+				label: expense.label,
+				value: centsToUnits(expense.value),
+			}));
 		}),
 
 	/** Convenience read used by the event detail cards. */

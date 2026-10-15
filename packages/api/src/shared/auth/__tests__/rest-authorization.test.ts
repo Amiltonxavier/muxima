@@ -78,4 +78,18 @@ describe("REST authorization stays in the shared guards", () => {
 
 		expect(offenders.map((f) => f.replace(process.cwd(), ""))).toEqual([]);
 	});
+
+	it("requires the account-level events.create permission to create an event", () => {
+		// The base `USER` role is what makes event creation possible. The oRPC
+		// `events.create` asks for it through the shared `requirePermission`;
+		// REST must ask the same question or the two surfaces disagree again.
+		const eventsRoutes = routesFiles.filter((file) =>
+			file.replace(process.cwd(), "").endsWith("/modules/events/routes.ts"),
+		);
+		expect(eventsRoutes).toHaveLength(1);
+
+		const source = eventsRoutes.map((file) => code(file)).join("\n");
+		expect(source).toMatch(/requirePermission\s*\(/);
+		expect(source).toMatch(/PERMISSIONS\.EVENT_CREATE/);
+	});
 });

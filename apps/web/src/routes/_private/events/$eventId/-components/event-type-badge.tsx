@@ -26,7 +26,7 @@ export function EventTypeBadge({ type }: EventTypeCardProps) {
 	return (
 		<Badge
 			variant="secondary"
-			className="inline-flex items-center gap-1.5 px-2.5 py-1"
+			className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none"
 		>
 			<span>{TYPE_LABELS[type] ?? type}</span>
 		</Badge>

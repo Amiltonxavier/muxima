@@ -1,0 +1,32 @@
+{
+	"name": "@muxima/mail",
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"test": "vitest",
+		"test:run": "vitest run"
+	},
+	"dependencies": {
+		"@muxima/env": "workspace:*",
+		"nodemailer": "^6.10.0"
+	},
+	"devDependencies": {
+		"@muxima/config": "workspace:*",
+		"@types/mailparser": "^3.9.0",
+		"@types/nodemailer": "^6.4.17",
+		"@types/smtp-server": "^3.5.13",
+		"mailparser": "^3.9.38",
+		"smtp-server": "^3.19.21",
+		"typescript": "^6.0.3",
+		"vitest": "catalog:"
+	}
+}

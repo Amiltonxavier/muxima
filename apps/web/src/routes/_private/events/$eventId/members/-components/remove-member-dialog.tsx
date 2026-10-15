@@ -8,7 +8,7 @@ import {
 	DialogTitle,
 } from "@muxima/ui/components/dialog";
 import type { MemberItem } from "../-types/member.types";
-import { getMemberName } from "../-utils/member.utils";
+import { getMemberName, isInvitation } from "../-utils/member.utils";
 
 export function RemoveMemberDialog({
 	member,
@@ -21,15 +21,18 @@ export function RemoveMemberDialog({
 	onConfirm: (memberId: string) => void;
 	isLoading: boolean;
 }) {
+	const invitation = member ? isInvitation(member) : false;
 	return (
 		<Dialog open={!!member} onOpenChange={() => onClose()}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Remover membro</DialogTitle>
+					<DialogTitle>
+						{invitation ? "Cancelar convite" : "Remover membro"}
+					</DialogTitle>
 					<DialogDescription>
-						{member ? getMemberName(member) : "Este membro"} perderá o acesso a
-						este evento. O evento e os convidados não são eliminados. Esta ação
-						não pode ser desfeita.
+						{invitation
+							? `O convite para ${member ? getMemberName(member) : "este e-mail"} será cancelado. Poderá voltar a convidar mais tarde.`
+							: `${member ? getMemberName(member) : "Este membro"} perderá o acesso a este evento. O evento e os convidados não são eliminados. Esta ação não pode ser desfeita.`}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
@@ -41,7 +44,13 @@ export function RemoveMemberDialog({
 						disabled={isLoading}
 						onClick={() => member && onConfirm(member.id)}
 					>
-						{isLoading ? "A remover..." : "Remover"}
+						{invitation
+							? isLoading
+								? "A cancelar..."
+								: "Cancelar convite"
+							: isLoading
+								? "A remover..."
+								: "Remover"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

@@ -2,15 +2,26 @@ import { expo } from "@better-auth/expo";
 import { createPrismaClient } from "@muxima/db";
 import { createActivityLog } from "@muxima/db/activity-log";
 import { env } from "@muxima/env/server";
+import { MailService } from "@muxima/mail";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
 import { customSession } from "better-auth/plugins";
 
 import { getUserAccess } from "./access";
+import { createUserCreateHook, roleIdAdditionalField } from "./default-role";
+import { emailVerificationOptions } from "./email-verification";
+import { createEmailOtpPlugin } from "./otp";
+import { evaluateSessionGate } from "./session-gate";
 
-const BLOCKED_USER_MESSAGE =
-	"A tua conta está bloqueada. Contacta o suporte para a desbloquear.";
+/**
+ * Public web origin the verification e-mail links back to. `FRONTEND_URL` is
+ * the explicit source; `CORS_ORIGIN` (always set) is the same origin the SPA
+ * is served from, mirroring the invitation QR-code helper's fallback.
+ */
+function getFrontendUrl(): string {
+	return env.FRONTEND_URL ?? env.CORS_ORIGIN;
+}
 
 export function createAuth() {
 	const prisma = createPrismaClient();
@@ -28,7 +39,23 @@ export function createAuth() {
 		],
 		emailAndPassword: {
 			enabled: true,
+			// A nova conta fica inativa até o e-mail ser confirmado: o registo
+			// não abre sessão (`autoSignIn: false`) e o início de sessão falha
+			// com `EMAIL_NOT_VERIFIED` enquanto `emailVerified` for falso.
+			requireEmailVerification: true,
+			autoSignIn: false,
 		},
+		emailVerification: emailVerificationOptions({
+			frontendUrl: getFrontendUrl(),
+			deliver: async ({ email, name, verifyUrl, expiresInMinutes }) => {
+				await MailService.sendEmailVerification({
+					to: email,
+					name,
+					verifyUrl,
+					expiresInMinutes,
+				});
+			},
+		}),
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
 		session: {
@@ -50,22 +77,38 @@ export function createAuth() {
 					defaultValue: "ACTIVE",
 					input: false,
 				},
+				// The account-level default role FK. Written only by the
+				// `user.create.before` hook below (`input: false` keeps clients
+				// from ever choosing their own role) — see `./default-role`.
+				...roleIdAdditionalField,
 			},
 		},
 		databaseHooks: {
+			user: {
+				create: {
+					// Every sign-up path (email/password, OTP, OAuth) funnels
+					// through Better Auth's user creation, so this hook is the
+					// single place that assigns the base `USER` role — persisted
+					// as `user.roleId` in the same insert that creates the
+					// account. No user can be created without a role.
+					before: createUserCreateHook(prisma),
+				},
+			},
 			session: {
-				// The backend is the source of truth: a BLOCKED account can never
-				// obtain a new session, whatever the client does.
+				// The backend is the source of truth: neither a BLOCKED account nor
+				// an account whose e-mail is still unconfirmed can ever obtain a
+				// new session, whatever the client does.
 				create: {
 					async before(session, ctx) {
 						if (!ctx) return;
 						const user = (await ctx.context.internalAdapter.findUserById(
 							session.userId,
-						)) as { status?: string } | null;
-						if (user?.status === "BLOCKED") {
+						)) as { status?: string; emailVerified?: boolean } | null;
+						const decision = evaluateSessionGate(user);
+						if (!decision.allowed) {
 							throw new APIError("FORBIDDEN", {
-								message: BLOCKED_USER_MESSAGE,
-								code: "ACCOUNT_BLOCKED",
+								message: decision.message,
+								code: decision.code,
 							});
 						}
 					},
@@ -114,6 +157,17 @@ export function createAuth() {
 		},
 		plugins: [
 			expo(),
+			/**
+			 * E-mail OTP ("login com código"). The policy — generation,
+			 * short expiry, attempt limit, resend rate limit, hashed storage and
+			 * atomic single-use consumption — lives in `./otp`, and this is the
+			 * only wiring: the code is rendered and delivered through
+			 * `MailService.sendOtp`, fire-and-forget, so an SMTP failure can
+			 * never break the auth flow.
+			 */
+			createEmailOtpPlugin(async ({ email, otp }) => {
+				await MailService.sendOtp({ to: email, otp });
+			}),
 			/**
 			 * Adds the caller's roles and permissions to the session response, so
 			 * `GET /api/auth/get-session` carries them and the server-side
@@ -170,4 +224,17 @@ export {
 	toAccessRoleId,
 	toAccessRoles,
 } from "./access";
-export { BLOCKED_USER_MESSAGE };
+export {
+	buildVerificationUrl,
+	EMAIL_VERIFICATION_EXPIRES_IN_MINUTES,
+	EMAIL_VERIFICATION_EXPIRES_IN_SECONDS,
+	EMAIL_VERIFICATION_PATH,
+	type EmailVerificationOptions,
+	emailVerificationOptions,
+	type VerificationDelivery,
+} from "./email-verification";
+export {
+	BLOCKED_USER_MESSAGE,
+	evaluateSessionGate,
+	UNVERIFIED_USER_MESSAGE,
+} from "./session-gate";

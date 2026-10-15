@@ -2,6 +2,7 @@ import type {
 	PublicInvitation,
 	PublicScheduleItem,
 } from "@muxima/api/shared/types/entities";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
@@ -62,17 +63,22 @@ function renderBook(
 	options: { reduceMotion?: boolean } = {},
 ) {
 	const onRespond = vi.fn();
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
 	const utils = render(
-		<InviteBook
-			invitation={makeInvitation(overrides)}
-			reduceMotion={options.reduceMotion ?? false}
-			isResponding={false}
-			onRespond={onRespond}
-			onShare={undefined}
-			scheduleItems={SCHEDULE}
-			scheduleLoading={false}
-			scheduleError={false}
-		/>,
+		<QueryClientProvider client={client}>
+			<InviteBook
+				invitation={makeInvitation(overrides)}
+				reduceMotion={options.reduceMotion ?? false}
+				isResponding={false}
+				onRespond={onRespond}
+				onShare={undefined}
+				scheduleItems={SCHEDULE}
+				scheduleLoading={false}
+				scheduleError={false}
+			/>
+		</QueryClientProvider>,
 	);
 	return { onRespond, ...utils };
 }

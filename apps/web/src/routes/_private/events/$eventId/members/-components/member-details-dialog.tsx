@@ -24,7 +24,9 @@ import {
 	getMemberInitials,
 	getMemberName,
 	getMemberStatus,
+	isInvitation,
 	isOwnerRole,
+	isSettledInvitation,
 	MEMBER_ROLE_DESCRIPTIONS,
 	MEMBER_ROLE_LABELS,
 	MEMBER_ROLE_OPTIONS,
@@ -59,6 +61,9 @@ export function MemberDetailsDialog({
 }) {
 	const { isEventLocked, lockMessage } = useEventLock();
 	const isOwner = isOwnerRole(member.role);
+	const invitation = isInvitation(member);
+	// A revoked invite is settled: its role is historical and cannot be edited.
+	const settled = isSettledInvitation(member);
 	// The owner cannot be re-assigned, so there is no assignable role to seed.
 	// The guard is repeated inline because narrowing through the `isOwner`
 	// const alias would need a cast.
@@ -72,9 +77,12 @@ export function MemberDetailsDialog({
 		<Dialog open onOpenChange={() => onClose()}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle>Detalhes do membro</DialogTitle>
+					<DialogTitle>
+						{invitation ? "Detalhes do convite" : "Detalhes do membro"}
+					</DialogTitle>
 					<DialogDescription>
-						Gerir o acesso de {getMemberName(member)} a este evento.
+						{invitation ? "Gerir o convite de" : "Gerir o acesso de"}{" "}
+						{getMemberName(member)} a este evento.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -105,16 +113,20 @@ export function MemberDetailsDialog({
 							<Shield className="h-3.5 w-3.5" />
 							Papel no evento
 						</label>
-						{isOwner ? (
+						{isOwner || settled ? (
 							<>
 								<div
 									id="member-role"
 									className="flex h-9 w-full items-center rounded-md border bg-muted px-3 text-sm"
 								>
-									{MEMBER_ROLE_LABELS.OWNER}
+									{isOwner
+										? MEMBER_ROLE_LABELS.OWNER
+										: (MEMBER_ROLE_OPTIONS.find(
+												(option) => option.value === member.role,
+											)?.label ?? member.role)}
 								</div>
 								<p className="text-muted-foreground text-xs">
-									{MEMBER_ROLE_DESCRIPTIONS.OWNER}
+									{MEMBER_ROLE_DESCRIPTIONS[isOwner ? "OWNER" : member.role]}
 								</p>
 							</>
 						) : (
@@ -142,7 +154,7 @@ export function MemberDetailsDialog({
 						)}
 					</div>
 
-					{roleChanged && canChangeRole && (
+					{roleChanged && !settled && canChangeRole && (
 						<Button
 							className="w-full"
 							disabled={isUpdating || isEventLocked}
@@ -165,7 +177,7 @@ export function MemberDetailsDialog({
 							<Trash2 className="mr-2 h-4 w-4" />
 							Não pode remover o proprietário
 						</Button>
-					) : canRemove ? (
+					) : settled ? null : canRemove ? (
 						<Button
 							variant="outline"
 							className="text-destructive"
@@ -174,7 +186,13 @@ export function MemberDetailsDialog({
 							onClick={() => onRemove(member.id)}
 						>
 							<Trash2 className="mr-2 h-4 w-4" />
-							{isRemoving ? "A remover..." : "Remover membro"}
+							{invitation
+								? isRemoving
+									? "A cancelar..."
+									: "Cancelar convite"
+								: isRemoving
+									? "A remover..."
+									: "Remover membro"}
 						</Button>
 					) : null}
 					<Button variant="outline" onClick={onClose}>

@@ -384,3 +384,27 @@ export function buildMonthlySpend(
 		.map(([month, amount]) => ({ month, amount }))
 		.sort((a, b) => a.month.localeCompare(b.month));
 }
+
+/**
+ * One bar per expense, sized by what was actually paid. It reads the same
+ * budget lines the rest of the screen uses, so it covers both financial sources
+ * of the event: inventory that was acquired (`unitPrice x currentQuantity`) and
+ * services whose supplier was paid (payments already summed by the resolver and
+ * collapsed into a single figure). Rows with nothing settled are dropped and
+ * the rest ranked heaviest first. Everything stays in cents.
+ */
+export type PaidExpense = {
+	/** Expense name — a service or an inventory item, the chart category. */
+	label: string;
+	/** Total actually paid for that expense, in cents. */
+	value: number;
+};
+
+export function buildPaidExpenses(
+	lines: Array<Pick<BudgetLine, "label" | "paid">>,
+): PaidExpense[] {
+	return lines
+		.filter((line) => line.paid > 0)
+		.map((line) => ({ label: line.label, value: line.paid }))
+		.sort((a, b) => b.value - a.value);
+}

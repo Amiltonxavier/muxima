@@ -1,13 +1,5 @@
-import { Badge } from "@muxima/ui/components/badge";
 import { Button } from "@muxima/ui/components/button";
 import { Card } from "@muxima/ui/components/card";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@muxima/ui/components/select";
 import {
 	Table,
 	TableBody,
@@ -16,20 +8,21 @@ import {
 	TableHeader,
 	TableRow,
 } from "@muxima/ui/components/table";
-import { MoreHorizontal, Shield, Trash2 } from "lucide-react";
+import { Eye, Shield, Trash2 } from "lucide-react";
 import { QueryState } from "@/shared/components/states";
+import { StatusDot } from "@/shared/components/status-dot";
 import { useEventLock } from "@/shared/hooks/use-event-lock";
-import type { AssignableMemberRole, MemberItem } from "../-types/member.types";
+import { getStatusLabel, getStatusTone } from "@/utils/status-helpers";
+import type { MemberItem } from "../-types/member.types";
 import {
 	getMemberEmail,
 	getMemberInitials,
 	getMemberName,
-	getMemberStatus,
+	isInvitation,
 	isOwnerRole,
+	isSettledInvitation,
 	MEMBER_ROLE_LABELS,
 	MEMBER_ROLE_OPTIONS,
-	MEMBER_STATUS_BADGE_CLASSES,
-	MEMBER_STATUS_LABELS,
 } from "../-utils/member.utils";
 
 /**
@@ -47,7 +40,7 @@ export function MembersTable({
 	members,
 	isLoading,
 	isError,
-	onRoleChange,
+
 	onViewDetails,
 	onRemove,
 	disabledMemberId,
@@ -57,7 +50,6 @@ export function MembersTable({
 	members: MemberItem[];
 	isLoading: boolean;
 	isError: boolean;
-	onRoleChange: (memberId: string, role: AssignableMemberRole) => void;
 	onViewDetails: (member: MemberItem) => void;
 	onRemove: (memberId: string) => void;
 	disabledMemberId?: string;
@@ -88,7 +80,6 @@ export function MembersTable({
 					</TableHeader>
 					<TableBody>
 						{members.map((member) => {
-							const status = getMemberStatus(member);
 							const isOwner = isOwnerRole(member.role);
 							// The owner has no assignable role, so its Select has no matching
 							// option and must be rendered read-only.
@@ -124,37 +115,17 @@ export function MembersTable({
 												{MEMBER_ROLE_LABELS.OWNER}
 											</div>
 										) : (
-											<Select
-												value={memberRole}
-												disabled={
-													disabledMemberId === member.id || isEventLocked
-												}
-												aria-label={
-													isEventLocked ? (lockMessage ?? undefined) : undefined
-												}
-												onValueChange={(v) => {
-													if (v)
-														onRoleChange(member.id, v as AssignableMemberRole);
-												}}
-											>
-												<SelectTrigger className="h-8 w-auto gap-1 text-xs">
-													<Shield className="h-3 w-3" />
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{MEMBER_ROLE_OPTIONS.map((item) => (
-														<SelectItem key={item.value} value={item.value}>
-															{item.label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
+											<div className="flex h-8 w-auto items-center gap-1 text-xs">
+												<Shield className="h-3 w-3" />
+												{memberRole}
+											</div>
 										)}
 									</TableCell>
 									<TableCell>
-										<Badge className={MEMBER_STATUS_BADGE_CLASSES[status]}>
-											{MEMBER_STATUS_LABELS[status]}
-										</Badge>
+										<StatusDot
+											label={getStatusLabel(member.status, "member")}
+											tone={getStatusTone(member.status)}
+										/>
 									</TableCell>
 									<TableCell>
 										<div className="flex justify-end gap-1">
@@ -164,7 +135,7 @@ export function MembersTable({
 												title="Ver detalhes"
 												onClick={() => onViewDetails(member)}
 											>
-												<MoreHorizontal className="h-3.5 w-3.5" />
+												<Eye className="h-3.5 w-3.5" />
 											</Button>
 											{isOwner ? (
 												<Button
@@ -175,7 +146,7 @@ export function MembersTable({
 												>
 													<Trash2 className="h-3.5 w-3.5" />
 												</Button>
-											) : (
+											) : isSettledInvitation(member) ? null : (
 												<Button
 													variant="ghost"
 													size="icon-sm"
@@ -183,7 +154,9 @@ export function MembersTable({
 													title={
 														isEventLocked
 															? (lockMessage ?? undefined)
-															: "Remover membro"
+															: isInvitation(member)
+																? "Cancelar convite"
+																: "Remover membro"
 													}
 													disabled={isEventLocked}
 													onClick={() => onRemove(member.id)}

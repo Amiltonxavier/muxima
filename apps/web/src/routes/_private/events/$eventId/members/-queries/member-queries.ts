@@ -69,7 +69,7 @@ export function useAddMember() {
 		orpc.members.add.mutationOptions({
 			onSuccess: () => {
 				invalidate();
-				toast.success("Membro adicionado com sucesso");
+				toast.success("Convite enviado com sucesso");
 			},
 		}),
 	);

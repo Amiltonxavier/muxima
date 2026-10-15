@@ -8,6 +8,7 @@ import { BudgetPaymentStatusChart } from "./analytics/budget-payment-status-char
 import { BudgetSourceChart } from "./analytics/budget-source-chart";
 import { MonthlySpendChart } from "./analytics/monthly-spend-chart";
 import { OverdueSuppliersTable } from "./analytics/overdue-suppliers-table";
+import { PaidExpensesChart } from "./analytics/paid-expenses-chart";
 import { TopPendingSuppliersChart } from "./analytics/top-pending-suppliers-chart";
 
 type BudgetAnalyticsProps = {
@@ -46,10 +47,8 @@ export function BudgetAnalytics({
 		>
 			{totals && breakdown && (
 				<div className="space-y-4">
-					<ExpenseAnalytics eventId={eventId} />
-
 					<div className="grid gap-4 lg:grid-cols-3">
-						<div className="lg:col-span-2">
+						<div className="h-full lg:col-span-2">
 							<BudgetOverviewRing totals={totals} />
 						</div>
 						<BudgetPaymentGauge totals={totals} />
@@ -67,6 +66,8 @@ export function BudgetAnalytics({
 						</div>
 						<OverdueSuppliersTable suppliers={breakdown.overdueSuppliers} />
 					</div>
+
+					<PaidExpensesChart eventId={eventId} />
 
 					<TopPendingSuppliersChart suppliers={breakdown.topPendingSuppliers} />
 				</div>

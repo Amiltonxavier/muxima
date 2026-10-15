@@ -7,11 +7,10 @@ import { useEventLock } from "@/shared/hooks/use-event-lock";
 
 export function SupplierHeader({
 	eventId,
-	total,
 	onAddSupplier,
 }: {
 	eventId: string;
-	total: number;
+
 	onAddSupplier: () => void;
 }) {
 	const { isEventLocked, lockMessage } = useEventLock();
@@ -22,7 +21,6 @@ export function SupplierHeader({
 		<div className="flex items-center justify-between gap-4">
 			<div>
 				<h1 className="font-semibold text-2xl">Fornecedores</h1>
-				<p className="text-muted-foreground text-sm">{total} fornecedores</p>
 			</div>
 			<div className="flex gap-2">
 				<ExportMenu eventId={eventId} module="suppliers" />

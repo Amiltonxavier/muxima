@@ -8,6 +8,7 @@ import {
 	Bell,
 	Calculator,
 	Calendar,
+	CalendarDays,
 	ChevronLeft,
 	ChevronRight,
 	CreditCard,
@@ -143,7 +144,7 @@ const globalNavGroups: NavGroup[] = [
 			{ label: "Dashboard", icon: <Home className="h-4 w-4" />, to: "/" },
 			{
 				label: "Eventos",
-				icon: <Gift className="h-4 w-4" />,
+				icon: <CalendarDays className="h-4 w-4" />,
 				to: "/events",
 				permission: PERMISSIONS.EVENT_READ,
 			},

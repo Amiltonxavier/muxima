@@ -8,35 +8,29 @@ import {
 	SelectValue,
 } from "@muxima/ui/components/select";
 import { Search, X } from "lucide-react";
-import type {
-	MemberRoleFilter,
-	MemberStatusFilter,
-} from "../-types/member.types";
+import type { MemberRoleFilter } from "../-types/member.types";
 import { MEMBER_ROLE_OPTIONS } from "../-utils/member.utils";
 
-const STATUS_OPTIONS: Array<{ value: MemberStatusFilter; label: string }> = [
-	{ value: "ALL", label: "Todos os estados" },
-	{ value: "ACTIVE", label: "Ativos" },
-	{ value: "PENDING", label: "Pendentes" },
-];
-
+/**
+ * Search + role filters.
+ *
+ * The status axis is not here: it is the Ativos/Pendentes/Cancelados tabs,
+ * which filter the list server-side. A second status control next to them would
+ * fight the tabs (a server filter that empties every other tab).
+ */
 export function MembersFilters({
 	search,
 	role,
-	status,
 	hasActiveFilters,
 	onSearchChange,
 	onRoleChange,
-	onStatusChange,
 	onReset,
 }: {
 	search: string;
 	role: MemberRoleFilter;
-	status: MemberStatusFilter;
 	hasActiveFilters: boolean;
 	onSearchChange: (value: string) => void;
 	onRoleChange: (value: MemberRoleFilter) => void;
-	onStatusChange: (value: MemberStatusFilter) => void;
 	onReset: () => void;
 }) {
 	return (
@@ -63,24 +57,6 @@ export function MembersFilters({
 				<SelectContent>
 					<SelectItem value="ALL">Todos os papéis</SelectItem>
 					{MEMBER_ROLE_OPTIONS.map((item) => (
-						<SelectItem key={item.value} value={item.value}>
-							{item.label}
-						</SelectItem>
-					))}
-				</SelectContent>
-			</Select>
-
-			<Select
-				value={status}
-				onValueChange={(v) => {
-					if (v) onStatusChange(v as MemberStatusFilter);
-				}}
-			>
-				<SelectTrigger className="w-[170px]">
-					<SelectValue placeholder="Estado" />
-				</SelectTrigger>
-				<SelectContent>
-					{STATUS_OPTIONS.map((item) => (
 						<SelectItem key={item.value} value={item.value}>
 							{item.label}
 						</SelectItem>
